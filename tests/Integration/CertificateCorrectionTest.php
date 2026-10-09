@@ -12,8 +12,8 @@ class CertificateCorrectionTest extends WP_UnitTestCase {
 		global $wpdb;
 		$serial = 'TEST-2026-' . wp_rand( 10000, 99999 );
 
-		cg_insert_certificate_record( array( 'student_name' => 'Ashaa Verma', 'email' => 'a@example.com', 'certificate_type' => 'Merit' ), $serial );
-		cg_insert_certificate_record( array( 'student_name' => 'Asha Verma', 'email' => 'a@example.com', 'certificate_type' => 'Merit' ), $serial );
+		certificate_generator_insert_certificate_record( array( 'student_name' => 'Ashaa Verma', 'email' => 'a@example.com', 'certificate_type' => 'Merit' ), $serial );
+		certificate_generator_insert_certificate_record( array( 'student_name' => 'Asha Verma', 'email' => 'a@example.com', 'certificate_type' => 'Merit' ), $serial );
 
 		$legacy = $wpdb->get_col( $wpdb->prepare( "SELECT student_name FROM {$wpdb->prefix}certificate_generator WHERE serial_number = %s", $serial ) );
 		$this->assertSame( array( 'Asha Verma' ), $legacy, 'still one row, now with the corrected name' );
@@ -27,9 +27,9 @@ class CertificateCorrectionTest extends WP_UnitTestCase {
 		global $wpdb;
 		$serial = 'TEST-2026-' . wp_rand( 10000, 99999 );
 
-		cg_insert_certificate_record( array( 'student_name' => 'x', 'certificate_type' => 'Merit' ), $serial );
+		certificate_generator_insert_certificate_record( array( 'student_name' => 'x', 'certificate_type' => 'Merit' ), $serial );
 		// The main generation path passes get_post_meta(0, …) = '' for keys that don't apply.
-		cg_sync_certificate_record_name( array( 'student_name' => '', 'teacher_name' => 'R. Iyer' ), $serial );
+		certificate_generator_sync_certificate_record_name( array( 'student_name' => '', 'teacher_name' => 'R. Iyer' ), $serial );
 
 		$this->assertSame( 'R. Iyer', $wpdb->get_var( $wpdb->prepare( "SELECT student_name FROM {$wpdb->prefix}certificate_generator WHERE serial_number = %s", $serial ) ) );
 	}

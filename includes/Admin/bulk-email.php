@@ -10,16 +10,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Handle AJAX requests
-add_action( 'wp_ajax_cert_start_bulk_send', 'certificate_generator_ajax_start_bulk_send' );
-add_action( 'wp_ajax_cert_get_queue_progress', 'certificate_generator_ajax_get_queue_progress' );
-add_action( 'wp_ajax_cert_pause_queue', 'certificate_generator_ajax_pause_queue' );
-add_action( 'wp_ajax_cert_resume_queue', 'certificate_generator_ajax_resume_queue' );
-add_action( 'wp_ajax_cert_clear_queue', 'certificate_generator_ajax_clear_queue' );
+add_action( 'wp_ajax_certificate_generator_start_bulk_send', 'certificate_generator_ajax_start_bulk_send' );
+add_action( 'wp_ajax_certificate_generator_get_queue_progress', 'certificate_generator_ajax_get_queue_progress' );
+add_action( 'wp_ajax_certificate_generator_pause_queue', 'certificate_generator_ajax_pause_queue' );
+add_action( 'wp_ajax_certificate_generator_resume_queue', 'certificate_generator_ajax_resume_queue' );
+add_action( 'wp_ajax_certificate_generator_clear_queue', 'certificate_generator_ajax_clear_queue' );
 
 // NEW: Filter-related AJAX handlers
-add_action( 'wp_ajax_cert_get_filter_options', 'certificate_generator_ajax_get_filter_options' );
-add_action( 'wp_ajax_cert_preview_recipients', 'certificate_generator_ajax_preview_recipients' );
-add_action( 'wp_ajax_cert_send_to_filtered', 'certificate_generator_ajax_send_to_filtered' );
+add_action( 'wp_ajax_certificate_generator_get_filter_options', 'certificate_generator_ajax_get_filter_options' );
+add_action( 'wp_ajax_certificate_generator_preview_recipients', 'certificate_generator_ajax_preview_recipients' );
+add_action( 'wp_ajax_certificate_generator_send_to_filtered', 'certificate_generator_ajax_send_to_filtered' );
 
 function certificate_generator_ajax_start_bulk_send() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
@@ -350,7 +350,7 @@ function certificate_generator_ajax_get_filter_options() {
 /**
  * Sanitize the Bulk Send filter payload ($_POST['filters']) shared by preview and send.
  */
-function cg_bulk_send_read_filters(): array {
+function certificate_generator_bulk_send_read_filters(): array {
 	// phpcs:ignore WordPress.Security.NonceVerification -- callers verify the nonce.
 	$filters = isset( $_POST['filters'] ) && is_array( $_POST['filters'] ) ? map_deep( wp_unslash( $_POST['filters'] ), 'sanitize_text_field' ) : array();
 
@@ -413,7 +413,7 @@ function certificate_generator_ajax_preview_recipients() {
 		wp_send_json_error( array( 'message' => 'Insufficient permissions' ) );
 	}
 
-	$filters = cg_bulk_send_read_filters();
+	$filters = certificate_generator_bulk_send_read_filters();
 
 	$filters['limit']  = min( 1000, max( 1, isset( $_POST['limit'] ) ? intval( $_POST['limit'] ) : 100 ) );
 	$filters['offset'] = isset( $_POST['offset'] ) ? intval( $_POST['offset'] ) : 0;
@@ -447,7 +447,7 @@ function certificate_generator_ajax_send_to_filtered() {
 
 	// Group every matching certificate by address: one email each, scoped to exactly
 	// the certificates that matched (not every certificate that address ever got).
-	$filters  = cg_bulk_send_read_filters();
+	$filters  = certificate_generator_bulk_send_read_filters();
 	$by_email = array();
 	$page     = 2000;
 	for ( $offset = 0; ; $offset += $page ) {

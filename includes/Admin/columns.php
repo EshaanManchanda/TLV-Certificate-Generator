@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Returns merged core + extra_fields as a flat array, or null if:
  *   - CustomTables class unavailable, table missing, or no row found.
  */
-function cg_get_sql_row_for_post( int $post_id, string $entity ): ?array {
+function certificate_generator_get_sql_row_for_post( int $post_id, string $entity ): ?array {
 	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		return null;
 	}
@@ -31,20 +31,20 @@ function cg_get_sql_row_for_post( int $post_id, string $entity ): ?array {
  * Cached version — prevents N×columns queries per list view.
  * Uses array_key_exists so null (no SQL row) is also cached.
  */
-function cg_get_sql_row_for_post_cached( int $post_id, string $entity ): ?array {
+function certificate_generator_get_sql_row_for_post_cached( int $post_id, string $entity ): ?array {
 	static $cache = array();
 	$key          = $entity . ':' . $post_id;
 	if ( ! array_key_exists( $key, $cache ) ) {
-		$cache[ $key ] = cg_get_sql_row_for_post( $post_id, $entity );
+		$cache[ $key ] = certificate_generator_get_sql_row_for_post( $post_id, $entity );
 	}
 	return $cache[ $key ];
 }
 
 
 // ── AJAX: toggle send_email (bulk-send opt-in/opt-out) per entity row ────────
-add_action( 'wp_ajax_cg_toggle_bulk_send', 'cg_ajax_toggle_bulk_send' );
-function cg_ajax_toggle_bulk_send(): void {
-	check_ajax_referer( 'cg_toggle_bulk_send', 'nonce' );
+add_action( 'wp_ajax_certificate_generator_toggle_bulk_send', 'certificate_generator_ajax_toggle_bulk_send' );
+function certificate_generator_ajax_toggle_bulk_send(): void {
+	check_ajax_referer( 'certificate_generator_toggle_bulk_send', 'nonce' );
 
 	if ( ! current_user_can( 'edit_posts' ) ) {
 		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ) );
@@ -91,7 +91,7 @@ function cg_ajax_toggle_bulk_send(): void {
 // certificate_generator_send_single_email_ajax removed — CPT-based, broken for deregistered CPTs.
 // Single-send entry point: cg_student_send_email in StudentsPage.php (SQL-backed).
 if ( false ) {
-	function _cg_removed_placeholder() {
+	function certificate_generator_removed_placeholder() {
 		// Check nonce for security
 		check_ajax_referer( 'certificate_generator_send_email', 'nonce' );
 
@@ -110,7 +110,7 @@ if ( false ) {
 		// Check if post has an email address — SQL-first, CPT fallback
 		$ajax_post_type = get_post_type( $post_id );
 		$ajax_sql_row   = in_array( $ajax_post_type, array( 'students', 'teachers', 'schools' ), true )
-		? cg_get_sql_row_for_post_cached( $post_id, $ajax_post_type )
+		? certificate_generator_get_sql_row_for_post_cached( $post_id, $ajax_post_type )
 		: null;
 		$email          = ( $ajax_sql_row !== null && ! empty( $ajax_sql_row['email'] ) )
 		? $ajax_sql_row['email']
@@ -130,8 +130,8 @@ if ( false ) {
 		}
 
 		// Check if certificate template exists — SQL table only.
-		$template = function_exists( 'cg_select_certificate_template' )
-		? cg_select_certificate_template( $certificate_type, '', false )
+		$template = function_exists( 'certificate_generator_select_certificate_template' )
+		? certificate_generator_select_certificate_template( $certificate_type, '', false )
 		: null;
 
 		if ( ! $template ) {
@@ -152,8 +152,8 @@ if ( false ) {
 		$fields    = array();
 		switch ( $post_type ) {
 			case 'students':
-				$fields = class_exists( 'CG_Field_Schema' )
-				? CG_Field_Schema::get_all_renderable_fields( get_post_meta( $post_id, 'certificate_type', true ) )
+				$fields = class_exists( 'CertificateGenerator_Field_Schema' )
+				? CertificateGenerator_Field_Schema::get_all_renderable_fields( get_post_meta( $post_id, 'certificate_type', true ) )
 				: array( 'student_name', 'school_name', 'issue_date' );
 				break;
 			case 'teachers':
@@ -166,8 +166,8 @@ if ( false ) {
 
 		// Debug log the fields and post type
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "Post type: {$post_type}, Fields: " . wp_json_encode( $fields ) );
-			cg_debug_log( "Template ID: {$template_id}, Template URL: {$template_url}" );
+			certificate_generator_debug_log( "Post type: {$post_type}, Fields: " . wp_json_encode( $fields ) );
+			certificate_generator_debug_log( "Template ID: {$template_id}, Template URL: {$template_url}" );
 		}
 
 		// Check if the template has at least the minimum number of field positions configured
@@ -189,8 +189,8 @@ if ( false ) {
 
 			// Debug log to check what's happening
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				cg_debug_log( "Checking field position for field_{$i} (X): " . ( $position_x ? $position_x : 'empty' ) );
-				cg_debug_log( "Checking field position for field_{$i} (Y): " . ( $position_y ? $position_y : 'empty' ) );
+				certificate_generator_debug_log( "Checking field position for field_{$i} (X): " . ( $position_x ? $position_x : 'empty' ) );
+				certificate_generator_debug_log( "Checking field position for field_{$i} (Y): " . ( $position_y ? $position_y : 'empty' ) );
 			}
 
 			if ( empty( $position_x ) || empty( $position_y ) ) {
@@ -202,7 +202,7 @@ if ( false ) {
 
 		// If we don't have enough field positions, return an error with instructions
 		if ( ! $has_enough_fields ) {
-			cg_debug_log( "Certificate template is missing field positions. Template ID: {$template_id}" );
+			certificate_generator_debug_log( "Certificate template is missing field positions. Template ID: {$template_id}" );
 
 			$missing_fields = implode( ', ', $missing_positions );
 			$error_message  = sprintf( /* translators: %s: comma-separated field names */ __( 'Certificate template is missing field positions for: %s', 'certificate-generator' ), esc_html( $missing_fields ) );
@@ -220,7 +220,7 @@ if ( false ) {
 		// Send the email with the correct fields based on post type
 		// We need to explicitly pass the fields to ensure the certificate is generated correctly
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "Sending email for post ID: {$post_id} with fields: " . wp_json_encode( $fields ) );
+			certificate_generator_debug_log( "Sending email for post ID: {$post_id} with fields: " . wp_json_encode( $fields ) );
 		}
 
 		// Check if certificate file already exists
@@ -229,16 +229,16 @@ if ( false ) {
 
 		if ( ! $certificate_exists ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				cg_debug_log( 'Certificate file does not exist or path is empty. Generating new certificate.' );
+				certificate_generator_debug_log( 'Certificate file does not exist or path is empty. Generating new certificate.' );
 			}
 			// Try to generate the certificate first to ensure it exists
-			$certificate_result = generate_certificate_pdf_email( $post_id, $fields );
+			$certificate_result = certificate_generator_generate_certificate_pdf_email( $post_id, $fields );
 			if ( ! $certificate_result ) {
 				wp_send_json_error( array( 'message' => __( 'Failed to generate certificate. Please check certificate template settings.', 'certificate-generator' ) ) );
 				wp_die();
 			}
 		} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "Certificate file already exists at: {$certificate_path}" );
+			certificate_generator_debug_log( "Certificate file already exists at: {$certificate_path}" );
 		}
 
 		// Look up the wp_certificate_generator row by email.
@@ -272,8 +272,8 @@ if ( false ) {
 				}
 
 				// Validate template URL if function exists
-				if ( function_exists( 'cg_validate_template_url' ) ) {
-					$validation_result = cg_validate_template_url( $template_url );
+				if ( function_exists( 'certificate_generator_validate_template_url' ) ) {
+					$validation_result = certificate_generator_validate_template_url( $template_url );
 					if ( $validation_result !== true ) {
 						// Extract the error message from the HTML
 						$error_message = wp_strip_all_tags( $validation_result );
@@ -349,11 +349,11 @@ function certificate_generator_admin_footer_js() {
 				type: 'POST',
 				dataType: 'json',
 				data: {
-					action:    'cg_toggle_bulk_send',
+					action:    'certificate_generator_toggle_bulk_send',
 					post_id:   postId,
 					post_type: postType,
 					new_value: newVal,
-					nonce:     '<?php echo esc_html( wp_create_nonce( 'cg_toggle_bulk_send' ) ); ?>'
+					nonce:     '<?php echo esc_html( wp_create_nonce( 'certificate_generator_toggle_bulk_send' ) ); ?>'
 				},
 				success: function(response) {
 					if (response.success) {
@@ -751,13 +751,13 @@ function certificate_generator_bulk_action_notices() {
 			$notice_type = 'warning';
 		}
 
-		cg_ui_notice( $notice_type, esc_html( $message ) );
+		certificate_generator_ui_notice( $notice_type, esc_html( $message ) );
 	}
 
 	if ( ! empty( $_REQUEST['bulk_email_error'] ) ) {
 		$error   = sanitize_text_field( wp_unslash( $_REQUEST['bulk_email_error'] ) );
 		$message = __( 'Bulk email error: Invalid post type.', 'certificate-generator' );
-		cg_ui_notice( 'error', esc_html( $message ) );
+		certificate_generator_ui_notice( 'error', esc_html( $message ) );
 	}
 }
 
@@ -1287,7 +1287,7 @@ function certificate_generator_add_send_filtered_button( $which ) {
 				url: ajaxurl,
 				type: 'POST',
 				data: {
-					action: 'cert_send_to_filtered',
+					action: 'certificate_generator_send_to_filtered',
 					nonce: '<?php echo esc_html( wp_create_nonce( 'cert_filter_nonce' ) ); ?>',
 					filters: filters
 				},
@@ -1608,7 +1608,7 @@ function certificate_generator_save_bulk_edit_fields( $post_id ) {
 				$parsed = DateTime::createFromFormat( 'Y-m-d', $raw );
 				if ( $parsed && $parsed->format( 'Y-m-d' ) === $raw ) {
 					update_post_meta( $post_id, 'event_date', $raw );
-					delete_transient( 'cg_duplicate_template_warning' );
+					delete_transient( 'certificate_generator_duplicate_template_warning' );
 				}
 			}
 		}
@@ -1623,7 +1623,7 @@ add_action( 'save_post', 'certificate_generator_save_bulk_edit_fields' );
 /**
  * Add certificate_type and event_date columns to the certificates list table.
  */
-function cg_certificates_add_columns( $columns ) {
+function certificate_generator_certificates_add_columns( $columns ) {
 	$new_columns = array();
 	foreach ( $columns as $key => $value ) {
 		$new_columns[ $key ] = $value;
@@ -1634,12 +1634,12 @@ function cg_certificates_add_columns( $columns ) {
 	}
 	return $new_columns;
 }
-add_filter( 'manage_certificates_posts_columns', 'cg_certificates_add_columns' );
+add_filter( 'manage_certificates_posts_columns', 'certificate_generator_certificates_add_columns' );
 
 /**
  * Populate the custom columns for the certificates CPT.
  */
-function cg_certificates_populate_column( $column, $post_id ) {
+function certificate_generator_certificates_populate_column( $column, $post_id ) {
 	switch ( $column ) {
 		case 'certificate_type':
 			$type = get_post_meta( $post_id, 'certificate_type', true );
@@ -1656,22 +1656,22 @@ function cg_certificates_populate_column( $column, $post_id ) {
 			break;
 	}
 }
-add_action( 'manage_certificates_posts_custom_column', 'cg_certificates_populate_column', 10, 2 );
+add_action( 'manage_certificates_posts_custom_column', 'certificate_generator_certificates_populate_column', 10, 2 );
 
 /**
  * Make certificate_type and event_date sortable.
  */
-function cg_certificates_sortable_columns( $columns ) {
+function certificate_generator_certificates_sortable_columns( $columns ) {
 	$columns['certificate_type'] = 'certificate_type';
 	$columns['event_date']       = 'event_date';
 	return $columns;
 }
-add_filter( 'manage_edit-certificates_sortable_columns', 'cg_certificates_sortable_columns' );
+add_filter( 'manage_edit-certificates_sortable_columns', 'certificate_generator_certificates_sortable_columns' );
 
 /**
  * Handle meta_key-based sorting for the certificates list table.
  */
-function cg_certificates_sort_query( $query ) {
+function certificate_generator_certificates_sort_query( $query ) {
 	if ( ! is_admin() || ! $query->is_main_query() ) {
 		return;
 	}
@@ -1688,5 +1688,5 @@ function cg_certificates_sort_query( $query ) {
 		$query->set( 'orderby', 'meta_value' );
 	}
 }
-add_action( 'pre_get_posts', 'cg_certificates_sort_query' );
+add_action( 'pre_get_posts', 'certificate_generator_certificates_sort_query' );
 ?>

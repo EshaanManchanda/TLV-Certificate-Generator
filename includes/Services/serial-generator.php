@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_Serial_Number_Generator {
+class CertificateGenerator_Serial_Number_Generator {
 	private static $instance = null;
 
 	public static function get_instance() {
@@ -129,7 +129,7 @@ class CG_Serial_Number_Generator {
 
 		// The legacy wp_certificate_generator table (queried above) has no pdf_url
 		// column; the newer wp_cg_certificates table does and can carry the same
-		// serial_number (cg_insert_certificate_record() dedupes serials across both),
+		// serial_number (certificate_generator_insert_certificate_record() dedupes serials across both),
 		// so look there for a downloadable URL to hand the LinkedIn "Add to Profile" button.
 		$pdf_url        = '';
 		$sql_cert_table = $wpdb->prefix . 'cg_certificates';

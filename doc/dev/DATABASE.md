@@ -22,9 +22,9 @@ Schema owner: `src/Database/CustomTables.php` (all tables created via `dbDelta`)
 | `wp_cg_lms_course_map` | v8: course → certificate-template mapping for LMS integrations. One row per `(lms_type, course_id)`: `template_id`, `trigger_event` (`course_complete`/`quiz_pass`/`both`), `quiz_id`, `enabled`. Shared by all five LMS/e-commerce integrations — used by the Pro add-on; see [`CONFIGURATION.md`](../guide/CONFIGURATION.md#lms--e-commerce-auto-issuance-v9). Created by the free plugin so mappings survive if Pro is deactivated |
 | `wp_cg_lms_tracks` | v9: a "track" groups several courses under one certificate template — the certificate issues once **every** course in the track is complete for a user, instead of one certificate per course. Columns: `lms_type`, `track_name`, `template_id`. |
 | `wp_cg_lms_track_courses` | v9: join table — which course IDs belong to which `wp_cg_lms_tracks` row. Unique on `(track_id, course_id)`. |
-| `wp_cg_renewal_reminders_sent` | v9: tracks which renewal-reminder "stage" (e.g. 30/7/1 days before expiry) has already been sent per certificate, so `CG_Cron_Jobs::send_recipient_renewal_reminders()` never double-sends. Unique on `(certificate_id, stage)`. **Pro/Business only** — see [Licensing & plans](../guide/PLAN-COMPARISON.md). |
+| `wp_cg_renewal_reminders_sent` | v9: tracks which renewal-reminder "stage" (e.g. 30/7/1 days before expiry) has already been sent per certificate, so `CertificateGenerator_Cron_Jobs::send_recipient_renewal_reminders()` never double-sends. Unique on `(certificate_id, stage)`. **Pro/Business only** — see [Licensing & plans](../guide/PLAN-COMPARISON.md). |
 | `wp_cg_custom_fonts` | v9: Business-plan custom `.ttf` font uploads (`font_name`, `file_path`, `uploaded_by`), rendered via the bundled [tFPDF](../../lib/tfpdf) engine instead of classic FPDF. Managed from **Certificate Generator → Custom Fonts** (`src/Admin/Pages/FontsPage.php`). |
-| `wp_cg_email_templates` | Named, per-certificate-type email templates (`certificate_type` is unique) — subject, title, message, attach/cc/bcc/reply-to. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first, falling back to the global `cg_email_subject`/`cg_email_body` options if no per-type row matches. Managed from **Settings → Email**. Free on every plan; see [`PLAN-COMPARISON.md`](../guide/PLAN-COMPARISON.md). |
+| `wp_cg_email_templates` | Named, per-certificate-type email templates (`certificate_type` is unique) — subject, title, message, attach/cc/bcc/reply-to. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first, falling back to the global `certificate_generator_email_subject`/`certificate_generator_email_body` options if no per-type row matches. Managed from **Settings → Email**. Free on every plan; see [`PLAN-COMPARISON.md`](../guide/PLAN-COMPARISON.md). |
 
 `wp_cg_certificate_templates` also carries a `badge_template_url` column (v9, nullable) — an optional companion badge image. When set, `src/Listeners/BadgeGenerationListener.php` generates a PNG via `src/Services/BadgeGenerator.php` (GD) alongside every certificate issued from that template, and stores the result in the new `badge_path` column on `wp_cg_certificates`. Added by `Migration005_AddBadgeColumns.php`; gated by the `CG_USE_BADGES` flag, not plan-gated.
 
@@ -55,7 +55,7 @@ If the bulk-send screen reports "Successfully queued 0 certificates" or "No cert
 
 ## Uninstall behavior
 
-Defined at the bottom of `certificate-generator.php`, gated by the `cg_keep_data_on_uninstall` option:
+Defined at the bottom of `certificate-generator.php`, gated by the `certificate_generator_keep_data_on_uninstall` option:
 - Drops both legacy and `wp_cg_*` tables.
 - Deletes ~25 named options (see [`CONFIGURATION.md`](../guide/CONFIGURATION.md)).
 - Clears all scheduled cron hooks.

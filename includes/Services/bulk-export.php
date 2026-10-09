@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Render a compact Year / School / Cert-type / Date-range filter bar for export pages.
  * Echoes HTML form fields only — caller wraps in <form>.
  */
-function cg_render_export_filter_fields() {
+function certificate_generator_render_export_filter_fields() {
 	$years       = function_exists( 'certificate_generator_get_unique_years' ) ? certificate_generator_get_unique_years() : array();
 	$schools     = function_exists( 'certificate_generator_get_unique_schools' ) ? certificate_generator_get_unique_schools() : array();
 	$cert_types  = function_exists( 'certificate_generator_get_unique_certificate_types' ) ? certificate_generator_get_unique_certificate_types() : array();
@@ -61,10 +61,10 @@ function cg_render_export_filter_fields() {
 }
 
 /**
- * Build SQL WHERE + params from export filter POST fields using cg_build_recipient_filter_sql.
+ * Build SQL WHERE + params from export filter POST fields using certificate_generator_build_recipient_filter_sql.
  * Returns [ $where_sql_suffix, $params[] ] where $where_sql_suffix is either '' or ' WHERE ...'.
  */
-function cg_export_filter_where( string $alias = '' ): array {
+function certificate_generator_export_filter_where( string $alias = '' ): array {
 	// phpcs:disable WordPress.Security.NonceVerification.Missing -- every caller runs check_admin_referer() first
 	$filters = array(
 		'schools'           => isset( $_POST['filter_school'] ) && is_array( $_POST['filter_school'] )
@@ -87,11 +87,11 @@ function cg_export_filter_where( string $alias = '' ): array {
 	);
 	// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-	if ( ! function_exists( 'cg_build_recipient_filter_sql' ) ) {
+	if ( ! function_exists( 'certificate_generator_build_recipient_filter_sql' ) ) {
 		return array( '', array() );
 	}
 
-	[ $where_fragments, $params ] = cg_build_recipient_filter_sql( $filters, $alias );
+	[ $where_fragments, $params ] = certificate_generator_build_recipient_filter_sql( $filters, $alias );
 
 	if ( empty( $where_fragments ) ) {
 		return array( '', array() );
@@ -101,19 +101,19 @@ function cg_export_filter_where( string $alias = '' ): array {
 }
 
 // Render the Export Students Page
-function render_bulk_export_students_page() {
-	cg_ui_card_open( 'Export students', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
+function certificate_generator_render_bulk_export_students_page() {
+	certificate_generator_ui_card_open( 'Export students', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
 	echo '<form method="post">';
 	wp_nonce_field( 'cg_export_students', '_wpnonce_cg_export' );
 	echo '<input type="hidden" name="export_students" value="1" />';
-	cg_render_export_filter_fields();
+	certificate_generator_render_export_filter_fields();
 	echo '<p class="submit"><button type="submit" class="button button-primary">Export to CSV</button></p>';
 	echo '</form>';
-	cg_ui_card_close();
+	certificate_generator_ui_card_close();
 }
 
 // Handle CSV Export
-function bulk_export_students() {
+function certificate_generator_bulk_export_students() {
 	if ( isset( $_POST['export_students'] ) ) {
 		check_admin_referer( 'cg_export_students', '_wpnonce_cg_export' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -136,7 +136,7 @@ function bulk_export_students() {
 
 			if ( $table_exists ) {
 				// Export from SQL tables (with optional filters)
-				[ $where_sql, $where_params ] = cg_export_filter_where();
+				[ $where_sql, $where_params ] = certificate_generator_export_filter_where();
 				$sql  = "SELECT * FROM $student_table" . $where_sql . ' ORDER BY id ASC'; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 				$rows = empty( $where_params )
 					? $GLOBALS['wpdb']->get_results( $sql, ARRAY_A ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -146,7 +146,7 @@ function bulk_export_students() {
 					add_action(
 						'admin_notices',
 						function () {
-							cg_ui_notice( 'warning', 'No students found for export.' );
+							certificate_generator_ui_notice( 'warning', 'No students found for export.' );
 						}
 					);
 					return;
@@ -215,21 +215,21 @@ function bulk_export_students() {
 			add_action(
 				'admin_notices',
 				function () {
-					cg_ui_notice( 'warning', 'No students found for export.' );
+					certificate_generator_ui_notice( 'warning', 'No students found for export.' );
 				}
 			);
 			return;
 		}
 
 		$extra_slugs = array();
-		if ( class_exists( 'CG_Field_Schema' ) ) {
+		if ( class_exists( 'CertificateGenerator_Field_Schema' ) ) {
 			$seen_types = array();
 			foreach ( $students as $student ) {
 				$cert_type = get_post_meta( $student->ID, 'certificate_type', true );
-				$type_key  = CG_Field_Schema::cert_type_to_key( $cert_type );
+				$type_key  = CertificateGenerator_Field_Schema::cert_type_to_key( $cert_type );
 				if ( $cert_type && ! isset( $seen_types[ $type_key ] ) ) {
 					$seen_types[ $type_key ] = true;
-					foreach ( CG_Field_Schema::get_extra_fields( $cert_type ) as $slug ) {
+					foreach ( CertificateGenerator_Field_Schema::get_extra_fields( $cert_type ) as $slug ) {
 						if ( ! in_array( $slug, $extra_slugs, true ) ) {
 							$extra_slugs[] = $slug;
 						}
@@ -272,24 +272,24 @@ function bulk_export_students() {
 		exit;
 	}
 }
-add_action( 'admin_init', 'bulk_export_students' );
+add_action( 'admin_init', 'certificate_generator_bulk_export_students' );
 
 
 
 // Render the Export Schools Page
-function render_bulk_export_schools_page() {
-	cg_ui_card_open( 'Export schools', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
+function certificate_generator_render_bulk_export_schools_page() {
+	certificate_generator_ui_card_open( 'Export schools', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
 	echo '<form method="post">';
 	wp_nonce_field( 'cg_export_schools', '_wpnonce_cg_export' );
 	echo '<input type="hidden" name="export_schools" value="1" />';
-	cg_render_export_filter_fields();
+	certificate_generator_render_export_filter_fields();
 	echo '<p class="submit"><button type="submit" class="button button-primary">Export to CSV</button></p>';
 	echo '</form>';
-	cg_ui_card_close();
+	certificate_generator_ui_card_close();
 }
 
 // Handle CSV Export for Schools
-function bulk_export_schools() {
+function certificate_generator_bulk_export_schools() {
 	if ( isset( $_POST['export_schools'] ) ) {
 		check_admin_referer( 'cg_export_schools', '_wpnonce_cg_export' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -311,7 +311,7 @@ function bulk_export_schools() {
 			) === $school_table;
 
 			if ( $table_exists ) {
-				[ $where_sql, $where_params ] = cg_export_filter_where();
+				[ $where_sql, $where_params ] = certificate_generator_export_filter_where();
 				$sql  = "SELECT * FROM $school_table" . $where_sql . ' ORDER BY id ASC'; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 				$rows = empty( $where_params )
 					? $GLOBALS['wpdb']->get_results( $sql, ARRAY_A ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -321,7 +321,7 @@ function bulk_export_schools() {
 					add_action(
 						'admin_notices',
 						function () {
-							cg_ui_notice( 'warning', 'No schools found for export.' );
+							certificate_generator_ui_notice( 'warning', 'No schools found for export.' );
 						}
 					);
 					return;
@@ -386,7 +386,7 @@ function bulk_export_schools() {
 			add_action(
 				'admin_notices',
 				function () {
-					cg_ui_notice( 'warning', 'No schools found for export.' );
+					certificate_generator_ui_notice( 'warning', 'No schools found for export.' );
 				}
 			);
 			return;
@@ -418,24 +418,24 @@ function bulk_export_schools() {
 		exit;
 	}
 }
-add_action( 'admin_init', 'bulk_export_schools' );
+add_action( 'admin_init', 'certificate_generator_bulk_export_schools' );
 
 
 
 // Render the Export Teachers Page
-function render_bulk_export_teachers_page() {
-	cg_ui_card_open( 'Export teachers', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
+function certificate_generator_render_bulk_export_teachers_page() {
+	certificate_generator_ui_card_open( 'Export teachers', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
 	echo '<form method="post">';
 	wp_nonce_field( 'cg_export_teachers', '_wpnonce_cg_export' );
 	echo '<input type="hidden" name="export_teachers" value="1" />';
-	cg_render_export_filter_fields();
+	certificate_generator_render_export_filter_fields();
 	echo '<p class="submit"><button type="submit" class="button button-primary">Export to CSV</button></p>';
 	echo '</form>';
-	cg_ui_card_close();
+	certificate_generator_ui_card_close();
 }
 
 // Handle CSV Export for Teachers
-function bulk_export_teachers() {
+function certificate_generator_bulk_export_teachers() {
 	if ( isset( $_POST['export_teachers'] ) ) {
 		check_admin_referer( 'cg_export_teachers', '_wpnonce_cg_export' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -457,7 +457,7 @@ function bulk_export_teachers() {
 			) === $teacher_table;
 
 			if ( $table_exists ) {
-				[ $where_sql, $where_params ] = cg_export_filter_where();
+				[ $where_sql, $where_params ] = certificate_generator_export_filter_where();
 				$sql  = "SELECT * FROM $teacher_table" . $where_sql . ' ORDER BY id ASC'; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 				$rows = empty( $where_params )
 					? $GLOBALS['wpdb']->get_results( $sql, ARRAY_A ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -467,7 +467,7 @@ function bulk_export_teachers() {
 					add_action(
 						'admin_notices',
 						function () {
-							cg_ui_notice( 'warning', 'No teachers found for export.' );
+							certificate_generator_ui_notice( 'warning', 'No teachers found for export.' );
 						}
 					);
 					return;
@@ -534,7 +534,7 @@ function bulk_export_teachers() {
 			add_action(
 				'admin_notices',
 				function () {
-					cg_ui_notice( 'warning', 'No teachers found for export.' );
+					certificate_generator_ui_notice( 'warning', 'No teachers found for export.' );
 				}
 			);
 			return;
@@ -573,25 +573,25 @@ function bulk_export_teachers() {
 		exit;
 	}
 }
-add_action( 'admin_init', 'bulk_export_teachers' );
+add_action( 'admin_init', 'certificate_generator_bulk_export_teachers' );
 
 
 // Render the Export Certificates Page
-function render_bulk_export_certificates_page() {
-	cg_ui_card_open( 'Export certificates', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
+function certificate_generator_render_bulk_export_certificates_page() {
+	certificate_generator_ui_card_open( 'Export certificates', array( 'icon' => 'download', 'class' => 'cg-narrow' ) );
 	echo '<form method="post">';
 	wp_nonce_field( 'cg_export_certificates', '_wpnonce_cg_export' );
 	echo '<input type="hidden" name="export_certificates" value="1" />';
 	echo '<p class="submit"><button type="submit" class="button button-primary">Export to CSV</button></p>';
 	echo '</form>';
-	cg_ui_card_close();
+	certificate_generator_ui_card_close();
 }
 
 /**
  * Stream certificate template rows as the CSV the templates importer reads.
  * Shared by Bulk Export and the Templates list "Export selected" action.
  */
-function cg_output_templates_csv( array $rows ): void {
+function certificate_generator_output_templates_csv( array $rows ): void {
 	// Decode each row's field data up front so we can (a) size the field_N
 	// columns to what's actually used instead of padding to the schema max,
 	// and (b) reuse the decoded data when writing rows below.
@@ -688,7 +688,7 @@ function cg_output_templates_csv( array $rows ): void {
 }
 
 // Handle CSV Export for Certificates
-function bulk_export_certificates() {
+function certificate_generator_bulk_export_certificates() {
 	if ( isset( $_POST['export_certificates'] ) ) {
 		check_admin_referer( 'cg_export_certificates', '_wpnonce_cg_export' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -716,13 +716,13 @@ function bulk_export_certificates() {
 					add_action(
 						'admin_notices',
 						function () {
-							cg_ui_notice( 'warning', 'No certificate templates found for export.' );
+							certificate_generator_ui_notice( 'warning', 'No certificate templates found for export.' );
 						}
 					);
 					return;
 				}
 
-				cg_output_templates_csv( $rows );
+				certificate_generator_output_templates_csv( $rows );
 				exit;
 			}
 		}
@@ -739,7 +739,7 @@ function bulk_export_certificates() {
 			add_action(
 				'admin_notices',
 				function () {
-					cg_ui_notice( 'warning', 'No certificates found for export.' );
+					certificate_generator_ui_notice( 'warning', 'No certificates found for export.' );
 				}
 			);
 			return;
@@ -751,7 +751,7 @@ function bulk_export_certificates() {
 		header( 'Expires: 0' );
 
 		$output       = fopen( 'php://output', 'w' );
-		$schema_cap   = class_exists( 'CG_Field_Schema' ) ? CG_Field_Schema::MAX_FIELDS : 15;
+		$schema_cap   = class_exists( 'CertificateGenerator_Field_Schema' ) ? CertificateGenerator_Field_Schema::MAX_FIELDS : 15;
 		$max_fields   = 1;
 		foreach ( $certificates as $certificate ) {
 			for ( $i = $schema_cap; $i > $max_fields; $i-- ) {
@@ -809,4 +809,4 @@ function bulk_export_certificates() {
 		exit;
 	}
 }
-add_action( 'admin_init', 'bulk_export_certificates' );
+add_action( 'admin_init', 'certificate_generator_bulk_export_certificates' );

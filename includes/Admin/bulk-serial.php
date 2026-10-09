@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_Bulk_Serial_Generator {
+class CertificateGenerator_Bulk_Serial_Generator {
 	private static $instance = null;
 
 	public static function get_instance() {
@@ -19,8 +19,8 @@ class CG_Bulk_Serial_Generator {
 		// pages) instead of its own admin_menu hook, so it stops landing at
 		// the very end of the submenu regardless of where it logically belongs.
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'wp_ajax_cg_bulk_generate_serials', array( $this, 'ajax_bulk_generate' ) );
-		add_action( 'wp_ajax_cg_bulk_generate_status', array( $this, 'ajax_get_status' ) );
+		add_action( 'wp_ajax_certificate_generator_bulk_generate_serials', array( $this, 'ajax_bulk_generate' ) );
+		add_action( 'wp_ajax_certificate_generator_bulk_generate_status', array( $this, 'ajax_get_status' ) );
 	}
 
 	public function add_bulk_serial_menu() {
@@ -164,17 +164,17 @@ class CG_Bulk_Serial_Generator {
 		}
 		?>
 		<div class="wrap cg-bulk-serial-page">
-			<?php cg_ui_page_header( 'Bulk Serial Numbers', 'Give every certificate record that has no serial number a unique one. Records that already have a serial are left alone.' ); ?>
+			<?php certificate_generator_ui_page_header( 'Bulk Serial Numbers', 'Give every certificate record that has no serial number a unique one. Records that already have a serial are left alone.' ); ?>
 
 			<div class="cg-stats">
 				<?php
-				cg_ui_stat( 'Total Certificate Records', $stats['total_posts'] );
-				cg_ui_stat( 'With Serial Number', $stats['total_with_serial'], '', 'good' );
-				cg_ui_stat( 'Missing Serial Number', $stats['total_without_serial'], '', $stats['total_without_serial'] ? 'warn' : '' );
+				certificate_generator_ui_stat( 'Total Certificate Records', $stats['total_posts'] );
+				certificate_generator_ui_stat( 'With Serial Number', $stats['total_with_serial'], '', 'good' );
+				certificate_generator_ui_stat( 'Missing Serial Number', $stats['total_without_serial'], '', $stats['total_without_serial'] ? 'warn' : '' );
 				?>
 			</div>
 
-			<?php cg_ui_card_open( 'Generate Serial Numbers', array( 'icon' => 'tag' ) ); ?>
+			<?php certificate_generator_ui_card_open( 'Generate Serial Numbers', array( 'icon' => 'tag' ) ); ?>
 				<div class="cg-actions">
 					<label><input type="checkbox" id="cg-bulk-students" checked> Include Students</label>
 					<label><input type="checkbox" id="cg-bulk-teachers" checked> Include Teachers</label>
@@ -183,10 +183,10 @@ class CG_Bulk_Serial_Generator {
 				<p class="submit">
 					<button type="button" id="cg-bulk-generate-btn" class="button button-primary">Generate Serial Numbers</button>
 				</p>
-				<?php cg_ui_progress( 'cg-bulk-progress' ); ?>
-			<?php cg_ui_card_close(); ?>
+				<?php certificate_generator_ui_progress( 'cg-bulk-progress' ); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( 'Recently Generated Serial Numbers', array( 'icon' => 'list-view' ) ); ?>
+			<?php certificate_generator_ui_card_open( 'Recently Generated Serial Numbers', array( 'icon' => 'list-view' ) ); ?>
 				<div class="cg-table-wrap">
 				<table class="wp-list-table widefat fixed striped cg-table">
 					<thead>
@@ -201,7 +201,7 @@ class CG_Bulk_Serial_Generator {
 					</thead>
 					<tbody id="cg-bulk-recent-serials">
 						<?php if ( empty( $recent_serials ) ) : ?>
-							<?php echo cg_ui_empty_row( 6, 'No serial numbers yet. Generate certificates, or run bulk generation above.' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+							<?php echo certificate_generator_ui_empty_row( 6, 'No serial numbers yet. Generate certificates, or run bulk generation above.' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 						<?php else : ?>
 							<?php foreach ( $recent_serials as $row ) : ?>
 								<tr>
@@ -210,18 +210,18 @@ class CG_Bulk_Serial_Generator {
 									<td><?php echo esc_html( ! empty( $row->certificate_type ) ? $row->certificate_type : '—' ); ?></td>
 									<td><code><?php echo esc_html( $row->serial_number ); ?></code></td>
 									<td><?php echo esc_html( ucfirst( ! empty( $row->generated_via ) ? $row->generated_via : 'manual' ) ); ?></td>
-									<td><?php echo esc_html( cg_format_date( $row->issued_at, true ) ? cg_format_date( $row->issued_at, true ) : '—' ); ?></td>
+									<td><?php echo esc_html( certificate_generator_format_date( $row->issued_at, true ) ? certificate_generator_format_date( $row->issued_at, true ) : '—' ); ?></td>
 								</tr>
 							<?php endforeach; ?>
 						<?php endif; ?>
 					</tbody>
 				</table>
 				</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( 'Duplicate Serial Numbers', array( 'icon' => 'warning' ) ); ?>
+			<?php certificate_generator_ui_card_open( 'Duplicate Serial Numbers', array( 'icon' => 'warning' ) ); ?>
 				<?php if ( empty( $duplicates ) ) : ?>
-					<?php echo cg_ui_empty( 'No duplicate serial numbers. Every serial points to exactly one record.', '', '', 'yes-alt' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+					<?php echo certificate_generator_ui_empty( 'No duplicate serial numbers. Every serial points to exactly one record.', '', '', 'yes-alt' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 				<?php else : ?>
 					<p>These serials are shared by more than one record, so the public verify page shows only one holder for each. Nothing here is changed automatically. Review each case; revoke from the Revoke Certificate tool if needed.</p>
 					<div class="cg-table-wrap">
@@ -255,7 +255,7 @@ class CG_Bulk_Serial_Generator {
 					</table>
 					</div>
 				<?php endif; ?>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 		</div>
 		<?php
 	}
@@ -292,8 +292,8 @@ class CG_Bulk_Serial_Generator {
 		global $wpdb;
 
 		$serial_gen = null;
-		if ( class_exists( 'CG_Serial_Number_Generator' ) ) {
-			$serial_gen = CG_Serial_Number_Generator::get_instance();
+		if ( class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
+			$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
 		}
 
 		// Generation results accumulator.
@@ -334,8 +334,8 @@ class CG_Bulk_Serial_Generator {
 
 				// Check if this name+type already has a serial in entity table.
 				$serial = '';
-				if ( function_exists( 'cg_find_existing_serial' ) && $name && $cert_type ) {
-					$serial = cg_find_existing_serial( $name, $cert_type, (string) ( $row['issue_date'] ?? '' ) );
+				if ( function_exists( 'certificate_generator_find_existing_serial' ) && $name && $cert_type ) {
+					$serial = certificate_generator_find_existing_serial( $name, $cert_type, (string) ( $row['issue_date'] ?? '' ) );
 				}
 
 				// The row is updated by id below, so no student_data for generate().
@@ -359,9 +359,9 @@ class CG_Bulk_Serial_Generator {
 					)
 				);
 
-				// Persist to wp_cg_certificates (and legacy table via cg_insert_certificate_record).
-				if ( function_exists( 'cg_insert_certificate_record' ) ) {
-					cg_insert_certificate_record(
+				// Persist to wp_cg_certificates (and legacy table via certificate_generator_insert_certificate_record).
+				if ( function_exists( 'certificate_generator_insert_certificate_record' ) ) {
+					certificate_generator_insert_certificate_record(
 						array(
 							$name_col          => $name,
 							'email'            => $email,

@@ -9,7 +9,7 @@ use CertificateGenerator\Services\BadgeGenerator;
 /**
  * Renders a companion badge PNG alongside a certificate PDF, for templates
  * that have an optional badge_template_url configured. Hooked to the existing
- * cg_certificate_generated action ($post_id, $pdf_path) — no new trigger
+ * certificate_generator_certificate_generated action ($post_id, $pdf_path) — no new trigger
  * plumbing needed.
  *
  * Gated by CG_USE_BADGES (off by default), registered in Plugin::register_hooks().
@@ -23,8 +23,8 @@ class BadgeGenerationListener {
 			return;
 		}
 
-		// $post_id/$pdf_path is all cg_certificate_generated carries — correlate back
-		// to the row _cg_generate_pdf_impl() just wrote via the pdf_path it returned.
+		// $post_id/$pdf_path is all certificate_generator_certificate_generated carries — correlate back
+		// to the row certificate_generator_generate_pdf_impl() just wrote via the pdf_path it returned.
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$cert = $wpdb->get_row(
 			$wpdb->prepare( "SELECT * FROM $cert_table WHERE pdf_path = %s ORDER BY id DESC LIMIT 1", $pdf_path ),

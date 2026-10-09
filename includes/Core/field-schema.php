@@ -1,9 +1,9 @@
 <?php
 /**
- * CG_Field_Schema — manages per-certificate-type extra field definitions.
+ * CertificateGenerator_Field_Schema — manages per-certificate-type extra field definitions.
  *
  * Extra fields are stored in wp_options keyed by certificate type:
- *   cg_extra_fields_{cert_type_key}  →  ['team_name', 'score']
+ *   certificate_generator_extra_fields_{cert_type_key}  →  ['team_name', 'score']
  *
  * Field values are stored as normal post_meta on student posts.
  */
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @param string|null $iso_date Date string, e.g. "2025-04-10".
  * @return int|null
  */
-function cg_year_from_issue_date( ?string $iso_date ): ?int {
+function certificate_generator_year_from_issue_date( ?string $iso_date ): ?int {
 	if ( empty( $iso_date ) ) {
 		return null;
 	}
@@ -26,7 +26,7 @@ function cg_year_from_issue_date( ?string $iso_date ): ?int {
 	return $year > 1970 ? $year : null;
 }
 
-class CG_Field_Schema {
+class CertificateGenerator_Field_Schema {
 
 	/** Fields rendered on every certificate (order = slot index). */
 	const STANDARD_FIELDS = array( 'student_name', 'school_name', 'teacher_name', 'issue_date' );
@@ -57,7 +57,7 @@ class CG_Field_Schema {
 			return array();
 		}
 		$key    = self::cert_type_to_key( $cert_type );
-		$fields = get_option( 'cg_extra_fields_' . $key, array() );
+		$fields = get_option( 'certificate_generator_extra_fields_' . $key, array() );
 		return is_array( $fields ) ? array_values( $fields ) : array();
 	}
 
@@ -86,7 +86,7 @@ class CG_Field_Schema {
 		}
 
 		$key    = self::cert_type_to_key( $cert_type );
-		$fields = get_option( 'cg_extra_fields_' . $key, array() );
+		$fields = get_option( 'certificate_generator_extra_fields_' . $key, array() );
 		if ( ! is_array( $fields ) ) {
 			$fields = array();
 		}
@@ -101,7 +101,7 @@ class CG_Field_Schema {
 		}
 
 		$fields[] = $slug;
-		update_option( 'cg_extra_fields_' . $key, $fields, false );
+		update_option( 'certificate_generator_extra_fields_' . $key, $fields, false );
 		return true;
 	}
 
@@ -114,12 +114,12 @@ class CG_Field_Schema {
 			return false;
 		}
 		$key    = self::cert_type_to_key( $cert_type );
-		$fields = get_option( 'cg_extra_fields_' . $key, array() );
+		$fields = get_option( 'certificate_generator_extra_fields_' . $key, array() );
 		if ( ! is_array( $fields ) ) {
 			return false;
 		}
 		$updated = array_values( array_diff( $fields, array( $slug ) ) );
-		update_option( 'cg_extra_fields_' . $key, $updated, false );
+		update_option( 'certificate_generator_extra_fields_' . $key, $updated, false );
 		return true;
 	}
 
@@ -144,7 +144,7 @@ class CG_Field_Schema {
 	 */
 	public static function get_all_registered_types(): array {
 		global $wpdb;
-		$like    = $wpdb->esc_like( 'cg_extra_fields_' ) . '%';
+		$like    = $wpdb->esc_like( 'certificate_generator_extra_fields_' ) . '%';
 		$options = $wpdb->get_results(
 			$wpdb->prepare( "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s", $like )
 		);
@@ -153,7 +153,7 @@ class CG_Field_Schema {
 			$key    = $row->option_name;
 			$fields = maybe_unserialize( $row->option_value );
 			if ( is_array( $fields ) && ! empty( $fields ) ) {
-				$type_key = str_replace( 'cg_extra_fields_', '', $key );
+				$type_key = str_replace( 'certificate_generator_extra_fields_', '', $key );
 				$result[] = array(
 					'key'    => $type_key,
 					'label'  => $type_key, // raw key; admins see the key

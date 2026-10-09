@@ -18,8 +18,8 @@ if ( ! defined( 'SECURE_AUTH_KEY' ) ) {
 	define( 'SECURE_AUTH_KEY', 'phpstan-placeholder-key' );
 }
 
-if ( ! function_exists( 'cg_format_date' ) ) {
-	function cg_format_date( ?string $date_string, bool $include_time = false ): string {
+if ( ! function_exists( 'certificate_generator_format_date' ) ) {
+	function certificate_generator_format_date( ?string $date_string, bool $include_time = false ): string {
 		return '';
 	}
 }

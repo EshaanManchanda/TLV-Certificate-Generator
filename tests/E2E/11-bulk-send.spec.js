@@ -17,7 +17,7 @@ test.describe('§11 Bulk Send preview', () => {
 					'issue_date' => '2026-02-01', 'year' => 2026, 'status' => 'active', 'import_source' => 'e2e',
 				]);
 			}
-			delete_transient('cg_unique_cert_types');
+			delete_transient('certificate_generator_unique_cert_types');
 			echo 1;`);
 	});
 

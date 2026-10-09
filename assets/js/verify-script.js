@@ -196,7 +196,7 @@ jQuery(document).ready(function ($) {
             url: cgVerify.ajaxurl,
             type: 'POST',
             data: {
-                action: 'cg_public_verify',
+                action: 'certificate_generator_public_verify',
                 nonce: cgVerify.nonce,
                 serial_number: serial
             },

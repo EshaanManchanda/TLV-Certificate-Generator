@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_Analytics_Dashboard {
+class CertificateGenerator_Analytics_Dashboard {
 	private static $instance = null;
 
 	public static function get_instance() {
@@ -15,9 +15,9 @@ class CG_Analytics_Dashboard {
 
 	public function init() {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'wp_ajax_cg_get_analytics_data', array( $this, 'ajax_get_analytics_data' ) );
-		add_action( 'wp_ajax_cg_export_expiration_report', array( $this, 'export_expiration_report' ) );
-		add_action( 'wp_ajax_cg_export_monthly_report', array( $this, 'export_monthly_report' ) );
+		add_action( 'wp_ajax_certificate_generator_get_analytics_data', array( $this, 'ajax_get_analytics_data' ) );
+		add_action( 'wp_ajax_certificate_generator_export_expiration_report', array( $this, 'export_expiration_report' ) );
+		add_action( 'wp_ajax_certificate_generator_export_monthly_report', array( $this, 'export_monthly_report' ) );
 	}
 
 	public function add_analytics_menu() {
@@ -59,29 +59,29 @@ class CG_Analytics_Dashboard {
 		?>
 		<div class="wrap cg-analytics-page">
 			<?php
-			cg_ui_page_header(
+			certificate_generator_ui_page_header(
 				'Certificate Analytics',
 				'How many certificates have been issued, how they were generated, and which are about to expire.',
-				'<a href="' . esc_url( admin_url( 'admin-ajax.php?action=cg_export_expiration_report&nonce=' . wp_create_nonce( 'cg_export_nonce' ) ) ) . '" class="button button-primary">Export Expiration Report (CSV)</a>'
-				. '<a href="' . esc_url( admin_url( 'admin-ajax.php?action=cg_export_monthly_report&nonce=' . wp_create_nonce( 'cg_export_nonce' ) ) ) . '" class="button">Export Monthly Report (CSV)</a>'
+				'<a href="' . esc_url( admin_url( 'admin-ajax.php?action=certificate_generator_export_expiration_report&nonce=' . wp_create_nonce( 'cg_export_nonce' ) ) ) . '" class="button button-primary">Export Expiration Report (CSV)</a>'
+				. '<a href="' . esc_url( admin_url( 'admin-ajax.php?action=certificate_generator_export_monthly_report&nonce=' . wp_create_nonce( 'cg_export_nonce' ) ) ) . '" class="button">Export Monthly Report (CSV)</a>'
 			);
 			?>
 
 			<div class="cg-stats">
 				<?php
-				cg_ui_stat( 'Total Certificates', $stats['total_certificates'] );
-				cg_ui_stat( 'Issued This Month', $stats['issued_this_month'] );
-				cg_ui_stat( 'With Serial Number', $stats['with_serial'] );
-				cg_ui_stat( 'Expiring in 30 Days', $stats['expiring_soon'], '', $stats['expiring_soon'] ? 'warn' : '' );
-				cg_ui_stat( 'Expired', $stats['expired'], '', $stats['expired'] ? 'bad' : '' );
-				cg_ui_stat( 'Avg Per Day (30d)', (string) $stats['avg_per_day'] );
+				certificate_generator_ui_stat( 'Total Certificates', $stats['total_certificates'] );
+				certificate_generator_ui_stat( 'Issued This Month', $stats['issued_this_month'] );
+				certificate_generator_ui_stat( 'With Serial Number', $stats['with_serial'] );
+				certificate_generator_ui_stat( 'Expiring in 30 Days', $stats['expiring_soon'], '', $stats['expiring_soon'] ? 'warn' : '' );
+				certificate_generator_ui_stat( 'Expired', $stats['expired'], '', $stats['expired'] ? 'bad' : '' );
+				certificate_generator_ui_stat( 'Avg Per Day (30d)', (string) $stats['avg_per_day'] );
 				?>
 			</div>
 
 			<?php if ( ! $stats['total_certificates'] ) : ?>
-				<?php cg_ui_card_open(); ?>
-				<?php echo cg_ui_empty( 'No certificates issued yet. Charts appear here once certificates are generated or sent.', admin_url( 'admin.php?page=certificate-bulk-send' ), 'Go to Bulk Send', 'chart-bar' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
-				<?php cg_ui_card_close(); ?>
+				<?php certificate_generator_ui_card_open(); ?>
+				<?php echo certificate_generator_ui_empty( 'No certificates issued yet. Charts appear here once certificates are generated or sent.', admin_url( 'admin.php?page=certificate-bulk-send' ), 'Go to Bulk Send', 'chart-bar' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+				<?php certificate_generator_ui_card_close(); ?>
 			<?php else : ?>
 			<div class="cg-grid cg-charts">
 				<?php
@@ -91,9 +91,9 @@ class CG_Analytics_Dashboard {
 					'cg-method-chart'     => 'Generation Method Distribution',
 					'cg-expiration-chart' => 'Expiration Status',
 				) as $chart_id => $chart_title ) {
-					cg_ui_card_open( $chart_title, array( 'icon' => 'chart-bar' ) );
+					certificate_generator_ui_card_open( $chart_title, array( 'icon' => 'chart-bar' ) );
 					echo '<canvas id="' . esc_attr( $chart_id ) . '"></canvas>';
-					cg_ui_card_close();
+					certificate_generator_ui_card_close();
 				}
 				?>
 			</div>
@@ -316,10 +316,10 @@ class CG_Analytics_Dashboard {
 					$row['id'],
 					$row['student_name'],
 					$row['serial_number'] ?? 'N/A',
-					cg_format_date( $row['issued_at'] ?? '' ),
-					$row['expires_at'] ? cg_format_date( $row['expires_at'] ) : 'N/A',
+					certificate_generator_format_date( $row['issued_at'] ?? '' ),
+					$row['expires_at'] ? certificate_generator_format_date( $row['expires_at'] ) : 'N/A',
 					$status,
-					cg_format_date( $row['created_at'] ?? '' ),
+					certificate_generator_format_date( $row['created_at'] ?? '' ),
 				)
 			);
 		}

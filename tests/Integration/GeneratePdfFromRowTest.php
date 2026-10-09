@@ -1,7 +1,7 @@
 <?php
 /**
  * Regression test for the "wrong certificate in bulk-send ZIP" bug:
- * cg_generate_pdf_from_row() used to re-query the entity table by
+ * certificate_generator_generate_pdf_from_row() used to re-query the entity table by
  * `email + certificate_type LIMIT 1` instead of using the row it was given,
  * so multiple students sharing an email + certificate_type (e.g. siblings)
  * all collapsed onto whichever row LIMIT 1 happened to return. See
@@ -100,12 +100,12 @@ class GeneratePdfFromRowTest extends WP_UnitTestCase {
 				ARRAY_A
 			);
 
-			$path = cg_generate_pdf_from_row( $row );
+			$path = certificate_generator_generate_pdf_from_row( $row );
 
 			$this->assertNotEmpty( $path, "PDF generation failed for $name (id=$id)" );
 			$this->assertFileExists( $path );
 			$this->assertSame(
-				cg_certificate_file_stem( 'students_row_' . $id ) . '.pdf',
+				certificate_generator_certificate_file_stem( 'students_row_' . $id ) . '.pdf',
 				basename( $path ),
 				"Row id=$id ($name) must produce its own certificate_students_row_{$id}.pdf, not share another sibling's file"
 			);
@@ -136,7 +136,7 @@ class GeneratePdfFromRowTest extends WP_UnitTestCase {
 
 		foreach ( $this->student_ids as $name => $id ) {
 			$row  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $id ), ARRAY_A );
-			$path = cg_generate_pdf_from_row( $row );
+			$path = certificate_generator_generate_pdf_from_row( $row );
 
 			$text = shell_exec( 'pdftotext ' . escapeshellarg( $path ) . ' - 2>NUL' );
 
@@ -156,8 +156,8 @@ class GeneratePdfFromRowTest extends WP_UnitTestCase {
 
 		$this->assertNull( $row['wp_post_id'] );
 
-		$path = cg_generate_pdf_from_row( $row );
+		$path = certificate_generator_generate_pdf_from_row( $row );
 
-		$this->assertSame( cg_certificate_file_stem( 'students_row_' . $id ) . '.pdf', basename( $path ) );
+		$this->assertSame( certificate_generator_certificate_file_stem( 'students_row_' . $id ) . '.pdf', basename( $path ) );
 	}
 }

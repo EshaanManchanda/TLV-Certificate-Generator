@@ -27,7 +27,7 @@ class FontsPage extends Page {
 		$table = CustomTables::instance()->get_table( 'custom_fonts' );
 
 		// The Pro add-on handles uploads here and returns its notice.
-		$message = (string) apply_filters( 'cg_fonts_page_message', '' );
+		$message = (string) apply_filters( 'certificate_generator_fonts_page_message', '' );
 
 		if ( isset( $_GET['cg_font_delete'] ) && check_admin_referer( 'cg_font_delete' ) ) {
 			$wpdb->delete( $table, array( 'id' => absint( $_GET['cg_font_delete'] ) ) );
@@ -50,27 +50,27 @@ class FontsPage extends Page {
 		</style>
 		<div class="wrap">
 			<?php
-			cg_ui_page_header(
+			certificate_generator_ui_page_header(
 				$this->title,
 				__( 'Fonts available to your certificate templates. Pick one in a template\'s Font Style field.', 'certificate-generator' ),
-				'<a href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=cg_font_sample' ), 'cg_font_sample' ) ) . '" class="button" target="_blank" rel="noopener">' . esc_html__( 'Download sample PDF', 'certificate-generator' ) . '</a>'
+				'<a href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=certificate_generator_font_sample' ), 'certificate_generator_font_sample' ) ) . '" class="button" target="_blank" rel="noopener">' . esc_html__( 'Download sample PDF', 'certificate-generator' ) . '</a>'
 			);
 			if ( $message ) {
 				$is_error = stripos( $message, 'fail' ) !== false || stripos( $message, "can't" ) !== false || stripos( $message, 'please' ) !== false;
-				cg_ui_notice( $is_error ? 'error' : 'success', esc_html( $message ) );
+				certificate_generator_ui_notice( $is_error ? 'error' : 'success', esc_html( $message ) );
 			}
 			?>
 
-			<?php do_action( 'cg_fonts_page_upload_card' ); ?>
+			<?php do_action( 'certificate_generator_fonts_page_upload_card' ); ?>
 
-			<?php cg_ui_card_open( __( 'Built-in fonts', 'certificate-generator' ), array( 'icon' => 'editor-textcolor' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Built-in fonts', 'certificate-generator' ), array( 'icon' => 'editor-textcolor' ) ); ?>
 			<p class="cg-hint"><?php esc_html_e( 'Included with the plugin. Download the sample PDF to see each font exactly as it prints on a certificate.', 'certificate-generator' ); ?></p>
 			<div class="cg-table-wrap">
 			<table class="widefat striped cg-table" id="cg-builtin-fonts">
 				<thead><tr><th><?php esc_html_e( 'Name', 'certificate-generator' ); ?></th><th><?php esc_html_e( 'Font key', 'certificate-generator' ); ?></th><th><?php esc_html_e( 'Used by', 'certificate-generator' ); ?></th><th><?php esc_html_e( 'Notes', 'certificate-generator' ); ?></th></tr></thead>
 				<tbody>
 					<?php if ( empty( $builtin ) ) : ?>
-						<?php echo cg_ui_empty_row( 4, __( 'No built-in fonts found in lib/fpdf/font/. Reinstall the plugin to restore them.', 'certificate-generator' ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+						<?php echo certificate_generator_ui_empty_row( 4, __( 'No built-in fonts found in lib/fpdf/font/. Reinstall the plugin to restore them.', 'certificate-generator' ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 					<?php endif; ?>
 					<?php foreach ( $builtin as $font_key => $builtin_font ) : ?>
 						<?php
@@ -88,15 +88,15 @@ class FontsPage extends Page {
 				</tbody>
 			</table>
 			</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( __( 'Uploaded fonts', 'certificate-generator' ), array( 'icon' => 'upload' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Uploaded fonts', 'certificate-generator' ), array( 'icon' => 'upload' ) ); ?>
 			<div class="cg-table-wrap">
 			<table class="widefat striped cg-table">
 				<thead><tr><th>Name</th><th>Preview</th><th>File</th><th>Used by</th><th></th></tr></thead>
 				<tbody>
 					<?php if ( empty( $fonts ) ) : ?>
-						<?php echo cg_ui_empty_row( 5, 'No custom fonts uploaded yet.' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+						<?php echo certificate_generator_ui_empty_row( 5, 'No custom fonts uploaded yet.' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 					<?php endif; ?>
 					<?php foreach ( $fonts as $font ) : ?>
 						<?php
@@ -118,7 +118,7 @@ class FontsPage extends Page {
 				</tbody>
 			</table>
 			</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 		</div>
 		<?php
 	}
@@ -170,12 +170,12 @@ class FontsPage extends Page {
 		return $pdf->Output( 'S' );
 	}
 
-	/** Handler for admin-post.php?action=cg_font_sample (registered in Plugin::register_hooks()). */
+	/** Handler for admin-post.php?action=certificate_generator_font_sample (registered in Plugin::register_hooks()). */
 	public static function stream_sample_pdf(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions', 'certificate-generator' ), 403 );
 		}
-		check_admin_referer( 'cg_font_sample' );
+		check_admin_referer( 'certificate_generator_font_sample' );
 
 		$pdf = self::build_sample_pdf();
 		nocache_headers();

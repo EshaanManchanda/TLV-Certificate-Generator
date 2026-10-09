@@ -7,7 +7,7 @@ const PLUGIN_FILE = 'Certificate-Generator-V7.5/certificate-generator.php';
 
 test.describe('§01 Activation & upgrade', () => {
 	test('deactivate + reactivate: no errors, menu with award icon', async ({ page }) => {
-		wp.setOption('cg_keep_data_on_uninstall', '1');
+		wp.setOption('certificate_generator_keep_data_on_uninstall', '1');
 		await page.goto('/wp-admin/plugins.php');
 		const row = page.locator(`tr[data-plugin="${PLUGIN_FILE}"]`);
 		await row.locator('.deactivate a').click();
@@ -25,12 +25,12 @@ test.describe('§01 Activation & upgrade', () => {
 		await expect(menu.locator('.wp-menu-image')).toHaveClass(/\bdashicons-award\b/);
 	});
 
-	test('SQL Migration page: DB version 009, up to date', async ({ page }) => {
+	test('SQL Migration page: DB version 010, up to date', async ({ page }) => {
 		await page.goto(adminUrl('cg-sql-migration'));
 		const body = page.locator('body');
-		await expect(body).toContainText(/Database version:\s*009/);
+		await expect(body).toContainText(/Database version:\s*010/);
 		await expect(body).toContainText('up to date');
-		expect(wp.getOption('cg_db_version')).toBe('009');
+		expect(wp.getOption('certificate_generator_db_version')).toBe('010');
 	});
 
 	test('reloading admin pages twice shows no database errors', async ({ page }) => {

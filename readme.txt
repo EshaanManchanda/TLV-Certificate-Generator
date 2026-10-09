@@ -34,8 +34,8 @@ Development happens in the open on GitHub: https://github.com/EshaanManchanda/TL
 
 = Shortcodes =
 
-* `[student_search]`, `[teacher_search]`, `[school_search]`: look up and download certificates.
-* `[cg_verify_certificate]`: public verification page.
+* `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]`: look up and download certificates.
+* `[certificate_generator_verify_certificate]`: public verification page.
 
 == Installation ==
 
@@ -86,10 +86,12 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 * Open-licensed fonts replace bundled commercial fonts; saved templates keep working.
 * Chart.js is bundled; the external QR fallback service was removed.
 * LMS (Tutor LMS, LearnDash, LifterLMS, Sensei, LearnPress) and WooCommerce auto-issue moved to the Pro add-on, with LearnPress support and "Issue to past completions" added there.
+* Shortcodes renamed to unique names: [student_search] is now [certificate_generator_student_search], [teacher_search] is [certificate_generator_teacher_search], [school_search] is [certificate_generator_school_search], and [cg_verify_certificate] is [certificate_generator_verify_certificate]. Existing pages are updated automatically.
+* All settings, serial counters and scheduled tasks move to the certificate_generator_ prefix automatically on update.
 
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
 
 = 7.6.0 =
-LMS and WooCommerce auto-issue now need the Certificate Generator Pro add-on. Your course mappings are kept and work again once the add-on is active.
+Shortcodes are renamed (e.g. [student_search] is now [certificate_generator_student_search]); your pages, settings and serial numbers are updated automatically. LMS and WooCommerce auto-issue now need the Pro add-on.

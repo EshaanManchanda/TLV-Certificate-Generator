@@ -32,16 +32,16 @@ class TextFitTest extends WP_UnitTestCase {
 		$pdf->AddPage();
 		$pdf->SetFont( 'Helvetica', 'B', 24 );
 
-		$this->assertSame( 24.0, cg_fit_font_size( $pdf, 24.0, 'Asha Rao', 100.0 ), 'short text keeps its size' );
+		$this->assertSame( 24.0, certificate_generator_fit_font_size( $pdf, 24.0, 'Asha Rao', 100.0 ), 'short text keeps its size' );
 
 		$pdf->SetFont( 'Helvetica', 'B', 24 );
-		$size = cg_fit_font_size( $pdf, 24.0, 'Venkata Subramanian Lakshminarayanan Iyer', 130.0 );
+		$size = certificate_generator_fit_font_size( $pdf, 24.0, 'Venkata Subramanian Lakshminarayanan Iyer', 130.0 );
 		$this->assertLessThan( 24.0, $size );
 		$this->assertGreaterThan( 14.4, $size, 'fits before reaching the floor' );
 		$this->assertLessThanOrEqual( 130.0, $pdf->GetStringWidth( 'Venkata Subramanian Lakshminarayanan Iyer' ) );
 
 		$pdf->SetFont( 'Helvetica', 'B', 24 );
-		$this->assertEqualsWithDelta( 14.4, cg_fit_font_size( $pdf, 24.0, str_repeat( 'Abcdefghij', 6 ), 100.0 ), 0.001, 'stops at 60% and lets the caller wrap' );
+		$this->assertEqualsWithDelta( 14.4, certificate_generator_fit_font_size( $pdf, 24.0, str_repeat( 'Abcdefghij', 6 ), 100.0 ), 0.001, 'stops at 60% and lets the caller wrap' );
 	}
 
 	/** Every content stream of an FPDF file, inflated. */
@@ -83,7 +83,7 @@ class TextFitTest extends WP_UnitTestCase {
 			)
 		);
 		$row  = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . $tables->get_table( 'students' ) . ' WHERE id = %d', $wpdb->insert_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-		$path = cg_generate_pdf_from_row( $row );
+		$path = certificate_generator_generate_pdf_from_row( $row );
 		$this->assertFileExists( $path );
 
 		$content = $this->page_streams( (string) file_get_contents( $path ) );

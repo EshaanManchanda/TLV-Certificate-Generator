@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function certificate_generator_get_unique_schools( $post_types = array( 'students', 'teachers', 'schools' ) ) {
 	global $wpdb;
 
-	$cache_key = 'cg_unique_schools';
+	$cache_key = 'certificate_generator_unique_schools';
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return $cached;
@@ -81,7 +81,7 @@ function certificate_generator_get_unique_schools( $post_types = array( 'student
 function certificate_generator_get_unique_certificate_types( $post_types = array( 'students', 'teachers', 'schools' ) ) {
 	global $wpdb;
 
-	$cache_key = 'cg_unique_cert_types';
+	$cache_key = 'certificate_generator_unique_cert_types';
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return $cached;
@@ -138,7 +138,7 @@ function certificate_generator_get_unique_certificate_types( $post_types = array
 function certificate_generator_get_unique_years() {
 	global $wpdb;
 
-	$cache_key = 'cg_unique_years';
+	$cache_key = 'certificate_generator_unique_years';
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return $cached;
@@ -188,7 +188,7 @@ function certificate_generator_get_unique_years() {
 function certificate_generator_get_unique_import_sources() {
 	global $wpdb;
 
-	$cache_key = 'cg_unique_import_sources';
+	$cache_key = 'certificate_generator_unique_import_sources';
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return $cached;
@@ -224,7 +224,7 @@ function certificate_generator_get_unique_import_sources() {
 function certificate_generator_get_unique_events() {
 	global $wpdb;
 
-	$cache_key = 'cg_unique_events';
+	$cache_key = 'certificate_generator_unique_events';
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return $cached;
@@ -257,7 +257,7 @@ function certificate_generator_get_unique_events() {
  * @param string $alias   Table alias used in the query (default 't').
  * @return array { string[] $where_fragments, array $params }
  */
-function cg_build_recipient_filter_sql( array $filters, string $alias = 't' ): array {
+function certificate_generator_build_recipient_filter_sql( array $filters, string $alias = 't' ): array {
 	global $wpdb;
 	$where  = array();
 	$params = array();
@@ -312,12 +312,12 @@ function cg_build_recipient_filter_sql( array $filters, string $alias = 't' ): a
 /**
  * Flush all filter dropdown transients. Call after any custom-table write.
  */
-function cg_flush_filter_caches(): void {
-	delete_transient( 'cg_unique_schools' );
-	delete_transient( 'cg_unique_cert_types' );
-	delete_transient( 'cg_unique_years' );
-	delete_transient( 'cg_unique_import_sources' );
-	delete_transient( 'cg_unique_events' );
+function certificate_generator_flush_filter_caches(): void {
+	delete_transient( 'certificate_generator_unique_schools' );
+	delete_transient( 'certificate_generator_unique_cert_types' );
+	delete_transient( 'certificate_generator_unique_years' );
+	delete_transient( 'certificate_generator_unique_import_sources' );
+	delete_transient( 'certificate_generator_unique_events' );
 }
 
 // Also flush on CPT saves (legacy path).
@@ -325,7 +325,7 @@ add_action(
 	'save_post',
 	function ( $post_id ) {
 		if ( in_array( get_post_type( $post_id ), array( 'students', 'teachers', 'schools', 'certificates' ), true ) ) {
-			cg_flush_filter_caches();
+			certificate_generator_flush_filter_caches();
 		}
 	}
 );
@@ -416,7 +416,7 @@ function certificate_generator_get_email_status_for_posts( $post_ids ) {
  * @param array $filters Filter criteria (same keys as get_filtered_recipients).
  * @return array{0:string,1:array}|null [ SQL, params ] or null when the SQL tables are unavailable.
  */
-function cg_recipient_set_sql( array $filters ): ?array {
+function certificate_generator_recipient_set_sql( array $filters ): ?array {
 	global $wpdb;
 
 	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
@@ -453,7 +453,7 @@ function cg_recipient_set_sql( array $filters ): ?array {
 		}
 
 		// send_email = 1: included in bulk sends. send_email = 0: opt-out (admin individual send bypasses this).
-		[ $extra_where, $extra_params ] = cg_build_recipient_filter_sql( $filters, 't' );
+		[ $extra_where, $extra_params ] = certificate_generator_build_recipient_filter_sql( $filters, 't' );
 		$where_sql                      = implode( ' AND ', array_merge( array( 't.send_email = 1' ), $extra_where ) );
 		$params                         = array_merge( $params, $extra_params );
 
@@ -517,7 +517,7 @@ function cg_recipient_set_sql( array $filters ): ?array {
 /**
  * $wpdb->prepare() refuses a query with no placeholders; skip it when there are no params.
  */
-function cg_prepare_maybe( string $sql, array $params ): string {
+function certificate_generator_prepare_maybe( string $sql, array $params ): string {
 	global $wpdb;
 	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	return $params ? $wpdb->prepare( $sql, ...$params ) : $sql;
@@ -551,7 +551,7 @@ function certificate_generator_get_filtered_recipients( $filters = array() ) {
 	$filters  = wp_parse_args( $filters, $defaults );
 
 	// SQL-first path — query wp_cg_* tables
-	$set = cg_recipient_set_sql( $filters );
+	$set = certificate_generator_recipient_set_sql( $filters );
 	if ( null !== $set ) {
 		[ $sql, $params ] = $set;
 		$params[]         = $filters['limit'];
@@ -659,9 +659,9 @@ function certificate_generator_count_filtered_recipients( $filters = array() ) {
 	$filters  = wp_parse_args( $filters, $defaults );
 
 	// SQL-first path — same recipient set as get_filtered_recipients, wrapped in COUNT
-	$set = cg_recipient_set_sql( $filters );
+	$set = certificate_generator_recipient_set_sql( $filters );
 	if ( null !== $set ) {
-		return (int) $wpdb->get_var( cg_prepare_maybe( "SELECT COUNT(*) FROM ({$set[0]}) AS c", $set[1] ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
+		return (int) $wpdb->get_var( certificate_generator_prepare_maybe( "SELECT COUNT(*) FROM ({$set[0]}) AS c", $set[1] ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	}
 
 	// CPT fallback
@@ -793,7 +793,7 @@ function certificate_generator_get_filter_statistics( $filters = array() ) {
 		'long_names'         => 0, // names that won't fit their field even at the smallest size
 	);
 
-	$set = cg_recipient_set_sql( $filters );
+	$set = certificate_generator_recipient_set_sql( $filters );
 	if ( null === $set ) {
 		return $stats;
 	}
@@ -801,7 +801,7 @@ function certificate_generator_get_filter_statistics( $filters = array() ) {
 
 	// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	$row = $wpdb->get_row(
-		cg_prepare_maybe(
+		certificate_generator_prepare_maybe(
 			"SELECT COUNT(*) AS total_certificates,
 				SUM(email IS NOT NULL AND email != '') AS with_email,
 				COUNT(DISTINCT NULLIF(email, '')) AS unique_emails,
@@ -819,7 +819,7 @@ function certificate_generator_get_filter_statistics( $filters = array() ) {
 
 	// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	$stats['grouped_sends'] = (int) $wpdb->get_var(
-		cg_prepare_maybe(
+		certificate_generator_prepare_maybe(
 			"SELECT COUNT(*) FROM (
 				SELECT email FROM ($sql) AS s WHERE email IS NOT NULL AND email != '' GROUP BY email HAVING COUNT(*) > 1
 			) AS g",
@@ -830,7 +830,7 @@ function certificate_generator_get_filter_statistics( $filters = array() ) {
 
 	// Dry-run warnings (PreSendCheck): measured in PHP, over every matching record.
 	if ( class_exists( '\CertificateGenerator\Services\PreSendCheck' ) ) {
-		$rows  = $wpdb->get_results( cg_prepare_maybe( "SELECT name, email, certificate_type, issue_date, post_type FROM ($sql) AS s", $params ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
+		$rows  = $wpdb->get_results( certificate_generator_prepare_maybe( "SELECT name, email, certificate_type, issue_date, post_type FROM ($sql) AS s", $params ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$stats = array_merge( $stats, \CertificateGenerator\Services\PreSendCheck::summarize( $rows ?: array() ) );
 	}
 

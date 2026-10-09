@@ -108,7 +108,7 @@ Use `doc/samples/*.csv` and a CSV of your own containing the test data table abo
 - [ ] Try the date option: turn on "include date" with a yearly reset. New serials look like `CERT-2026-000000NN`.
 
 ## 9. Verification (public)
-Create a page containing `[cg_verify_certificate]` and open it in a **logged-out / private window**.
+Create a page containing `[certificate_generator_verify_certificate]` and open it in a **logged-out / private window**.
 - [ ] Enter Ben's serial. It shows **Valid** with the right name, type and date.
 - [ ] Enter Asha's two serials. Each shows Asha with the correct event.
 - [ ] An unknown serial shows **Not found**.
@@ -124,7 +124,7 @@ Create a page containing `[cg_verify_certificate]` and open it in a **logged-out
 - [ ] A wrong serial gives the error "No certificate found".
 
 ## 11. Search shortcodes (front end)
-Create pages with `[student_search]`, `[teacher_search]`, `[school_search]` and
+Create pages with `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]` and
 `[school_bulk_certificate_download]`, and test them logged out.
 - [ ] Student search by email or name finds Asha and lists **both** events, each downloading the right PDF.
 - [ ] A certificate that isn't ready yet shows the **pending** notice instead of an error.

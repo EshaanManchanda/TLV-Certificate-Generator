@@ -123,7 +123,7 @@ and [`CONFIGURATION.md`](CONFIGURATION.md#lms--e-commerce-auto-issuance-v9).
 
 ## Getting Started — 4-step quick start
 
-The same checklist appears on the Dashboard (`cg_setup_steps()`) and ticks itself off.
+The same checklist appears on the Dashboard (`certificate_generator_setup_steps()`) and ticks itself off.
 
 1. **Create a certificate template** — go to **Templates**, upload your background image, and
    position the text fields (name, certificate type, date, etc.).
@@ -142,7 +142,7 @@ The same checklist appears on the Dashboard (`cg_setup_steps()`) and ticks itsel
 1. Go to **Certificate Generator → Templates → Add New**.
 2. Upload your certificate background image (PNG or JPG, A4 landscape recommended).
 3. Use the field position editor to drag Name, Certificate Type, School, and Date fields onto
-   the canvas — up to 15 custom field slots per certificate type (`CG_Field_Schema`).
+   the canvas — up to 15 custom field slots per certificate type (`CertificateGenerator_Field_Schema`).
 4. Set font, size, and colour for each field.
 5. Click **Save Template**.
 
@@ -170,8 +170,8 @@ under **Serial Settings**:
 
 - Format: `PREFIX-{YEAR}-{SEQ}` — e.g. `CERT-2025-00142`.
 - Prefix, year inclusion, sequence padding, and reset period are all configurable
-  (`cg_serial_prefix`, `cg_serial_length`, `cg_serial_suffix`, `cg_serial_reset_period`,
-  `cg_serial_include_date`).
+  (`certificate_generator_serial_prefix`, `certificate_generator_serial_length`, `certificate_generator_serial_suffix`, `certificate_generator_serial_reset_period`,
+  `certificate_generator_serial_include_date`).
 - Use **Bulk Serials** to assign serial numbers to existing records that don't have one yet.
 
 This feature is **not plan-gated** — it works identically on Free, Pro, and Business.
@@ -196,7 +196,7 @@ feature is **not plan-gated** — it works identically on Free, Pro, and Busines
 
 ### Verification
 
-Every certificate's QR code (and the `[cg_verify_certificate]` shortcode) resolves to a public
+Every certificate's QR code (and the `[certificate_generator_verify_certificate]` shortcode) resolves to a public
 authenticity check. Visitors can also search by serial number or email on the results page,
 which also shows a **"LinkedIn — Add to Profile"** button so recipients can add the certificate
 to their LinkedIn profile directly. This feature is **not plan-gated**.
@@ -323,11 +323,11 @@ and `includes/Public/verification.php`.
 
 | Shortcode | Purpose |
 |---|---|
-| `[student_search]` | Front-end search form for a student to look up their own certificate(s) by email. |
-| `[teacher_search]` | Same lookup flow for teachers. |
-| `[school_search]` | Same lookup flow for schools (by school name and place). |
+| `[certificate_generator_student_search]` | Front-end search form for a student to look up their own certificate(s) by email. |
+| `[certificate_generator_teacher_search]` | Same lookup flow for teachers. |
+| `[certificate_generator_school_search]` | Same lookup flow for schools (by school name and place). |
 | `[school_bulk_certificate_download]` | (Pro add-on) Lets a school download all of its certificates in bulk (ZIP) from the front end. |
-| `[cg_verify_certificate]` | Public certificate authenticity verification form — reachable via a certificate's QR code (`/verify-certificate/`); visitors can also search by serial number or email on the results page (`/result/`). |
+| `[certificate_generator_verify_certificate]` | Public certificate authenticity verification form — reachable via a certificate's QR code (`/verify-certificate/`); visitors can also search by serial number or email on the results page (`/result/`). |
 
 ### Customizing search-form text
 
@@ -335,7 +335,7 @@ The three search shortcodes accept optional attributes to override title, subtit
 text, and help text on a specific page:
 
 ```
-[student_search title="Custom Title" subtitle="Custom subtitle" button_text="Find Mine" help_text="Custom help text"]
+[certificate_generator_student_search title="Custom Title" subtitle="Custom subtitle" button_text="Find Mine" help_text="Custom help text"]
 ```
 
 To set a sitewide default instead of editing every page, use
@@ -377,20 +377,20 @@ migration from the legacy serialized option `certificate_generator_settings_emai
 
 | Option | Purpose |
 |---|---|
-| `cg_email_transport` | `wp_mail` or `smtp` |
-| `cg_email_from_name` / `cg_email_from_email` | Sender identity |
-| `cg_email_subject` / `cg_email_body` | HTML template with placeholders |
-| `cg_smtp_host` / `cg_smtp_port` / `cg_smtp_username` / `cg_smtp_password` (encrypted) / `cg_smtp_encryption` | SMTP connection details |
+| `certificate_generator_email_transport` | `wp_mail` or `smtp` |
+| `certificate_generator_email_from_name` / `certificate_generator_email_from_email` | Sender identity |
+| `certificate_generator_email_subject` / `certificate_generator_email_body` | HTML template with placeholders |
+| `certificate_generator_smtp_host` / `certificate_generator_smtp_port` / `certificate_generator_smtp_username` / `certificate_generator_smtp_password` (encrypted) / `certificate_generator_smtp_encryption` | SMTP connection details |
 
 ### Serial numbers
 
 | Option | Purpose |
 |---|---|
-| `cg_serial_prefix` | Prefix string, e.g. `CERT` |
-| `cg_serial_length` | Sequence digit padding |
-| `cg_serial_suffix` | Optional suffix |
-| `cg_serial_reset_period` | When the sequence counter resets |
-| `cg_serial_include_date` | Whether to embed the year, e.g. `CERT-2025-00142` |
+| `certificate_generator_serial_prefix` | Prefix string, e.g. `CERT` |
+| `certificate_generator_serial_length` | Sequence digit padding |
+| `certificate_generator_serial_suffix` | Optional suffix |
+| `certificate_generator_serial_reset_period` | When the sequence counter resets |
+| `certificate_generator_serial_include_date` | Whether to embed the year, e.g. `CERT-2025-00142` |
 
 ### Licensing (Pro add-on only)
 
@@ -411,8 +411,8 @@ See [Licensing & plans](#licensing--plans) below for the full plan matrix.
 | `certificate_generator_version` | Installed version tracking |
 | `certificate_generator_settings` | Installation mode, max memory usage, etc. |
 | `certificate_generator_api_key` / `certificate_generator_api_key_enabled` | REST API key + enable flag |
-| `cg_keep_data_on_uninstall` | If false, uninstall drops all custom tables and deletes plugin options |
-| `cg_extra_fields_{cert_type_key}` | Per-certificate-type custom field registry (max 15 extra slots) |
+| `certificate_generator_keep_data_on_uninstall` | If false, uninstall drops all custom tables and deletes plugin options |
+| `certificate_generator_extra_fields_{cert_type_key}` | Per-certificate-type custom field registry (max 15 extra slots) |
 
 ### Required CSV columns
 
@@ -453,7 +453,7 @@ about 2–3 s on a local site.
 
 ### Uninstall
 
-Gated by `cg_keep_data_on_uninstall`. If disabled: drops both legacy and `wp_cg_*` tables,
+Gated by `certificate_generator_keep_data_on_uninstall`. If disabled: drops both legacy and `wp_cg_*` tables,
 deletes ~25 named options, and clears all scheduled cron hooks.
 
 ## Database schema
@@ -529,8 +529,8 @@ Full detail: [`ARCHITECTURE.md`](../dev/ARCHITECTURE.md).
   hand-rolled `spl_autoload_register` fallback for `CertificateGenerator\` → `src/`.
 - **Bundled libraries**: `lib/fpdf/` (PDF rendering, all built-in fonts), `lib/tfpdf/` (renders
   uploaded `.ttf` fonts), and `endroid/qr-code` in `vendor/` (QR images).
-- **Free / Pro split**: the free plugin exposes hooks (`cg_settings_tabs`, `cg_fonts_page_*`,
-  `cg_feature_flags`, `cg_admin_menu_integrations`) and the Pro add-on plugs in through them.
+- **Free / Pro split**: the free plugin exposes hooks (`certificate_generator_settings_tabs`, `cg_fonts_page_*`,
+  `certificate_generator_feature_flags`, `certificate_generator_admin_menu_integrations`) and the Pro add-on plugs in through them.
   The LMS / WooCommerce integrations (`AbstractLmsListener` / `AbstractLmsMapper` plus one
   Listener+Mapper pair per platform and their mapping pages) live in
   `certificate-generator-pro/src/`. See [`ARCHITECTURE.md`](../dev/ARCHITECTURE.md#free-plugin-and-pro-add-on).
@@ -579,8 +579,8 @@ in the email body instead of an attachment.
 ### Large downloads (1,000+ certificates)
 
 - **Download Certificates** runs as a job in the browser. Each request renders certificates
-  for up to `CG_QUEUE_RUNTIME_BUDGET` seconds (default 20), with a progress bar. When it
-  finishes it builds one ZIP per `CG_ADMIN_EXPORT_ZIP_PART_SIZE` certificates (default 200),
+  for up to `CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET` seconds (default 20), with a progress bar. When it
+  finishes it builds one ZIP per `CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE` certificates (default 200),
   each with a `manifest.csv`. A dropped connection is retried, and restarting a job doesn't
   re-render anything that's already done. Without JavaScript the old one-ZIP-per-part form
   still works.
@@ -588,14 +588,14 @@ in the email body instead of an attachment.
   the row's data, the template settings, the template and image files, and the serial. If
   nothing changed, the existing file is served instead of being rendered again, under the
   same URL. Editing the row or template, or replacing the template image, re-renders it.
-  If a code change alters PDF output, bump `CG_PDF_RENDER_REV` so cached PDFs re-render. To
-  turn the cache off: `define( 'CG_DISABLE_PDF_CACHE', true );` in `wp-config.php`.
+  If a code change alters PDF output, bump `CERTIFICATE_GENERATOR_PDF_RENDER_REV` so cached PDFs re-render. To
+  turn the cache off: `define( 'CERTIFICATE_GENERATOR_DISABLE_PDF_CACHE', true );` in `wp-config.php`.
 - **Admin ZIPs are private.** They are written to `uploads/cg_certificates/private/`
   (deny-all rule, random file names), are only downloadable by the admin who built them, and
-  are deleted after a day by the daily `cg_cleanup_old_zips` cron. Public ZIPs (student
+  are deleted after a day by the daily `certificate_generator_cleanup_old_zips` cron. Public ZIPs (student
   search, emails) are kept 7 days.
-- **`[student_search]`** shows "Download All (ZIP)" for more than 3 certificates. The ZIP is
-  built when the link is clicked (`admin-ajax.php?action=cg_student_zip`, which hide-login
+- **`[certificate_generator_student_search]`** shows "Download All (ZIP)" for more than 3 certificates. The ZIP is
+  built when the link is clicked (`admin-ajax.php?action=certificate_generator_student_zip`, which hide-login
   plugins leave reachable; limited to 5 per minute per visitor), not on every page view.
 - Benchmark: `wp eval-file bin/bench-bulk-download.php 1000` (dev sites only; it seeds and
   removes its own data).

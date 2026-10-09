@@ -1,19 +1,19 @@
 <?php
 /**
  * Regression test for the DB-backed feature toggle override in Config::flag().
- * A value explicitly set via the `cg_feature_toggles` option (the Tools tab
+ * A value explicitly set via the `certificate_generator_feature_toggles` option (the Tools tab
  * UI) must win over a wp-config.php constant of the same name; an untouched
  * flag must still fall through to the constant, unaffected.
  */
 class FeatureToggleTest extends WP_UnitTestCase {
 
 	public function tear_down(): void {
-		delete_option( 'cg_feature_toggles' );
+		delete_option( 'certificate_generator_feature_toggles' );
 		parent::tear_down();
 	}
 
 	public function test_free_plugin_lists_no_integration_toggles(): void {
-		$this->assertSame( array( 'CG_USE_BADGES', 'CG_USE_EVENTS', 'CG_USE_RENEWAL_REMINDERS' ), array_keys( cg_feature_flags() ) );
+		$this->assertSame( array( 'CG_USE_BADGES', 'CG_USE_EVENTS', 'CG_USE_RENEWAL_REMINDERS' ), array_keys( certificate_generator_feature_flags() ) );
 		$this->assertFalse( class_exists( '\CertificateGenerator\Integrations\LmsBackfill' ), 'LMS/WooCommerce code ships in the Pro add-on' );
 	}
 
@@ -21,13 +21,13 @@ class FeatureToggleTest extends WP_UnitTestCase {
 		if ( ! defined( 'CG_USE_TUTOR_LMS_INTEGRATION' ) ) {
 			define( 'CG_USE_TUTOR_LMS_INTEGRATION', true );
 		}
-		update_option( 'cg_feature_toggles', array( 'CG_USE_TUTOR_LMS_INTEGRATION' => false ) );
+		update_option( 'certificate_generator_feature_toggles', array( 'CG_USE_TUTOR_LMS_INTEGRATION' => false ) );
 
 		$this->assertFalse( \CertificateGenerator\Core\Config::flag( 'CG_USE_TUTOR_LMS_INTEGRATION' ), 'DB toggle set to false must override the true constant' );
 	}
 
 	public function test_untouched_flag_falls_through_to_constant(): void {
-		delete_option( 'cg_feature_toggles' );
+		delete_option( 'certificate_generator_feature_toggles' );
 
 		if ( ! defined( 'CG_USE_NEW_PDF' ) ) {
 			define( 'CG_USE_NEW_PDF', false );

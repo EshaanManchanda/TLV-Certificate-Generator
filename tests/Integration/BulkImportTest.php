@@ -1,6 +1,6 @@
 <?php
 /**
- * Bulk import of students / teachers / schools (CG_Import_Writer):
+ * Bulk import of students / teachers / schools (CertificateGenerator_Import_Writer):
  * every CSV row is accounted for — saved, merged into an earlier row with the same
  * identity, skipped or failed — and the page says which. The regression this guards:
  * a 1000-row file sharing one parent email kept 366 rows and still said "imported 1000".
@@ -21,7 +21,7 @@ class BulkImportTest extends WP_UnitTestCase {
 		$_POST    = array();
 		$_REQUEST = array();
 		$_FILES   = array();
-		remove_all_filters( 'cg_import_deadline' );
+		remove_all_filters( 'certificate_generator_import_deadline' );
 		parent::tear_down();
 	}
 
@@ -44,7 +44,7 @@ class BulkImportTest extends WP_UnitTestCase {
 			),
 		);
 		ob_start();
-		call_user_func( 'bulk_import_' . $entity );
+		call_user_func( 'certificate_generator_bulk_import_' . $entity );
 		return (string) ob_get_clean();
 	}
 
@@ -189,47 +189,47 @@ class BulkImportTest extends WP_UnitTestCase {
 	}
 
 	public function test_time_limit_stops_at_a_chunk_and_a_second_upload_finishes(): void {
-		add_filter( 'cg_import_deadline', fn() => microtime( true ) - 1 ); // already past: stop after the first chunk
+		add_filter( 'certificate_generator_import_deadline', fn() => microtime( true ) - 1 ); // already past: stop after the first chunk
 		$lines = array( 'student_name,email,school_name,certificate_type,issue_date' );
-		for ( $i = 0; $i < CG_Import_Writer::CHUNK + 20; $i++ ) {
+		for ( $i = 0; $i < CertificateGenerator_Import_Writer::CHUNK + 20; $i++ ) {
 			$lines[] = "Timed $i,timed$i@example.test,T School,Participation,2026-01-15";
 		}
 		$html = $this->import( 'students', $lines );
-		$this->assertSame( CG_Import_Writer::CHUNK, $this->count_rows( 'students' ) );
-		$this->assertStringContainsString( 'Stopped at row ' . ( CG_Import_Writer::CHUNK + 2 ), $this->text( $html ) );
+		$this->assertSame( CertificateGenerator_Import_Writer::CHUNK, $this->count_rows( 'students' ) );
+		$this->assertStringContainsString( 'Stopped at row ' . ( CertificateGenerator_Import_Writer::CHUNK + 2 ), $this->text( $html ) );
 
-		remove_all_filters( 'cg_import_deadline' );
+		remove_all_filters( 'certificate_generator_import_deadline' );
 		$html = $this->import( 'students', $lines );
-		$this->assertSame( CG_Import_Writer::CHUNK + 20, $this->count_rows( 'students' ), 'No duplicates after re-uploading' );
+		$this->assertSame( CertificateGenerator_Import_Writer::CHUNK + 20, $this->count_rows( 'students' ), 'No duplicates after re-uploading' );
 		$this->assertStringContainsString( '(20 new, 0 updated)', $this->text( $html ), 'Resumes at the stop row instead of re-updating' );
-		$this->assertStringContainsString( CG_Import_Writer::CHUNK . ' already imported by the earlier upload', $this->text( $html ) );
+		$this->assertStringContainsString( CertificateGenerator_Import_Writer::CHUNK . ' already imported by the earlier upload', $this->text( $html ) );
 	}
 
 	/** Audit bug 1: a retry that re-updates earlier rows hits the limit sooner and never progresses. */
 	public function test_retry_progresses_even_when_every_upload_is_cut_short(): void {
 		$lines = array( 'student_name,email,school_name,certificate_type,issue_date' );
-		for ( $i = 0; $i < 2 * CG_Import_Writer::CHUNK + 5; $i++ ) {
+		for ( $i = 0; $i < 2 * CertificateGenerator_Import_Writer::CHUNK + 5; $i++ ) {
 			$lines[] = "Slow $i,slow$i@example.test,S School,Participation,2026-01-15";
 		}
-		add_filter( 'cg_import_deadline', fn() => microtime( true ) - 1 ); // every upload gets one chunk only
+		add_filter( 'certificate_generator_import_deadline', fn() => microtime( true ) - 1 ); // every upload gets one chunk only
 
 		$this->import( 'students', $lines );
-		$this->assertSame( CG_Import_Writer::CHUNK, $this->count_rows( 'students' ) );
+		$this->assertSame( CertificateGenerator_Import_Writer::CHUNK, $this->count_rows( 'students' ) );
 		$this->import( 'students', $lines );
-		$this->assertSame( 2 * CG_Import_Writer::CHUNK, $this->count_rows( 'students' ) );
+		$this->assertSame( 2 * CertificateGenerator_Import_Writer::CHUNK, $this->count_rows( 'students' ) );
 		$html = $this->import( 'students', $lines );
-		$this->assertSame( 2 * CG_Import_Writer::CHUNK + 5, $this->count_rows( 'students' ) );
+		$this->assertSame( 2 * CertificateGenerator_Import_Writer::CHUNK + 5, $this->count_rows( 'students' ) );
 		$this->assertStringNotContainsString( 'Stopped at row', $this->text( $html ) );
 	}
 
 	public function test_an_edited_file_is_imported_from_the_top(): void {
-		add_filter( 'cg_import_deadline', fn() => microtime( true ) - 1 );
+		add_filter( 'certificate_generator_import_deadline', fn() => microtime( true ) - 1 );
 		$lines = array( 'student_name,email,school_name,certificate_type,issue_date' );
-		for ( $i = 0; $i < CG_Import_Writer::CHUNK + 1; $i++ ) {
+		for ( $i = 0; $i < CertificateGenerator_Import_Writer::CHUNK + 1; $i++ ) {
 			$lines[] = "Edit $i,edit$i@example.test,E School,Participation,2026-01-15";
 		}
 		$this->import( 'students', $lines );
-		remove_all_filters( 'cg_import_deadline' );
+		remove_all_filters( 'certificate_generator_import_deadline' );
 
 		$lines[1] = 'Edit 0 Renamed,edit0@example.test,E School,Participation,2026-01-15'; // different file now
 		$html     = $this->import( 'students', $lines );

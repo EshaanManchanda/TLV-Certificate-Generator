@@ -58,16 +58,16 @@ function certificate_generator_process_queue_batch() {
 	}
 
 	// Run-lock: prevent cron + inline trigger + concurrent request from double-processing.
-	if ( get_transient( 'cg_queue_lock' ) ) {
+	if ( get_transient( 'certificate_generator_queue_lock' ) ) {
 		return $results;
 	}
-	set_transient( 'cg_queue_lock', 1, 60 );
+	set_transient( 'certificate_generator_queue_lock', 1, 60 );
 
 	try {
-		// Stale-row reclaim: rows stuck in 'sending' longer than CG_QUEUE_STALE_MINUTES
+		// Stale-row reclaim: rows stuck in 'sending' longer than CERTIFICATE_GENERATOR_QUEUE_STALE_MINUTES
 		// are reset to 'pending' with attempts incremented so they eventually land on 'failed'.
-		$stale_minutes = defined( 'CG_QUEUE_STALE_MINUTES' ) ? (int) CG_QUEUE_STALE_MINUTES : 10;
-		$max_attempts  = defined( 'CG_QUEUE_MAX_ATTEMPTS' ) ? (int) CG_QUEUE_MAX_ATTEMPTS : 3;
+		$stale_minutes = defined( 'CERTIFICATE_GENERATOR_QUEUE_STALE_MINUTES' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_STALE_MINUTES : 10;
+		$max_attempts  = defined( 'CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS : 3;
 		$queue_table   = $wpdb->prefix . 'cert_email_queue';
 
 		$wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
@@ -92,7 +92,7 @@ function certificate_generator_process_queue_batch() {
 			return $results;
 		}
 
-		$batch_size = defined( 'CG_QUEUE_BATCH_SIZE' ) ? (int) CG_QUEUE_BATCH_SIZE : 50;
+		$batch_size = defined( 'CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE : 50;
 		$emails     = certificate_generator_get_next_batch( $batch_size );
 
 		if ( empty( $emails ) ) {
@@ -100,7 +100,7 @@ function certificate_generator_process_queue_batch() {
 		}
 
 		$start  = microtime( true );
-		$budget = defined( 'CG_QUEUE_RUNTIME_BUDGET' ) ? (int) CG_QUEUE_RUNTIME_BUDGET : 20;
+		$budget = defined( 'CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET : 20;
 
 		foreach ( $emails as $queue_item ) {
 			// Runtime budget: stop before PHP timeout so cron can resume next tick.
@@ -140,7 +140,7 @@ function certificate_generator_process_queue_batch() {
 			sleep( 2 );
 		}
 	} finally {
-		delete_transient( 'cg_queue_lock' );
+		delete_transient( 'certificate_generator_queue_lock' );
 	}
 
 	return $results;
@@ -196,7 +196,7 @@ function certificate_generator_process_queue_now( $num_batches = 1 ) {
  * @return array Results
  */
 function certificate_generator_start_bulk_send( $post_type, $post_ids = array() ) {
-	cg_debug_log( "Certificate Generator: Starting bulk send for post_type: $post_type" );
+	certificate_generator_debug_log( "Certificate Generator: Starting bulk send for post_type: $post_type" );
 
 	// Add all emails to queue
 	$queue_results = certificate_generator_bulk_queue_emails( $post_type, $post_ids );
@@ -234,7 +234,7 @@ function certificate_generator_start_bulk_send( $post_type, $post_ids = array() 
  */
 function certificate_generator_pause_queue() {
 	update_option( 'certificate_generator_queue_paused', true );
-	cg_debug_log( 'Certificate Generator: Queue processing paused' );
+	certificate_generator_debug_log( 'Certificate Generator: Queue processing paused' );
 	return true;
 }
 
@@ -243,7 +243,7 @@ function certificate_generator_pause_queue() {
  */
 function certificate_generator_resume_queue() {
 	update_option( 'certificate_generator_queue_paused', false );
-	cg_debug_log( 'Certificate Generator: Queue processing resumed' );
+	certificate_generator_debug_log( 'Certificate Generator: Queue processing resumed' );
 	return true;
 }
 
@@ -304,7 +304,7 @@ function certificate_generator_clear_queue() {
 
 	$cleared = $wpdb->query( 'DELETE FROM `' . esc_sql( $table_name ) . "` WHERE status = 'pending'" );
 
-	cg_debug_log( "Certificate Generator: Cleared $cleared pending emails from queue" );
+	certificate_generator_debug_log( "Certificate Generator: Cleared $cleared pending emails from queue" );
 
 	return $cleared;
 }

@@ -16,7 +16,7 @@
 	}
 
 	var box = firstBtn.parentNode;
-	// Same markup as cg_ui_progress() (includes/Admin/ui.php).
+	// Same markup as certificate_generator_ui_progress() (includes/Admin/ui.php).
 	box.innerHTML =
 		'<button type="button" class="button button-primary" id="cg-job-start"></button>' +
 		'<div class="cg-progress cg-job-progress" id="cg-job-progress" hidden>' +
@@ -74,11 +74,11 @@
 		show( 0, 0, cfg.i18n.starting );
 
 		var job;
-		post( 'cg_cert_dl_start' )
+		post( 'certificate_generator_cert_dl_start' )
 			.then( function ( d ) {
 				job = d.job_id;
 				return ( function step() {
-					return post( 'cg_cert_dl_step', { job_id: job } ).then( function ( s ) {
+					return post( 'certificate_generator_cert_dl_step', { job_id: job } ).then( function ( s ) {
 						show( s.processed, s.total, cfg.i18n.progress.replace( '%1$d', s.processed ).replace( '%2$d', s.total ) );
 						return s.complete ? s : step();
 					} );
@@ -92,7 +92,7 @@
 				return parts.reduce( function ( chain, i ) {
 					return chain.then( function () {
 						show( i, s.parts, cfg.i18n.zipping.replace( '%1$d', i + 1 ).replace( '%2$d', s.parts ) );
-						return post( 'cg_cert_dl_zip', { job_id: job, part: i } ).then( function ( z ) {
+						return post( 'certificate_generator_cert_dl_zip', { job_id: job, part: i } ).then( function ( z ) {
 							var li = document.createElement( 'li' );
 							var a  = document.createElement( 'a' );
 							a.href        = z.download_url;

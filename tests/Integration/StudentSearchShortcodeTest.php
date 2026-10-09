@@ -1,6 +1,6 @@
 <?php
 /**
- * Black-box coverage of the [student_search] shortcode (scs_student_search_shortcode(),
+ * Black-box coverage of the [certificate_generator_student_search] shortcode (certificate_generator_student_search_shortcode(),
  * includes/Services/certificate-search.php ~line 3130): calls it exactly as WordPress
  * would when rendering the shortcode on a page, asserting only on the returned HTML —
  * never on internal function calls — since that HTML is the entire observable contract
@@ -37,7 +37,7 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 
 	public function tear_down(): void {
 		$_GET = array();
-		delete_option( 'cg_shortcode_text' );
+		delete_option( 'certificate_generator_shortcode_text' );
 		parent::tear_down();
 	}
 
@@ -47,7 +47,7 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 	public function test_renders_search_form_with_default_text_when_no_email_param(): void {
 		unset( $_GET['student_email'] );
 
-		$output = scs_student_search_shortcode( array() );
+		$output = certificate_generator_student_search_shortcode( array() );
 
 		$this->assertStringContainsString( '<form method="get"', $output );
 		$this->assertStringContainsString( 'name="student_email"', $output );
@@ -60,21 +60,21 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 	public function test_shortcode_attribute_overrides_default_title(): void {
 		unset( $_GET['student_email'] );
 
-		$output = scs_student_search_shortcode( array( 'title' => 'My Custom Title' ) );
+		$output = certificate_generator_student_search_shortcode( array( 'title' => 'My Custom Title' ) );
 
 		$this->assertStringContainsString( 'My Custom Title', $output );
 		$this->assertStringNotContainsString( 'Certificate Lookup', $output );
 	}
 
 	/**
-	 * [BB] the admin-configured default (cg_shortcode_text option) is used when no
-	 * shortcode attribute is given, per cg_get_shortcode_text()'s precedence order.
+	 * [BB] the admin-configured default (certificate_generator_shortcode_text option) is used when no
+	 * shortcode attribute is given, per certificate_generator_get_shortcode_text()'s precedence order.
 	 */
 	public function test_admin_configured_text_used_when_no_attribute_given(): void {
 		unset( $_GET['student_email'] );
-		update_option( 'cg_shortcode_text', array( 'student_title' => 'Admin Configured Title' ) );
+		update_option( 'certificate_generator_shortcode_text', array( 'student_title' => 'Admin Configured Title' ) );
 
-		$output = scs_student_search_shortcode( array() );
+		$output = certificate_generator_student_search_shortcode( array() );
 
 		$this->assertStringContainsString( 'Admin Configured Title', $output );
 	}
@@ -82,9 +82,9 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 	/** [BB] an explicit shortcode attribute still wins over the admin-configured default. */
 	public function test_shortcode_attribute_wins_over_admin_configured_text(): void {
 		unset( $_GET['student_email'] );
-		update_option( 'cg_shortcode_text', array( 'student_title' => 'Admin Configured Title' ) );
+		update_option( 'certificate_generator_shortcode_text', array( 'student_title' => 'Admin Configured Title' ) );
 
-		$output = scs_student_search_shortcode( array( 'title' => 'Attribute Wins' ) );
+		$output = certificate_generator_student_search_shortcode( array( 'title' => 'Attribute Wins' ) );
 
 		$this->assertStringContainsString( 'Attribute Wins', $output );
 		$this->assertStringNotContainsString( 'Admin Configured Title', $output );
@@ -96,7 +96,7 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 	public function test_unknown_email_shows_no_certificate_found_screen(): void {
 		$_GET['student_email'] = 'nobody-registered@example.com';
 
-		$output = scs_student_search_shortcode( array() );
+		$output = certificate_generator_student_search_shortcode( array() );
 
 		$this->assertStringContainsString( 'No Certificate Found', $output );
 		$this->assertStringContainsString( "couldn't find any certificates", $output );
@@ -137,7 +137,7 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 
 		$_GET['student_email'] = 'found@example.com';
 
-		$output = scs_student_search_shortcode( array() );
+		$output = certificate_generator_student_search_shortcode( array() );
 
 		// The card renders sanitize_file_name($student_name)/(school_name) — spaces become
 		// hyphens (the value doubles as the download-filename stem), so assert that form.
@@ -187,7 +187,7 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 
 		$_GET['student_email'] = 'pending@example.com';
 
-		$output = scs_student_search_shortcode( array() );
+		$output = certificate_generator_student_search_shortcode( array() );
 
 		// esc_html() renders the apostrophe as the &#039; entity.
 		$this->assertStringContainsString( 'Your Certificate Isn&#039;t Ready Yet', $output );

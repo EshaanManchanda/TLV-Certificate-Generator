@@ -1,4 +1,5 @@
 <?php
+// phpcs:disable -- FPDF font definition (generated data); FPDF reads these exact variable names.
 defined( 'ABSPATH' ) || exit;
 $type = 'TrueType';
 $name = 'NotoSans-Bold';

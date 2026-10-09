@@ -13,9 +13,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Gate-kept debug log — only writes when WP_DEBUG is on.
  */
-function cg_email_debug_log( string $msg ): void {
+function certificate_generator_email_debug_log( string $msg ): void {
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		cg_debug_log( '[CG Email] ' . $msg );
+		certificate_generator_debug_log( '[CG Email] ' . $msg );
 	}
 }
 
@@ -24,7 +24,7 @@ function cg_email_debug_log( string $msg ): void {
  * is_email() rejects single-label domains, which is correct for production
  * but produces false positives in Local/dev environments.
  */
-function cg_is_local_email( string $email ): bool {
+function certificate_generator_is_local_email( string $email ): bool {
 	if ( strpos( $email, '@' ) === false ) {
 		return false;
 	}
@@ -38,7 +38,7 @@ function cg_is_local_email( string $email ): bool {
  * dual-write in certificate-search.php uses), else by recipient_email +
  * certificate_type.
  */
-function cg_mark_certificate_email_sent( array $cert_row ): void {
+function certificate_generator_mark_certificate_email_sent( array $cert_row ): void {
 	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		return;
 	}
@@ -72,7 +72,7 @@ function cg_mark_certificate_email_sent( array $cert_row ): void {
  *
  * @return array[]
  */
-function cg_get_certs_by_email( string $email ): array {
+function certificate_generator_get_certs_by_email( string $email ): array {
 	static $cache = array();
 	if ( isset( $cache[ $email ] ) ) {
 		return $cache[ $email ];
@@ -93,7 +93,7 @@ function cg_get_certs_by_email( string $email ): array {
  * Generate (or retrieve) a PDF for a wp_certificate_generator row.
  * Returns the filesystem path on success, null on failure.
  */
-function cg_generate_pdf_from_row( array $row ): ?string {
+function certificate_generator_generate_pdf_from_row( array $row ): ?string {
 	// Use stored path when still valid.
 	if ( ! empty( $row['pdf_path'] ) && file_exists( $row['pdf_path'] ) ) {
 		return $row['pdf_path'];
@@ -101,9 +101,9 @@ function cg_generate_pdf_from_row( array $row ): ?string {
 
 	global $wpdb;
 
-	// ── SQL-first path: look up live entity row, call generate_certificate_pdf ──
+	// ── SQL-first path: look up live entity row, call certificate_generator_generate_certificate_pdf ──
 	// Uses fresh data from wp_cg_* tables and avoids visual_debug markers.
-	if ( function_exists( 'generate_certificate_pdf' )
+	if ( function_exists( 'certificate_generator_generate_certificate_pdf' )
 		&& ! empty( $row['email'] )
 		&& ! empty( $row['certificate_type'] )
 		&& class_exists( '\CertificateGenerator\Database\CustomTables' )
@@ -155,17 +155,17 @@ function cg_generate_pdf_from_row( array $row ): ?string {
 			// per student instead of every NULL row colliding on certificate_0.pdf.
 			$post_id   = (int) ( $sql_row['wp_post_id'] ?? $sql_row['id'] ?? 0 );
 			$cert_type = $sql_row['certificate_type'] ?? '';
-			$fields    = class_exists( 'CG_Field_Schema' )
-				? CG_Field_Schema::get_all_renderable_fields( $cert_type )
+			$fields    = class_exists( 'CertificateGenerator_Field_Schema' )
+				? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type )
 				: array( 'student_name', 'school_name', 'issue_date' );
-			$file_url  = generate_certificate_pdf( $post_id, $fields, $sql_row );
+			$file_url  = certificate_generator_generate_certificate_pdf( $post_id, $fields, $sql_row );
 			if ( $file_url ) {
 				// Derive filesystem path from URL — don't rely on postmeta which
 				// may not be saved when wp_post_id = 0.
 				$path = wp_normalize_path(
 					str_replace(
-						cg_certificates_url(),
-						cg_certificates_dir(),
+						certificate_generator_certificates_url(),
+						certificate_generator_certificates_dir(),
 						$file_url
 					)
 				);
@@ -191,7 +191,7 @@ function cg_generate_pdf_from_row( array $row ): ?string {
 	}
 
 	// ── Fallback: generate from stored JSON blob ──────────────────────────────
-	if ( ! function_exists( 'generate_certificate_pdf_with_data' ) ) {
+	if ( ! function_exists( 'certificate_generator_generate_certificate_pdf_with_data' ) ) {
 		return null;
 	}
 
@@ -201,7 +201,7 @@ function cg_generate_pdf_from_row( array $row ): ?string {
 	}
 
 	$post_data = array_merge( $data, array( 'certificate_type' => $row['certificate_type'] ) );
-	$result    = generate_certificate_pdf_with_data( $post_data );
+	$result    = certificate_generator_generate_certificate_pdf_with_data( $post_data );
 
 	$path = null;
 	if ( is_array( $result ) && ! empty( $result['path'] ) ) {
@@ -231,11 +231,11 @@ function cg_generate_pdf_from_row( array $row ): ?string {
 
 /**
  * Fetch a flattened entity row from a SQL table by wp_post_id.
- * Different name from cg_get_sql_row_for_post() in columns.php to avoid
+ * Different name from certificate_generator_get_sql_row_for_post() in columns.php to avoid
  * fatal on duplicate function declaration (both files load on every admin request).
  * Returns null if CustomTables unavailable, table missing, or no row found.
  */
-function cg_email_get_sql_row( int $post_id, string $post_type ): ?array {
+function certificate_generator_email_get_sql_row( int $post_id, string $post_type ): ?array {
 	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		return null;
 	}
@@ -269,35 +269,35 @@ function cg_email_get_sql_row( int $post_id, string $post_type ): ?array {
  * @internal Renamed from certificate_generator_create_zip_for_email in v8 Phase 2.
  *           Call certificate_generator_create_zip_for_email() or ZipService::make() instead.
  */
-function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args = array() ) {
+function certificate_generator_create_zip_impl( $certificates_data, $recipient_email, array $args = array() ) {
 	// Validate inputs
 	if ( empty( $certificates_data ) || ! is_array( $certificates_data ) ) {
-		cg_debug_log( 'Certificate Generator: Cannot create ZIP - no certificate data provided' );
+		certificate_generator_debug_log( 'Certificate Generator: Cannot create ZIP - no certificate data provided' );
 		return false;
 	}
 
 	if ( empty( $recipient_email ) ) {
-		cg_debug_log( 'Certificate Generator: Cannot create ZIP - no recipient email provided' );
+		certificate_generator_debug_log( 'Certificate Generator: Cannot create ZIP - no recipient email provided' );
 		return false;
 	}
 
 	// Check if ZipArchive class is available
 	if ( ! class_exists( 'ZipArchive' ) ) {
-		cg_debug_log( 'Certificate Generator: ZipArchive class not available on this server' );
+		certificate_generator_debug_log( 'Certificate Generator: ZipArchive class not available on this server' );
 		return false;
 	}
 
 	$private = ! empty( $args['private'] );
-	$dir     = $private ? cg_private_zip_dir() : cg_certificates_dir();
+	$dir     = $private ? certificate_generator_private_zip_dir() : certificate_generator_certificates_dir();
 
 	// Build ZIP file name: certificates_{label}_{timestamp}.zip, or _{random token}.zip when private.
-	$zip_name = function_exists( 'cg_certificate_zip_filename' ) ? cg_certificate_zip_filename( $recipient_email ) : 'certificates_' . preg_replace( '/[^a-z0-9]/', '_', strtolower( $recipient_email ) ) . '_' . time() . '.zip';
+	$zip_name = function_exists( 'certificate_generator_certificate_zip_filename' ) ? certificate_generator_certificate_zip_filename( $recipient_email ) : 'certificates_' . preg_replace( '/[^a-z0-9]/', '_', strtolower( $recipient_email ) ) . '_' . time() . '.zip';
 	$prefix   = preg_replace( '/_\d+\.zip$/', '_', $zip_name );
 	if ( $private ) {
 		$zip_name = $prefix . wp_generate_password( 20, false ) . '.zip';
 	}
 	$zip_path = $dir . '/' . $zip_name;
-	$zip_url  = $private ? '' : cg_certificates_url() . '/' . $zip_name;
+	$zip_url  = $private ? '' : certificate_generator_certificates_url() . '/' . $zip_name;
 
 	// Only files inside uploads may enter a ZIP, under a bare file name: no caller-supplied
 	// path can pull in wp-config.php, and no entry can unpack outside its folder.
@@ -307,7 +307,7 @@ function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args 
 	$failed_files = array();
 	$file_count   = 0;
 	foreach ( $certificates_data as $cert ) {
-		$file_name = cg_zip_entry_name( (string) ( $cert['filename'] ?? basename( (string) ( $cert['path'] ?? '' ) ) ) );
+		$file_name = certificate_generator_zip_entry_name( (string) ( $cert['filename'] ?? basename( (string) ( $cert['path'] ?? '' ) ) ) );
 		if ( '' === $file_name ) {
 			$failed_files[] = (string) ( $cert['path'] ?? '' );
 			continue;
@@ -333,7 +333,7 @@ function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args 
 	}
 
 	if ( 0 === $file_count ) {
-		cg_debug_log( 'Certificate Generator: No files were added to ZIP' );
+		certificate_generator_debug_log( 'Certificate Generator: No files were added to ZIP' );
 		return false;
 	}
 
@@ -354,10 +354,10 @@ function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args 
 			$old->close();
 			if ( $match ) {
 				touch( $existing ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- keep it past the cleanup while it's in use
-				cg_debug_log( 'ZIP reused: ' . basename( $existing ) );
+				certificate_generator_debug_log( 'ZIP reused: ' . basename( $existing ) );
 				return array(
 					'zip_path'          => $existing,
-					'zip_url'           => $private ? '' : cg_certificates_url() . '/' . basename( $existing ),
+					'zip_url'           => $private ? '' : certificate_generator_certificates_url() . '/' . basename( $existing ),
 					'certificate_count' => $file_count,
 					'failed_count'      => count( $failed_files ),
 					'failed_files'      => $failed_files,
@@ -368,7 +368,7 @@ function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args 
 
 	$zip = new ZipArchive();
 	if ( $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) !== true ) {
-		cg_debug_log( "Certificate Generator: Could not create ZIP file at {$zip_path}" );
+		certificate_generator_debug_log( "Certificate Generator: Could not create ZIP file at {$zip_path}" );
 		return false;
 	}
 
@@ -394,15 +394,15 @@ function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args 
 
 	// Close ZIP archive (libzip writes to a temp file and renames, so the ZIP appears whole).
 	if ( ! $zip->close() || 0 === $added_count ) {
-		cg_debug_log( 'Certificate Generator: ZIP could not be written: ' . $zip->getStatusString() );
+		certificate_generator_debug_log( 'Certificate Generator: ZIP could not be written: ' . $zip->getStatusString() );
 		wp_delete_file( $zip_path );
 		return false;
 	}
 
 	if ( ! empty( $failed_files ) ) {
-		cg_debug_log( '[CG ZIP] ' . count( $failed_files ) . ' file(s) could not be added: ' . implode( ', ', $failed_files ) );
+		certificate_generator_debug_log( '[CG ZIP] ' . count( $failed_files ) . ' file(s) could not be added: ' . implode( ', ', $failed_files ) );
 	}
-	cg_debug_log( 'ZIP built: ' . $zip_name . " ($added_count files)" );
+	certificate_generator_debug_log( 'ZIP built: ' . $zip_name . " ($added_count files)" );
 
 	return array(
 		'zip_path'          => $zip_path,
@@ -417,7 +417,7 @@ function _cg_create_zip_impl( $certificates_data, $recipient_email, array $args 
  * A ZIP entry name reduced to its last path segment: '../../wp-config.pdf' → 'wp-config.pdf'.
  * Returns '' when nothing usable is left.
  */
-function cg_zip_entry_name( string $name ): string {
+function certificate_generator_zip_entry_name( string $name ): string {
 	$name = basename( str_replace( '\\', '/', $name ) );
 	return ( '' === $name || '.' === $name || '..' === $name ) ? '' : $name;
 }
@@ -426,8 +426,8 @@ function cg_zip_entry_name( string $name ): string {
  * cg_certificates/private/ — admin ZIPs that must never be served directly. The deny rule
  * covers Apache; on nginx the random filename keeps them unguessable.
  */
-function cg_private_zip_dir(): string {
-	$dir = cg_certificates_dir() . '/private';
+function certificate_generator_private_zip_dir(): string {
+	$dir = certificate_generator_certificates_dir() . '/private';
 	if ( ! file_exists( $dir . '/index.php' ) ) {
 		wp_mkdir_p( $dir );
 		file_put_contents( $dir . '/.htaccess', "Require all denied\nDeny from all\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions
@@ -446,7 +446,7 @@ if ( ! class_exists( '\CertificateGenerator\Core\Config' )
 	 * @deprecated v8 Use \CertificateGenerator\Services\ZipService::make() instead.
 	 */
 	function certificate_generator_create_zip_for_email( $certificates_data, $recipient_email, array $args = array() ) {
-		return _cg_create_zip_impl( $certificates_data, $recipient_email, $args );
+		return certificate_generator_create_zip_impl( $certificates_data, $recipient_email, $args );
 	}
 }
 
@@ -464,11 +464,8 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 
 	if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
 		@set_time_limit( 0 );
-		$needed  = wp_convert_hr_to_bytes( '512M' );
-		$current = wp_convert_hr_to_bytes( (string) ini_get( 'memory_limit' ) );
-		if ( $current > 0 && $current < $needed ) {
-			ini_set( 'memory_limit', '512M' );
-		}
+		add_filter( 'certificate_generator_memory_limit', static fn() => '512M' ); // filterable target for big ZIPs
+		wp_raise_memory_limit( 'certificate_generator' ); // raises only, never lowers
 		@ignore_user_abort( true );
 	}
 
@@ -537,7 +534,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 				continue; // a scope may span several entity types
 			}
 			if ( ! empty( $_rows ) ) {
-				// Normalize field names cg_generate_pdf_from_row / cert building expect.
+				// Normalize field names certificate_generator_generate_pdf_from_row / cert building expect.
 				foreach ( $_rows as &$_r ) {
 					if ( ! isset( $_r['student_name'] ) ) {
 						$_r['student_name'] = $_r['teacher_name'] ?? $_r['school_name'] ?? '';
@@ -553,9 +550,9 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 	// Fallback to legacy table only when SQL tables are missing/empty — never for a scoped
 	// send, where it would attach certificates the email was not queued for.
 	if ( empty( $all_rows ) && ! $scope ) {
-		$all_rows = cg_get_certs_by_email( $recipient_email );
+		$all_rows = certificate_generator_get_certs_by_email( $recipient_email );
 	}
-	cg_email_debug_log( 'Found ' . count( $all_rows ) . " certs for {$recipient_email} (entity: {$entity_type})" );
+	certificate_generator_email_debug_log( 'Found ' . count( $all_rows ) . " certs for {$recipient_email} (entity: {$entity_type})" );
 
 	// A scoped send's anchor is just the address's oldest record, which may be a different
 	// certificate — the certificates being sent decide the type template and placeholders.
@@ -603,13 +600,13 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 	$_ss     = class_exists( '\CertificateGenerator\Services\SettingsService' );
 	$subject = ! empty( $options[ $prefix . 'subject' ] )
 		? $options[ $prefix . 'subject' ]
-		: ( $_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_subject' ) : get_option( 'cg_email_subject', '' ) );
+		: ( $_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_subject' ) : get_option( 'certificate_generator_email_subject', '' ) );
 	$title   = ! empty( $options[ $prefix . 'title' ] )
 		? $options[ $prefix . 'title' ]
-		: get_option( 'cg_email_title', '' );
+		: get_option( 'certificate_generator_email_title', '' );
 	$message = ! empty( $options[ $prefix . 'message' ] )
 		? $options[ $prefix . 'message' ]
-		: ( $_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_body' ) : get_option( 'cg_email_body', '' ) );
+		: ( $_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_body' ) : get_option( 'certificate_generator_email_body', '' ) );
 
 	// Generate result page URL
 	$result_page_url = home_url( '/result/?student_email=' . urlencode( $recipient_email ) );
@@ -653,25 +650,25 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 	$generated_certificate_ids = array();
 
 	$total_certs = count( $all_rows );
-	cg_email_debug_log( "Generating {$total_certs} PDFs for {$recipient_email}" );
+	certificate_generator_email_debug_log( "Generating {$total_certs} PDFs for {$recipient_email}" );
 
 	try {
 		foreach ( $all_rows as $index => $cert_row ) {
 			if ( $index % 10 === 0 && $index > 0 ) {
-				cg_email_debug_log( "Progress — {$index}/{$total_certs} PDFs" );
+				certificate_generator_email_debug_log( "Progress — {$index}/{$total_certs} PDFs" );
 			}
 
-			$cert_path = cg_generate_pdf_from_row( $cert_row );
+			$cert_path = certificate_generator_generate_pdf_from_row( $cert_row );
 
 			if ( empty( $cert_path ) || ! file_exists( $cert_path ) ) {
-				cg_email_debug_log( "PDF not found for cg_id {$cert_row['id']} — skipping" );
+				certificate_generator_email_debug_log( "PDF not found for cg_id {$cert_row['id']} — skipping" );
 				continue;
 			}
 
 			$cert_path = wp_normalize_path( $cert_path );
 
-			$_pdf_name                   = function_exists( 'cg_certificate_pdf_filename' )
-				? cg_certificate_pdf_filename( $cert_row['student_name'], $cert_row['certificate_type'] ?? '', (string) $cert_row['id'] )
+			$_pdf_name                   = function_exists( 'certificate_generator_certificate_pdf_filename' )
+				? certificate_generator_certificate_pdf_filename( $cert_row['student_name'], $cert_row['certificate_type'] ?? '', (string) $cert_row['id'] )
 				: basename( $cert_path );
 			$certificates_data[]         = array(
 				'path'     => $cert_path,
@@ -704,10 +701,10 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		return false;
 	}
 
-	cg_email_debug_log( 'Generated ' . count( $certificates_data ) . " certs for {$recipient_email}" );
+	certificate_generator_email_debug_log( 'Generated ' . count( $certificates_data ) . " certs for {$recipient_email}" );
 
 	if ( $use_zip ) {
-		cg_email_debug_log( 'Creating ZIP for ' . count( $certificates_data ) . " certs → {$recipient_email}" );
+		certificate_generator_email_debug_log( 'Creating ZIP for ' . count( $certificates_data ) . " certs → {$recipient_email}" );
 
 		$zip_result = certificate_generator_create_zip_for_email( $certificates_data, $recipient_email );
 
@@ -745,11 +742,11 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 			);
 		}
 
-		cg_email_debug_log( 'ZIP created: ' . $zip_result['zip_path'] );
+		certificate_generator_email_debug_log( 'ZIP created: ' . $zip_result['zip_path'] );
 
 	} else {
 		$certificate_path = $certificates_data[0]['path'];
-		cg_email_debug_log( "Single PDF for {$recipient_email}: {$certificate_path}" );
+		certificate_generator_email_debug_log( "Single PDF for {$recipient_email}: {$certificate_path}" );
 	}
 
 	if ( empty( $certificate_path ) || ! file_exists( $certificate_path ) ) {
@@ -869,7 +866,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 
 		if ( $zip_size <= $max_attachment_size ) {
 			$attachments[] = $certificate_path;
-			cg_email_debug_log( sprintf( 'Attaching ZIP %.2f MB to %s', $zip_size / 1024 / 1024, $recipient_email ) );
+			certificate_generator_email_debug_log( sprintf( 'Attaching ZIP %.2f MB to %s', $zip_size / 1024 / 1024, $recipient_email ) );
 		} else {
 			$download_url = $zip_result['zip_url'] ?? '';
 			if ( ! empty( $download_url ) ) {
@@ -959,16 +956,16 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		'server'             => wp_parse_url( home_url(), PHP_URL_HOST ),
 	);
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		cg_debug_log( 'Email configuration: ' . wp_json_encode( $email_config ) );
+		certificate_generator_debug_log( 'Email configuration: ' . wp_json_encode( $email_config ) );
 	}
 
-	// Route through the configured transport (cg_email_transport: wp_mail/smtp/sender/mandrill)
+	// Route through the configured transport (certificate_generator_email_transport: wp_mail/smtp/sender/mandrill)
 	// instead of calling wp_mail() directly, so this plugin's own SMTP settings are honored.
 	// Logging is suppressed here (log: false) — this function already logs per-certificate below.
 	$cg_mailer = class_exists( '\CertificateGenerator\Email\Mailer' ) ? \CertificateGenerator\Email\Mailer::make() : null;
 
 	for ( $attempt = 1; $attempt <= $max_retries; $attempt++ ) {
-		cg_email_debug_log( "Attempt {$attempt}/{$max_retries} → {$recipient_email}" );
+		certificate_generator_email_debug_log( "Attempt {$attempt}/{$max_retries} → {$recipient_email}" );
 		$last_php_error = error_get_last();
 
 		// Attempt to send email
@@ -977,7 +974,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 			: wp_mail( $recipient_email, $subject, $html_message, $headers, $attachments );
 
 		if ( $email_sent ) {
-			cg_email_debug_log( "Sent on attempt {$attempt} → {$recipient_email}" );
+			certificate_generator_email_debug_log( "Sent on attempt {$attempt} → {$recipient_email}" );
 			break;
 		} else {
 			// Capture error details
@@ -1017,8 +1014,8 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 			$all_errors[] = "Attempt {$attempt}: {$current_error}";
 
 			// Log detailed error for this attempt
-			cg_debug_log( "Certificate Generator: Email attempt {$attempt} failed: {$current_error}" );
-			cg_debug_log( 'Certificate Generator: Error details: ' . wp_json_encode( $error_details ) );
+			certificate_generator_debug_log( "Certificate Generator: Email attempt {$attempt} failed: {$current_error}" );
+			certificate_generator_debug_log( 'Certificate Generator: Error details: ' . wp_json_encode( $error_details ) );
 
 			// Don't retry on certain permanent failures
 			$permanent_failures = array(
@@ -1036,7 +1033,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 			foreach ( $permanent_failures as $failure_type ) {
 				if ( stripos( $current_error, $failure_type ) !== false ) {
 					$is_permanent_failure = true;
-					cg_debug_log( "Certificate Generator: Permanent failure detected: {$failure_type}. Stopping retries." );
+					certificate_generator_debug_log( "Certificate Generator: Permanent failure detected: {$failure_type}. Stopping retries." );
 					break;
 				}
 			}
@@ -1045,7 +1042,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 				break;
 			}
 
-			cg_email_debug_log( "Waiting {$retry_delay}s before retry" );
+			certificate_generator_email_debug_log( "Waiting {$retry_delay}s before retry" );
 			sleep( $retry_delay );
 			$retry_delay *= 2; // Exponential backoff
 		}
@@ -1053,7 +1050,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 
 	// Log final result with all errors
 	if ( ! $email_sent && $log_email ) {
-		cg_debug_log( 'Certificate Generator: All email attempts failed. Errors: ' . implode( ' | ', $all_errors ) );
+		certificate_generator_debug_log( 'Certificate Generator: All email attempts failed. Errors: ' . implode( ' | ', $all_errors ) );
 	}
 
 	// Log each certificate individually for audit trail.
@@ -1072,7 +1069,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 			if ( $email_sent ) {
 				certificate_generator_log_email( $logged_cg_id, $recipient_email, $cert_name, $cert_type, $log_subject, true );
 				if ( $cert_row_ref ) {
-					cg_mark_certificate_email_sent( $cert_row_ref );
+					certificate_generator_mark_certificate_email_sent( $cert_row_ref );
 				}
 			} else {
 				$detailed_error = "wp_mail() failed after {$attempt} attempts" . ( $last_error ? ": {$last_error}" : '' );
@@ -1080,7 +1077,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 			}
 		}
 		if ( $email_sent ) {
-			cg_email_debug_log( "Logged {$cert_count} cert(s) as sent → {$recipient_email}" );
+			certificate_generator_email_debug_log( "Logged {$cert_count} cert(s) as sent → {$recipient_email}" );
 		}
 	}
 
@@ -1155,7 +1152,7 @@ function certificate_generator_send_bulk_emails( $post_type, $skip_already_sent 
 	}
 
 	$results['total'] = array_sum( array_map( 'count', $by_email ) );
-	cg_email_debug_log( 'Bulk: ' . count( $by_email ) . ' unique email addresses to process' );
+	certificate_generator_email_debug_log( 'Bulk: ' . count( $by_email ) . ' unique email addresses to process' );
 
 	foreach ( $by_email as $email => $cg_ids ) {
 		$cert_count = count( $cg_ids );
@@ -1166,7 +1163,7 @@ function certificate_generator_send_bulk_emails( $post_type, $skip_already_sent 
 			continue;
 		}
 
-		cg_email_debug_log( "Bulk: processing {$cert_count} cert(s) for {$email}" );
+		certificate_generator_email_debug_log( "Bulk: processing {$cert_count} cert(s) for {$email}" );
 
 		$success = certificate_generator_send_email( (int) $cg_ids[0] );
 
@@ -1182,7 +1179,7 @@ function certificate_generator_send_bulk_emails( $post_type, $skip_already_sent 
 		}
 	}
 
-	cg_email_debug_log( "Bulk complete. Sent {$results['success']} certs via {$results['emails_sent']} emails ({$results['grouped_sends']} grouped)" );
+	certificate_generator_email_debug_log( "Bulk complete. Sent {$results['success']} certs via {$results['emails_sent']} emails ({$results['grouped_sends']} grouped)" );
 
 	return $results;
 }
@@ -1315,7 +1312,7 @@ function certificate_generator_email_health_check() {
 
 	// Check from email configuration
 	$from_email                             = certificate_generator_get_from_email();
-	$email_valid                            = is_email( $from_email ) || cg_is_local_email( $from_email );
+	$email_valid                            = is_email( $from_email ) || certificate_generator_is_local_email( $from_email );
 	$results['details']['from_email']       = $from_email;
 	$results['details']['from_email_valid'] = $email_valid;
 
@@ -1345,7 +1342,7 @@ function certificate_generator_email_health_check() {
 	// Check certificate generation dependencies
 	$results['details']['fpdf_available']                 = file_exists( CERTIFICATE_GENERATOR_PATH . 'lib/fpdf/fpdf.php' );
 	$results['details']['font_manager_available']         = class_exists( 'CertificateGenerator_FontManager' );
-	$results['details']['certificate_function_available'] = function_exists( 'generate_certificate_pdf_email' );
+	$results['details']['certificate_function_available'] = function_exists( 'certificate_generator_generate_certificate_pdf_email' );
 
 	if ( ! $results['details']['fpdf_available'] ) {
 		$results['issues'][]       = 'FPDF library not found - certificate generation will fail';
@@ -1417,8 +1414,8 @@ function certificate_generator_log_wp_mail_error( $error ) {
 
 		// Log to WordPress error log (only in debug mode for detailed info)
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( 'wp_mail_failed hook triggered' );
-			cg_debug_log( 'WP_Error details: ' . wp_json_encode( $error_data ) );
+			certificate_generator_debug_log( 'wp_mail_failed hook triggered' );
+			certificate_generator_debug_log( 'WP_Error details: ' . wp_json_encode( $error_data ) );
 		}
 
 		// Also log to debug.log if WP_DEBUG_LOG is enabled
@@ -1430,7 +1427,7 @@ function certificate_generator_log_wp_mail_error( $error ) {
 				$error->get_error_message(),
 				wp_json_encode( $error->get_error_data() )
 			);
-			cg_debug_log( $log_message );
+			certificate_generator_debug_log( $log_message );
 		}
 	}
 }
@@ -1662,7 +1659,7 @@ function certificate_generator_queue_bulk_emails_async( $post_type, $skip_alread
 	if ( $total > 50 ) {
 		$result['requires_batching'] = true;
 		set_transient(
-			'cert_batch_' . $batch_id,
+			'certificate_generator_batch_' . $batch_id,
 			array(
 				'post_type'         => $post_type,
 				'skip_already_sent' => $skip_already_sent,
@@ -1741,7 +1738,7 @@ function certificate_generator_process_batch_ajax() {
 	}
 
 	// Get batch metadata from transient
-	$batch_data = get_transient( 'cert_batch_' . $batch_id );
+	$batch_data = get_transient( 'certificate_generator_batch_' . $batch_id );
 
 	if ( ! $batch_data ) {
 		wp_send_json_error( array( 'message' => __( 'Batch data expired or not found', 'certificate-generator' ) ) );
@@ -1759,7 +1756,7 @@ function certificate_generator_process_batch_ajax() {
 
 	// Update progress
 	$batch_data['processed'] = $offset + $limit;
-	set_transient( 'cert_batch_' . $batch_id, $batch_data, 3600 );
+	set_transient( 'certificate_generator_batch_' . $batch_id, $batch_data, 3600 );
 
 	// Calculate progress percentage
 	$progress_percent = min( 100, round( ( $batch_data['processed'] / $batch_data['total_posts'] ) * 100 ) );
@@ -1782,7 +1779,7 @@ function certificate_generator_process_batch_ajax() {
 
 	// Clean up transient if complete
 	if ( $is_complete ) {
-		delete_transient( 'cert_batch_' . $batch_id );
+		delete_transient( 'certificate_generator_batch_' . $batch_id );
 	}
 
 	// If no emails were queued in this batch, return as error so UI can display diagnostics

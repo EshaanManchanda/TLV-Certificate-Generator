@@ -22,7 +22,7 @@ require_once __DIR__ . '/../Admin/columns.php';
  *
  * @param int $post_id The saved post ID.
  */
-function cg_sync_to_dynamic_tags( $post_id ) {
+function certificate_generator_sync_to_dynamic_tags( $post_id ) {
 	if ( ! class_exists( 'WP_Dynamic_Tags_Table_Manager' ) ) {
 		return;
 	}
@@ -61,9 +61,9 @@ function cg_sync_to_dynamic_tags( $post_id ) {
 	}
 
 	// Sync extra fields registered for this post's certificate type
-	if ( class_exists( 'CG_Field_Schema' ) ) {
+	if ( class_exists( 'CertificateGenerator_Field_Schema' ) ) {
 		$cert_type    = get_post_meta( $post_id, 'certificate_type', true );
-		$extra_fields = CG_Field_Schema::get_extra_fields( $cert_type );
+		$extra_fields = CertificateGenerator_Field_Schema::get_extra_fields( $cert_type );
 		foreach ( $extra_fields as $slug ) {
 			$value = get_post_meta( $post_id, $slug, true );
 			if ( $value !== '' && $value !== null ) {
@@ -99,21 +99,21 @@ function cg_sync_to_dynamic_tags( $post_id ) {
 	}
 }
 
-// CPT save hooks removed — cg_sync_to_dynamic_tags is now triggered from SQL admin page saves.
+// CPT save hooks removed — certificate_generator_sync_to_dynamic_tags is now triggered from SQL admin page saves.
 
 /**
  * Populate extra_fields JSON column in the SQL table whenever a student/teacher/school is saved.
  * Core columns (name, email, phone, school_name, certificate_type, issue_date, etc.) have their
- * own SQL columns; everything else (registered via CG_Field_Schema) goes to extra_fields JSON.
+ * own SQL columns; everything else (registered via CertificateGenerator_Field_Schema) goes to extra_fields JSON.
  */
-function cg_sync_extra_fields_to_sql( int $post_id ): void {
+function certificate_generator_sync_extra_fields_to_sql( int $post_id ): void {
 	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 		return;
 	}
 	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		return;
 	}
-	if ( ! class_exists( 'CG_Field_Schema' ) ) {
+	if ( ! class_exists( 'CertificateGenerator_Field_Schema' ) ) {
 		return;
 	}
 
@@ -150,7 +150,7 @@ function cg_sync_extra_fields_to_sql( int $post_id ): void {
 	);
 
 	$cert_type   = get_post_meta( $post_id, 'certificate_type', true );
-	$extra_slugs = CG_Field_Schema::get_extra_fields( $cert_type );
+	$extra_slugs = CertificateGenerator_Field_Schema::get_extra_fields( $cert_type );
 
 	$extra = array();
 	foreach ( $extra_slugs as $slug ) {
@@ -182,24 +182,24 @@ function cg_sync_extra_fields_to_sql( int $post_id ): void {
 // unregistered; their edit screens (and thus these meta boxes) are unreachable.
 
 // Extra Fields Meta Box for Students
-function add_students_extra_fields_meta_box() {
+function certificate_generator_add_students_extra_fields_meta_box() {
 	add_meta_box(
 		'students_extra_fields_meta_box',
 		'Extra Fields',
-		'render_students_extra_fields_form',
+		'certificate_generator_render_students_extra_fields_form',
 		'students',
 		'normal',
 		'default'
 	);
 }
-add_action( 'add_meta_boxes', 'add_students_extra_fields_meta_box' );
+add_action( 'add_meta_boxes', 'certificate_generator_add_students_extra_fields_meta_box' );
 
-function render_students_extra_fields_form( $post ) {
+function certificate_generator_render_students_extra_fields_form( $post ) {
 	$certificate_type = get_post_meta( $post->ID, 'certificate_type', true );
-	if ( ! class_exists( 'CG_Field_Schema' ) ) {
+	if ( ! class_exists( 'CertificateGenerator_Field_Schema' ) ) {
 		return;
 	}
-	$extra_fields = CG_Field_Schema::get_extra_fields( $certificate_type );
+	$extra_fields = CertificateGenerator_Field_Schema::get_extra_fields( $certificate_type );
 	?>
 	<div class="cg-student-card" id="cg-extra-fields-card">
 		<?php if ( empty( $extra_fields ) ) : ?>
@@ -220,7 +220,7 @@ function render_students_extra_fields_form( $post ) {
 			<?php
 			foreach ( $extra_fields as $slug ) :
 				$value = get_post_meta( $post->ID, $slug, true );
-				$label = CG_Field_Schema::get_display_label( $slug );
+				$label = CertificateGenerator_Field_Schema::get_display_label( $slug );
 				?>
 				<div class="custom-form-group">
 					<label for="cg_extra_<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $label ); ?></label>
@@ -263,7 +263,7 @@ function render_students_extra_fields_form( $post ) {
 require_once plugin_dir_path( __FILE__ ) . 'font-manager.php';
 
 // Add Meta Box for Certificates Post Type
-function add_certificates_meta_box() {
+function certificate_generator_add_certificates_meta_box() {
 	add_meta_box(
 		'certificates_meta_box',
 		'Certificate Details',
@@ -273,10 +273,10 @@ function add_certificates_meta_box() {
 		'high'
 	);
 }
-add_action( 'add_meta_boxes', 'add_certificates_meta_box' );
+add_action( 'add_meta_boxes', 'certificate_generator_add_certificates_meta_box' );
 
 // Save Certificates Data
-function save_certificates_data( $post_id ) {
+function certificate_generator_save_certificates_data( $post_id ) {
 	// Check if data is being saved correctly
 	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 		return;
@@ -304,12 +304,12 @@ function save_certificates_data( $post_id ) {
 			if ( $stored !== null ) {
 				update_post_meta( $post_id, 'event_date', $stored );
 			} else {
-				set_transient( 'cg_event_date_invalid_' . $post_id, 1, 30 );
+				set_transient( 'certificate_generator_event_date_invalid_' . $post_id, 1, 30 );
 			}
 		}
 	}
 	// Invalidate duplicate-template warning cache when any certificate template is saved
-	delete_transient( 'cg_duplicate_template_warning' );
+	delete_transient( 'certificate_generator_duplicate_template_warning' );
 
 	if ( isset( $_POST['template_url'] ) ) {
 		update_post_meta( $post_id, 'template_url', esc_url_raw( wp_unslash( $_POST['template_url'] ) ) );
@@ -332,11 +332,11 @@ function save_certificates_data( $post_id ) {
 
 	// Save number-of-fields stepper
 	if ( isset( $_POST['template_field_count'] ) ) {
-		$field_count = max( 2, min( CG_Field_Schema::MAX_FIELDS, intval( $_POST['template_field_count'] ) ) );
+		$field_count = max( 2, min( CertificateGenerator_Field_Schema::MAX_FIELDS, intval( $_POST['template_field_count'] ) ) );
 		update_post_meta( $post_id, 'template_field_count', $field_count );
 	}
 
-	for ( $i = 1; $i <= CG_Field_Schema::MAX_FIELDS; $i++ ) {
+	for ( $i = 1; $i <= CertificateGenerator_Field_Schema::MAX_FIELDS; $i++ ) {
 		$x_input = sanitize_text_field( wp_unslash( $_POST[ "field_{$i}_position_x" ] ?? '' ) );
 		$y_input = sanitize_text_field( wp_unslash( $_POST[ "field_{$i}_position_y" ] ?? '' ) );
 		$x_val   = $x_input !== '' ? sanitize_text_field( $x_input ) : strval( 105 );
@@ -369,7 +369,7 @@ function save_certificates_data( $post_id ) {
 		$new_slug    = sanitize_title( $new_title );
 
 		// Prevent infinite loop by removing and re-adding the save action
-		remove_action( 'save_post', 'save_certificates_data' );
+		remove_action( 'save_post', 'certificate_generator_save_certificates_data' );
 		wp_update_post(
 			array(
 				'ID'         => $post_id,
@@ -377,15 +377,15 @@ function save_certificates_data( $post_id ) {
 				'post_name'  => $new_slug,
 			)
 		);
-		add_action( 'save_post', 'save_certificates_data' );
+		add_action( 'save_post', 'certificate_generator_save_certificates_data' );
 	}
 }
-add_action( 'save_post', 'save_certificates_data' );
+add_action( 'save_post', 'certificate_generator_save_certificates_data' );
 
 /**
  * Admin notice: invalid event_date format.
  */
-function cg_certificates_event_date_invalid_notice() {
+function certificate_generator_certificates_event_date_invalid_notice() {
 	$screen = get_current_screen();
 	if ( ! $screen || $screen->post_type !== 'certificates' || $screen->base !== 'post' ) {
 		return;
@@ -394,24 +394,24 @@ function cg_certificates_event_date_invalid_notice() {
 	if ( ! $post ) {
 		return;
 	}
-	if ( get_transient( 'cg_event_date_invalid_' . $post->ID ) ) {
-		delete_transient( 'cg_event_date_invalid_' . $post->ID );
+	if ( get_transient( 'certificate_generator_event_date_invalid_' . $post->ID ) ) {
+		delete_transient( 'certificate_generator_event_date_invalid_' . $post->ID );
 		echo '<div class="notice notice-error is-dismissible"><p><strong>Certificate Generator:</strong> Invalid Event Date format. Please use the date picker or enter a date in YYYY-MM-DD format.</p></div>';
 	}
 }
-add_action( 'admin_notices', 'cg_certificates_event_date_invalid_notice' );
+add_action( 'admin_notices', 'certificate_generator_certificates_event_date_invalid_notice' );
 
 /**
  * Admin notice: multiple templates share the same certificate_type but none have event_date.
  * Only shown on the certificates list screen. Cached for 5 minutes.
  */
-function cg_certificates_duplicate_type_warning() {
+function certificate_generator_certificates_duplicate_type_warning() {
 	$screen = get_current_screen();
 	if ( ! $screen || $screen->id !== 'edit-certificates' ) {
 		return;
 	}
 
-	$cached = get_transient( 'cg_duplicate_template_warning' );
+	$cached = get_transient( 'certificate_generator_duplicate_template_warning' );
 	if ( $cached === false ) {
 		// Build map: certificate_type => [has_date, count]
 		$all      = get_posts(
@@ -443,7 +443,7 @@ function cg_certificates_duplicate_type_warning() {
 			}
 		}
 		$cached = $bad_types;
-		set_transient( 'cg_duplicate_template_warning', $cached, 5 * MINUTE_IN_SECONDS );
+		set_transient( 'certificate_generator_duplicate_template_warning', $cached, 5 * MINUTE_IN_SECONDS );
 	}
 
 	if ( ! empty( $cached ) ) {
@@ -451,13 +451,13 @@ function cg_certificates_duplicate_type_warning() {
 		echo '<div class="notice notice-warning is-dismissible"><p><strong>Certificate Generator:</strong> The following certificate types have multiple templates but no <em>Event Date</em> set — the system cannot reliably pick the correct template. Please add an Event Date to each template: ' . esc_html( $list ) . '.</p></div>';
 	}
 }
-add_action( 'admin_notices', 'cg_certificates_duplicate_type_warning' );
+add_action( 'admin_notices', 'certificate_generator_certificates_duplicate_type_warning' );
 
 // Preview-certificate button/handler removed — superseded by the nonce-checked
-// cg_preview_template AJAX action in src/Admin/Pages/TemplatesPage.php.
+// certificate_generator_preview_template AJAX action in src/Admin/Pages/TemplatesPage.php.
 
 // Fields Definitions
-$student_fields = array(
+$certificate_generator_student_fields = array(
 	array(
 		'key'   => 'field_student_name',
 		'label' => 'Student Name',
@@ -493,7 +493,7 @@ $student_fields = array(
 	),
 );
 
-$teacher_fields = array(
+$certificate_generator_teacher_fields = array(
 	array(
 		'key'   => 'field_teacher_name',
 		'label' => 'Teacher Name',
@@ -535,7 +535,7 @@ $teacher_fields = array(
 	),
 );
 
-$school_fields = array(
+$certificate_generator_school_fields = array(
 	array(
 		'key'   => 'field_school_name_schools',
 		'label' => 'School Name',
@@ -572,7 +572,7 @@ $school_fields = array(
 );
 
 // Define Fields for Certificates
-$certificate_fields = array(
+$certificate_generator_certificate_fields = array(
 	array(
 		'key'   => 'field_certificate_type',
 		'label' => 'Certificate Type',
@@ -682,7 +682,7 @@ $certificate_fields = array(
 );
 
 // Add Advanced Custom Fields
-function add_acf_field_group( $group_key, $title, $fields, $post_type ) {
+function certificate_generator_add_acf_field_group( $group_key, $title, $fields, $post_type ) {
 	if ( function_exists( 'acf_add_local_field_group' ) ) {
 		acf_add_local_field_group(
 			array(
@@ -703,14 +703,14 @@ function add_acf_field_group( $group_key, $title, $fields, $post_type ) {
 	}
 }
 
-function add_custom_fields() {
-	global $student_fields, $teacher_fields, $school_fields, $certificate_fields;
-	add_acf_field_group( 'group_students', 'Student Fields', $student_fields, 'students' );
-	add_acf_field_group( 'group_teachers', 'Teacher Fields', $teacher_fields, 'teachers' );
-	add_acf_field_group( 'group_schools', 'School Fields', $school_fields, 'schools' );
-	add_acf_field_group( 'group_certificates', 'Certificate Settings', $certificate_fields, 'certificates' );
+function certificate_generator_add_custom_fields() {
+	global $certificate_generator_student_fields, $certificate_generator_teacher_fields, $certificate_generator_school_fields, $certificate_generator_certificate_fields;
+	certificate_generator_add_acf_field_group( 'group_students', 'Student Fields', $certificate_generator_student_fields, 'students' );
+	certificate_generator_add_acf_field_group( 'group_teachers', 'Teacher Fields', $certificate_generator_teacher_fields, 'teachers' );
+	certificate_generator_add_acf_field_group( 'group_schools', 'School Fields', $certificate_generator_school_fields, 'schools' );
+	certificate_generator_add_acf_field_group( 'group_certificates', 'Certificate Settings', $certificate_generator_certificate_fields, 'certificates' );
 }
-add_action( 'acf/init', 'add_custom_fields' );
+add_action( 'acf/init', 'certificate_generator_add_custom_fields' );
 
 // Add Admin Page for Data Management
 // function custom_post_admin_menu() {
@@ -719,7 +719,7 @@ add_action( 'acf/init', 'add_custom_fields' );
 // 'Post Management',
 // 'manage_options',
 // 'custom-post-management',
-// 'render_custom_post_admin_page',
+// 'certificate_generator_render_custom_post_admin_page',
 // 'dashicons-admin-generic',
 // 20
 // );
@@ -727,8 +727,8 @@ add_action( 'acf/init', 'add_custom_fields' );
 // add_action('admin_menu', 'custom_post_admin_menu');
 
 // Enqueue WordPress media uploader on CPT edit screens
-add_action( 'admin_enqueue_scripts', 'cg_enqueue_cpt_admin_scripts' );
-function cg_enqueue_cpt_admin_scripts( $hook ) {
+add_action( 'admin_enqueue_scripts', 'certificate_generator_enqueue_cpt_admin_scripts' );
+function certificate_generator_enqueue_cpt_admin_scripts( $hook ) {
 	if ( ! in_array( $hook, array( 'post.php', 'post-new.php' ), true ) ) {
 		return;
 	}
@@ -742,8 +742,8 @@ function cg_enqueue_cpt_admin_scripts( $hook ) {
 }
 
 // Hide auto-generated title box on CPT edit screens
-add_action( 'admin_head', 'cg_cpt_admin_head_styles' );
-function cg_cpt_admin_head_styles() {
+add_action( 'admin_head', 'certificate_generator_cpt_admin_head_styles' );
+function certificate_generator_cpt_admin_head_styles() {
 	$screen = get_current_screen();
 	if ( ! $screen || ! in_array( $screen->post_type, array( 'students', 'teachers', 'schools', 'certificates' ), true ) ) {
 		return;
@@ -752,7 +752,7 @@ function cg_cpt_admin_head_styles() {
 }
 
 // Render the Admin Page
-function render_custom_post_admin_page() {
+function certificate_generator_render_custom_post_admin_page() {
 	echo '<div class="wrap">';
 	echo '<h1>Manage Custom Post Data</h1>';
 	echo '<form method="post" action="options.php">';

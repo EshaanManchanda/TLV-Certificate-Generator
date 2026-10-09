@@ -29,7 +29,7 @@
 		CGUI.progress(progress, 0, 0, 'Generating serial numbers… this can take a few minutes for large sites.');
 
 		var data = new URLSearchParams({
-			action: 'cg_bulk_generate_serials',
+			action: 'certificate_generator_bulk_generate_serials',
 			nonce: cgBulkSerial.nonce,
 			students: document.getElementById('cg-bulk-students').checked ? 1 : 0,
 			teachers: document.getElementById('cg-bulk-teachers').checked ? 1 : 0,

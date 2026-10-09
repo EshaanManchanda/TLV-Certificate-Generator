@@ -9,7 +9,7 @@ test.describe('§02 Dashboard', () => {
 			(SELECT COUNT(*) FROM {p}cg_certificate_templates) AS t,
 			(SELECT COUNT(*) FROM {p}cg_students) + (SELECT COUNT(*) FROM {p}cg_teachers) + (SELECT COUNT(*) FROM {p}cg_schools) AS r,
 			(SELECT COUNT(*) FROM {p}cg_certificates) AS c`);
-		const testSent = !!wp.getOption('cg_test_certificate_sent');
+		const testSent = !!wp.getOption('certificate_generator_test_certificate_sent');
 		const done = [s.t > 0, testSent, s.r > 0, s.c > 0];
 		const doneCount = done.filter(Boolean).length;
 

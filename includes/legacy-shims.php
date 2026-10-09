@@ -29,17 +29,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 // When CG_USE_NEW_PDF=false (default), certificate-search.php provides the
 // functions directly and this block is skipped.
 //
-// generate_certificate_pdf_email is NOT overridden here — it already calls
-// generate_certificate_pdf() which is shimmed below, so it inherits the new path.
+// certificate_generator_generate_certificate_pdf_email is NOT overridden here — it already calls
+// certificate_generator_generate_certificate_pdf() which is shimmed below, so it inherits the new path.
 
 if ( class_exists( '\CertificateGenerator\Core\Config' )
 	&& \CertificateGenerator\Core\Config::flag( 'CG_USE_NEW_PDF' )
-	&& ! function_exists( 'generate_certificate_pdf' ) ) {
+	&& ! function_exists( 'certificate_generator_generate_certificate_pdf' ) ) {
 
 	/**
 	 * @deprecated v8 Use \CertificateGenerator\Services\PdfGenerator::make() instead.
 	 */
-	function generate_certificate_pdf( $post_id, $fields = array(), $student_data = null ) {
+	function certificate_generator_generate_certificate_pdf( $post_id, $fields = array(), $student_data = null ) {
 		return \CertificateGenerator\Services\PdfGenerator::make(
 			(int) $post_id,
 			(array) $fields,
@@ -50,7 +50,7 @@ if ( class_exists( '\CertificateGenerator\Core\Config' )
 	/**
 	 * @deprecated v8 Use \CertificateGenerator\Services\PdfGenerator::makeFromArray() instead.
 	 */
-	function generate_certificate_pdf_with_data( $post_data ) {
+	function certificate_generator_generate_certificate_pdf_with_data( $post_data ) {
 		return \CertificateGenerator\Services\PdfGenerator::makeFromArray( (array) $post_data );
 	}
 }
@@ -80,7 +80,7 @@ if ( class_exists( '\CertificateGenerator\Core\Config' )
 // ── Phase 4: Email shims ─────────────────────────────────────────────────────
 // certificate_generator_send_email() is already delegated from
 // src/Services/EmailService::sendById() (Phase-1 bug-fix). Once CG_USE_EVENTS
-// is flipped in Phase 4, the send funnel fires do_action('cg_email_sent').
+// is flipped in Phase 4, the send funnel fires do_action('certificate_generator_email_sent').
 // No shim override needed here — EmailService is the shim.
 
 // ── Phases 1–2 complete — PDF + ZIP shims active above ────────────────────────

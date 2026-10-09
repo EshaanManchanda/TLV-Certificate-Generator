@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_Migrator {
+class CertificateGenerator_Migrator {
 	public static function run() {
 		global $wpdb;
 		$table_name      = $wpdb->prefix . 'certificate_generator';
@@ -123,15 +123,15 @@ class CG_Migrator {
 }
 
 add_action(
-	'wp_ajax_cg_run_email_backfill',
+	'wp_ajax_certificate_generator_run_email_backfill',
 	function () {
-		check_ajax_referer( 'cg_run_email_backfill', 'nonce' );
+		check_ajax_referer( 'certificate_generator_run_email_backfill', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => 'Insufficient permissions' ), 403 );
 		}
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'certificate_generator';
-		$backfilled = CG_Migrator::migrate_existing_data( $table_name );
+		$backfilled = CertificateGenerator_Migrator::migrate_existing_data( $table_name );
 		$remaining  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table_name WHERE email = ''" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		wp_send_json_success(
 			array(

@@ -14,8 +14,8 @@ class EmailService {
 
 	public function __construct( Mailer $mailer ) {
 		$this->mailer           = $mailer;
-		$this->subject_template = get_option( 'cg_email_subject', 'Your Certificate: {certificate_title}' );
-		$this->body_template    = get_option( 'cg_email_body', '' );
+		$this->subject_template = get_option( 'certificate_generator_email_subject', 'Your Certificate: {certificate_title}' );
+		$this->body_template    = get_option( 'certificate_generator_email_body', '' );
 	}
 
 	public function send_certificate( string $to, string $name, array $cert_data, array $attachments = array() ): bool {

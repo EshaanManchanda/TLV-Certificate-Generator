@@ -9,7 +9,7 @@ const REASON = 'E2E revoked for testing';
 test.describe('§10 Revoke', () => {
 	let verifyUrl;
 	test.beforeAll(() => {
-		verifyUrl = wp.ensurePage('Verify', '[cg_verify_certificate]');
+		verifyUrl = wp.ensurePage('Verify', '[certificate_generator_verify_certificate]');
 		wp.seedCertificate({ serial_number: SERIAL, student_name: 'E2E Ben Winner', email: 'ben@e2e.test', certificate_type: 'E2E Winner' });
 		wp.resetRateLimit();
 	});

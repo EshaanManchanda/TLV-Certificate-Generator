@@ -20,11 +20,11 @@ class TestCertificateTest extends WP_UnitTestCase {
 	}
 
 	public function test_checklist_has_test_certificate_step_and_no_migration_step(): void {
-		$labels = array_column( cg_setup_steps( 1, 0, false ), 'label' );
+		$labels = array_column( certificate_generator_setup_steps( 1, 0, false ), 'label' );
 		$this->assertContains( 'Email yourself a test certificate', $labels );
 		$this->assertNotContains( 'Certificate records in custom table', $labels );
 
 		update_option( TestCertificate::DONE_OPTION, 1 );
-		$this->assertTrue( cg_setup_steps( 1, 0, false )[1]['done'] );
+		$this->assertTrue( certificate_generator_setup_steps( 1, 0, false )[1]['done'] );
 	}
 }

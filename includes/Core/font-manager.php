@@ -379,23 +379,23 @@ class CertificateGenerator_FontManager {
 			$tfpdf_file = CERTIFICATE_GENERATOR_PATH . 'lib/tfpdf/tfpdf.php';
 			if ( file_exists( $tfpdf_file ) ) {
 				require_once $tfpdf_file;
-				if ( class_exists( 'CG_TFPDF' ) ) {
-					return new CG_TFPDF( $orientation, $unit, $size );
+				if ( class_exists( 'CertificateGenerator_TFPDF' ) ) {
+					return new CertificateGenerator_TFPDF( $orientation, $unit, $size );
 				}
 				if ( class_exists( 'tFPDF' ) ) {
 					return new tFPDF( $orientation, $unit, $size );
 				}
 			}
-			cg_debug_log( "FontManager: custom font '$font_name' selected but tFPDF is unavailable — falling back to FPDF (custom font will not render)." );
+			certificate_generator_debug_log( "FontManager: custom font '$font_name' selected but tFPDF is unavailable — falling back to FPDF (custom font will not render)." );
 		}
-		// CG_FPDF / CG_TFPDF (certificate-search.php) reuse decoded template images across a bulk run.
-		return class_exists( 'CG_FPDF' ) ? new CG_FPDF( $orientation, $unit, $size ) : new FPDF( $orientation, $unit, $size );
+		// CertificateGenerator_FPDF / CertificateGenerator_TFPDF (certificate-search.php) reuse decoded template images across a bulk run.
+		return class_exists( 'CertificateGenerator_FPDF' ) ? new CertificateGenerator_FPDF( $orientation, $unit, $size ) : new FPDF( $orientation, $unit, $size );
 	}
 
 	private function add_custom_font_to_pdf( $pdf, $font_name, $style, $size ) {
 		$ttf_path = $this->get_custom_font_path( $font_name );
 		if ( ! $ttf_path || ! file_exists( $ttf_path ) || ! ( $pdf instanceof tFPDF ) ) {
-			cg_debug_log( "FontManager: custom font '$font_name' unavailable — falling back to Helvetica." );
+			certificate_generator_debug_log( "FontManager: custom font '$font_name' unavailable — falling back to Helvetica." );
 			$pdf->SetFont( 'Helvetica', $style, $size );
 			return 'Helvetica';
 		}
@@ -403,7 +403,7 @@ class CertificateGenerator_FontManager {
 		// tFPDF's own embedding-permission check calls die() directly, which
 		// would crash the whole request — verify it ourselves first.
 		if ( ! self::is_font_embeddable( $ttf_path ) ) {
-			cg_debug_log( "FontManager: custom font '$font_name' cannot be embedded (font license restricts embedding) — falling back to Helvetica." );
+			certificate_generator_debug_log( "FontManager: custom font '$font_name' cannot be embedded (font license restricts embedding) — falling back to Helvetica." );
 			$pdf->SetFont( 'Helvetica', $style, $size );
 			return 'Helvetica';
 		}
@@ -420,7 +420,7 @@ class CertificateGenerator_FontManager {
 			// an arbitrary absolute path. Point _SYSTEM_TTFONTS at the uploaded
 			// font's own directory (wp-uploads/.../) and pass just the filename.
 			if ( ! defined( '_SYSTEM_TTFONTS' ) ) {
-				define( '_SYSTEM_TTFONTS', trailingslashit( dirname( $ttf_path ) ) );
+				define( '_SYSTEM_TTFONTS', trailingslashit( dirname( $ttf_path ) ) ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- constant name required by tFPDF
 			}
 
 			// A custom upload has exactly one weight/style available. tFPDF's
@@ -433,7 +433,7 @@ class CertificateGenerator_FontManager {
 			$pdf->SetFont( $font_name, '', $size );
 			return $font_name;
 		} catch ( \Throwable $e ) {
-			cg_debug_log( 'Custom font loading error: ' . $e->getMessage() );
+			certificate_generator_debug_log( 'Custom font loading error: ' . $e->getMessage() );
 			$pdf->SetFont( 'Helvetica', $style, $size );
 			return 'Helvetica';
 		}
@@ -464,7 +464,7 @@ class CertificateGenerator_FontManager {
 		$z_file   = $this->font_path . $font_data['file'] . '.z';
 
 		if ( ! file_exists( $php_file ) || ! file_exists( $z_file ) ) {
-			cg_debug_log( "FontManager: Font files missing for $font_name, falling back to Helvetica" );
+			certificate_generator_debug_log( "FontManager: Font files missing for $font_name, falling back to Helvetica" );
 			$pdf->SetFont( 'Helvetica', $style, $size );
 			return 'Helvetica';
 		}
@@ -473,7 +473,7 @@ class CertificateGenerator_FontManager {
 		// This prevents "FPDF error: Unsupported font type: TrueTypeUnicode"
 		$font_content = file_get_contents( $php_file, false, null, 0, 100 );
 		if ( $font_content !== false && strpos( $font_content, "'TrueTypeUnicode'" ) !== false ) {
-			cg_debug_log( "FontManager: Unsupported TrueTypeUnicode font detected ($font_name). Falling back to Helvetica to prevent crash." );
+			certificate_generator_debug_log( "FontManager: Unsupported TrueTypeUnicode font detected ($font_name). Falling back to Helvetica to prevent crash." );
 			$pdf->SetFont( 'Helvetica', $style, $size );
 			return 'Helvetica';
 		}
@@ -485,7 +485,7 @@ class CertificateGenerator_FontManager {
 			return $font_data['display_name'];
 		} catch ( \Throwable $e ) {
 			unset( $this->available_fonts[ $font_name ] );  // don't retry this broken font
-			cg_debug_log( 'Font loading error: ' . $e->getMessage() );
+			certificate_generator_debug_log( 'Font loading error: ' . $e->getMessage() );
 			$pdf->SetFont( 'Helvetica', $style, $size );
 			return 'Helvetica';
 		}
@@ -622,7 +622,7 @@ class CertificateGenerator_FontManager {
 
 			// Log memory optimization
 			if ( function_exists( 'error_log' ) ) {
-				cg_debug_log(
+				certificate_generator_debug_log(
 					sprintf(
 						'Certificate Generator: Memory optimization triggered at %.2f MB, cache cleared',
 						$current_memory

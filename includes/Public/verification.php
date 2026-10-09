@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_Public_Verification {
+class CertificateGenerator_Public_Verification {
 	private static $instance = null;
 
 	public static function get_instance() {
@@ -14,17 +14,17 @@ class CG_Public_Verification {
 	}
 
 	public function init() {
-		add_shortcode( 'cg_verify_certificate', array( $this, 'render_verification_shortcode' ) );
+		add_shortcode( 'certificate_generator_verify_certificate', array( $this, 'render_verification_shortcode' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'wp_ajax_cg_public_verify', array( $this, 'ajax_public_verify' ) );
-		add_action( 'wp_ajax_nopriv_cg_public_verify', array( $this, 'ajax_public_verify' ) );
+		add_action( 'wp_ajax_certificate_generator_public_verify', array( $this, 'ajax_public_verify' ) );
+		add_action( 'wp_ajax_nopriv_certificate_generator_public_verify', array( $this, 'ajax_public_verify' ) );
 	}
 
 	public function enqueue_assets() {
 		global $post;
 
 		// Check singular pages/posts directly
-		if ( is_singular() && $post && has_shortcode( $post->post_content, 'cg_verify_certificate' ) ) {
+		if ( is_singular() && $post && has_shortcode( $post->post_content, 'certificate_generator_verify_certificate' ) ) {
 			$this->do_enqueue();
 			return;
 		}
@@ -65,7 +65,7 @@ class CG_Public_Verification {
 				'description' => 'Enter the serial number printed on your certificate to verify its authenticity.',
 			),
 			$atts,
-			'cg_verify_certificate'
+			'certificate_generator_verify_certificate'
 		);
 
 		$s  = $this->get_style_options();
@@ -162,8 +162,8 @@ class CG_Public_Verification {
 			wp_send_json_error( array( 'message' => 'Serial number is required' ) );
 		}
 
-		if ( class_exists( 'CG_Serial_Number_Generator' ) ) {
-			$serial_gen = CG_Serial_Number_Generator::get_instance();
+		if ( class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
+			$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
 			$result     = $serial_gen->verify( $serial );
 			wp_send_json_success( $result );
 		}
@@ -210,8 +210,8 @@ class CG_Public_Verification {
 					'student_name'     => $recipient_name,
 					'certificate_type' => $cert->certificate_type ?? '',
 					'serial_number'    => $cert->serial_number,
-					'issued_at'        => ! empty( $cert->issued_at ) ? cg_format_date( $cert->issued_at ) : '',
-					'expires_at'       => ! empty( $cert->expires_at ) ? cg_format_date( $cert->expires_at ) : '',
+					'issued_at'        => ! empty( $cert->issued_at ) ? certificate_generator_format_date( $cert->issued_at ) : '',
+					'expires_at'       => ! empty( $cert->expires_at ) ? certificate_generator_format_date( $cert->expires_at ) : '',
 				),
 			)
 		);

@@ -10,10 +10,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-add_action( 'plugins_loaded', 'cg_migrate_queue_columns', 20 );
+add_action( 'plugins_loaded', 'certificate_generator_migrate_queue_columns', 20 );
 
-function cg_migrate_queue_columns() {
-	if ( get_option( 'cg_migration_queue_columns_done' ) ) {
+function certificate_generator_migrate_queue_columns() {
+	if ( get_option( 'certificate_generator_migration_queue_columns_done' ) ) {
 		return;
 	}
 
@@ -46,18 +46,18 @@ function cg_migrate_queue_columns() {
 		}
 	}
 
-	update_option( 'cg_migration_queue_columns_done', true );
+	update_option( 'certificate_generator_migration_queue_columns_done', true );
 }
 
-add_action( 'plugins_loaded', 'cg_migrate_queue_scope_column', 20 );
+add_action( 'plugins_loaded', 'certificate_generator_migrate_queue_scope_column', 20 );
 
 /**
  * Add wp_cert_email_queue.scope — JSON {entity: [row ids]} naming exactly which
  * certificates a queued email carries. NULL keeps the old "every certificate for
  * this address" behaviour for rows queued outside the filtered Bulk Send.
  */
-function cg_migrate_queue_scope_column() {
-	if ( get_option( 'cg_migration_queue_scope_done' ) ) {
+function certificate_generator_migrate_queue_scope_column() {
+	if ( get_option( 'certificate_generator_migration_queue_scope_done' ) ) {
 		return;
 	}
 
@@ -73,5 +73,5 @@ function cg_migrate_queue_scope_column() {
 		$wpdb->query( "ALTER TABLE `$queue_table` ADD COLUMN scope LONGTEXT NULL DEFAULT NULL" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 
-	update_option( 'cg_migration_queue_scope_done', true );
+	update_option( 'certificate_generator_migration_queue_scope_done', true );
 }

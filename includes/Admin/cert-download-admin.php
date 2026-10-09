@@ -4,7 +4,7 @@
  *
  * Filter page that lets an admin query students, teachers or schools by event, email, school, cert type,
  * year, and date range — then download individual PDFs or bulk ZIPs (auto-split
- * into parts of CG_ADMIN_EXPORT_ZIP_PART_SIZE certificates each).
+ * into parts of CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE certificates each).
  *
  * @package Certificate Generator
  */
@@ -14,22 +14,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Part size — defined in certificate-generator.php; fallback for unit tests.
-if ( ! defined( 'CG_ADMIN_EXPORT_ZIP_PART_SIZE' ) ) {
-	define( 'CG_ADMIN_EXPORT_ZIP_PART_SIZE', 200 );
+if ( ! defined( 'CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE' ) ) {
+	define( 'CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE', 200 );
 }
 
 // ── Action hooks (fire before headers sent) ──────────────────────────────────
 
-add_action( 'admin_init', 'cg_handle_admin_cert_zip_download' );
-add_action( 'admin_init', 'cg_handle_admin_individual_cert_download' );
-add_action( 'wp_ajax_cg_cert_dl_start', 'cg_ajax_cert_dl_start' );
-add_action( 'wp_ajax_cg_cert_dl_step', 'cg_ajax_cert_dl_step' );
-add_action( 'wp_ajax_cg_cert_dl_zip', 'cg_ajax_cert_dl_zip' );
-add_action( 'admin_post_cg_cert_dl_file', 'cg_handle_cert_dl_file' );
+add_action( 'admin_init', 'certificate_generator_handle_admin_cert_zip_download' );
+add_action( 'admin_init', 'certificate_generator_handle_admin_individual_cert_download' );
+add_action( 'wp_ajax_certificate_generator_cert_dl_start', 'certificate_generator_ajax_cert_dl_start' );
+add_action( 'wp_ajax_certificate_generator_cert_dl_step', 'certificate_generator_ajax_cert_dl_step' );
+add_action( 'wp_ajax_certificate_generator_cert_dl_zip', 'certificate_generator_ajax_cert_dl_zip' );
+add_action( 'admin_post_certificate_generator_cert_dl_file', 'certificate_generator_handle_cert_dl_file' );
 
 // ── ZIP download handler (partitioned) ───────────────────────────────────────
 
-function cg_handle_admin_cert_zip_download(): void {
+function certificate_generator_handle_admin_cert_zip_download(): void {
 	if ( ! isset( $_POST['cg_download_zip'] ) ) {
 		return;
 	}
@@ -40,10 +40,10 @@ function cg_handle_admin_cert_zip_download(): void {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 	}
 
-	$filters   = cg_admin_cert_read_filters();
-	$part_size = CG_ADMIN_EXPORT_ZIP_PART_SIZE;
-	$total     = cg_admin_cert_count( $filters );
-	$plan      = cg_admin_cert_part_plan( $total, $part_size );
+	$filters   = certificate_generator_admin_cert_read_filters();
+	$part_size = CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE;
+	$total     = certificate_generator_admin_cert_count( $filters );
+	$plan      = certificate_generator_admin_cert_part_plan( $total, $part_size );
 	$part      = absint( $_POST['cg_zip_part'] ?? 0 );
 
 	if ( 0 === $plan['num_parts'] ) {
@@ -60,7 +60,7 @@ function cg_handle_admin_cert_zip_download(): void {
 		exit;
 	}
 
-	$rows = cg_admin_cert_query( $filters, $part_size, $part * $part_size );
+	$rows = certificate_generator_admin_cert_query( $filters, $part_size, $part * $part_size );
 
 	if ( empty( $rows ) ) {
 		wp_safe_redirect(
@@ -71,19 +71,17 @@ function cg_handle_admin_cert_zip_download(): void {
 
 	// Raise limits — best-effort; the 200-cert part size is the real safety margin.
 	@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-	$cur_mem = cg_admin_parse_memory_mb( (string) ini_get( 'memory_limit' ) );
-	if ( -1 !== $cur_mem && $cur_mem < 512 ) {
-		@ini_set( 'memory_limit', '512M' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-	}
+	add_filter( 'certificate_generator_memory_limit', static fn() => '512M' ); // filterable target for big ZIPs
+	wp_raise_memory_limit( 'certificate_generator' ); // raises only, never lowers
 	@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 
 	// PDFs go into the ZIP straight from cg_certificates/ (no temp copies); the manifest is
 	// built in memory. Unchanged certificates come from the PDF cache.
-	$name_col   = cg_admin_cert_name_col( $filters );
+	$name_col   = certificate_generator_admin_cert_name_col( $filters );
 	$cert_files = array();
-	$manifest   = array( cg_admin_cert_manifest_header() );
+	$manifest   = array( certificate_generator_admin_cert_manifest_header() );
 	foreach ( $rows as $row ) {
-		$entry = cg_admin_cert_zip_entry( $row, $name_col );
+		$entry = certificate_generator_admin_cert_zip_entry( $row, $name_col );
 		if ( $entry ) {
 			$cert_files[] = $entry['file'];
 			$manifest[]   = $entry['manifest'];
@@ -102,10 +100,10 @@ function cg_handle_admin_cert_zip_download(): void {
 	}
 
 	$cert_files[] = array(
-		'content'  => cg_admin_cert_manifest_csv( $manifest ),
+		'content'  => certificate_generator_admin_cert_manifest_csv( $manifest ),
 		'filename' => 'manifest.csv',
 	);
-	$zip_label    = cg_admin_cert_zip_label( $filters, $part, $plan['num_parts'] );
+	$zip_label    = certificate_generator_admin_cert_zip_label( $filters, $part, $plan['num_parts'] );
 	$zip_result   = certificate_generator_create_zip_for_email( $cert_files, $zip_label, array( 'private' => true ) );
 
 	if ( ! $zip_result || empty( $zip_result['zip_path'] ) || ! file_exists( $zip_result['zip_path'] ) ) {
@@ -115,8 +113,8 @@ function cg_handle_admin_cert_zip_download(): void {
 		exit;
 	}
 
-	// The private ZIP stays for reuse; CG_Cron_Jobs::cleanup_old_zips() removes it after a day.
-	cg_admin_cert_stream_zip( $zip_result['zip_path'], cg_admin_cert_zip_download_name( $filters, $part, $plan['num_parts'] ) );
+	// The private ZIP stays for reuse; CertificateGenerator_Cron_Jobs::cleanup_old_zips() removes it after a day.
+	certificate_generator_admin_cert_stream_zip( $zip_result['zip_path'], certificate_generator_admin_cert_zip_download_name( $filters, $part, $plan['num_parts'] ) );
 }
 
 /**
@@ -124,15 +122,15 @@ function cg_handle_admin_cert_zip_download(): void {
  *
  * @return array{file: array, manifest: array}|null Null when no PDF could be produced.
  */
-function cg_admin_cert_zip_entry( array $row, string $name_col ): ?array {
-	$path = cg_admin_cert_pdf_path( $row );
+function certificate_generator_admin_cert_zip_entry( array $row, string $name_col ): ?array {
+	$path = certificate_generator_admin_cert_pdf_path( $row );
 	if ( '' === $path ) {
 		return null;
 	}
 	$row_id    = (int) ( $row['id'] ?? 0 );
 	$cert_type = (string) ( $row['certificate_type'] ?? '' );
-	$safe_name = function_exists( 'cg_certificate_pdf_filename' )
-		? cg_certificate_pdf_filename( (string) ( $row[ $name_col ] ?? 'recipient' ), $cert_type, (string) $row_id )
+	$safe_name = function_exists( 'certificate_generator_certificate_pdf_filename' )
+		? certificate_generator_certificate_pdf_filename( (string) ( $row[ $name_col ] ?? 'recipient' ), $cert_type, (string) $row_id )
 		: sanitize_file_name( ( $row[ $name_col ] ?? 'recipient' ) . '_' . $row_id . '.pdf' );
 
 	return array(
@@ -155,18 +153,18 @@ function cg_admin_cert_zip_entry( array $row, string $name_col ): ?array {
  * Absolute path of a recipient's certificate PDF, rendering it only when the cache misses.
  * '' when the row has no certificate type or generation failed.
  */
-function cg_admin_cert_pdf_path( array $row ): string {
+function certificate_generator_admin_cert_pdf_path( array $row ): string {
 	$cert_type = $row['certificate_type'] ?? '';
-	if ( empty( $cert_type ) || ! function_exists( 'generate_certificate_pdf' ) ) {
+	if ( empty( $cert_type ) || ! function_exists( 'certificate_generator_generate_certificate_pdf' ) ) {
 		return '';
 	}
 
-	$fields = class_exists( 'CG_Field_Schema' )
-		? CG_Field_Schema::get_all_renderable_fields( $cert_type )
+	$fields = class_exists( 'CertificateGenerator_Field_Schema' )
+		? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type )
 		: array( 'student_name', 'school_name', 'issue_date' );
 
 	$post_id  = (int) ( $row['wp_post_id'] ?? $row['id'] ?? 0 );
-	$file_url = generate_certificate_pdf( $post_id, $fields, $row );
+	$file_url = certificate_generator_generate_certificate_pdf( $post_id, $fields, $row );
 	if ( ! $file_url ) {
 		return '';
 	}
@@ -177,14 +175,14 @@ function cg_admin_cert_pdf_path( array $row ): string {
 	return file_exists( $file_path ) ? $file_path : '';
 }
 
-function cg_admin_cert_manifest_header(): array {
+function certificate_generator_admin_cert_manifest_header(): array {
 	return array( 'name', 'email', 'school', 'cert_type', 'cg_id', 'pdf_filename' );
 }
 
 /**
  * The manifest.csv bytes for these rows — same fputcsv() output as the old temp file.
  */
-function cg_admin_cert_manifest_csv( array $lines ): string {
+function certificate_generator_admin_cert_manifest_csv( array $lines ): string {
 	$fh = fopen( 'php://temp', 'r+' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 	foreach ( $lines as $line ) {
 		fputcsv( $fh, $line );
@@ -199,7 +197,7 @@ function cg_admin_cert_manifest_csv( array $lines ): string {
  * Send a private ZIP to the browser and end the request. readfile() streams it in chunks,
  * so a large ZIP never sits in PHP memory.
  */
-function cg_admin_cert_stream_zip( string $zip_path, string $download_name ): void {
+function certificate_generator_admin_cert_stream_zip( string $zip_path, string $download_name ): void {
 	while ( ob_get_level() ) {
 		ob_end_clean();
 	}
@@ -223,16 +221,16 @@ function cg_admin_cert_stream_zip( string $zip_path, string $download_name ): vo
 // certificate twice.
 
 /** Capability + nonce for every job request. */
-function cg_cert_dl_guard(): void {
-	check_ajax_referer( 'cg_cert_dl_job', 'nonce' );
+function certificate_generator_cert_dl_guard(): void {
+	check_ajax_referer( 'certificate_generator_cert_dl_job', 'nonce' );
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ), 403 );
 	}
 }
 
 /** The current user's job, or a JSON error. Job ids are 20 alphanumerics, never a path. */
-function cg_cert_dl_job( string $job_id ): array {
-	$job = preg_match( '/^[A-Za-z0-9]{20}$/', $job_id ) ? get_transient( 'cg_dljob_' . $job_id ) : false;
+function certificate_generator_cert_dl_job( string $job_id ): array {
+	$job = preg_match( '/^[A-Za-z0-9]{20}$/', $job_id ) ? get_transient( 'certificate_generator_dljob_' . $job_id ) : false;
 	if ( ! is_array( $job ) || (int) $job['user_id'] !== get_current_user_id() ) {
 		wp_send_json_error( array( 'message' => __( 'This download has expired. Please start it again.', 'certificate-generator' ) ), 404 );
 	}
@@ -244,35 +242,35 @@ function cg_cert_dl_job( string $job_id ): array {
  * not — it upserts). A lock older than two minutes belongs to a request that died, and
  * the conditional UPDATE lets exactly one request take it over.
  */
-function cg_cert_dl_lock( string $job_id ): bool {
+function certificate_generator_cert_dl_lock( string $job_id ): bool {
 	global $wpdb;
-	$name = 'cg_dljob_lock_' . $job_id;
+	$name = 'certificate_generator_dljob_lock_' . $job_id;
 	if ( 1 === (int) $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %d, 'no')", $name, time() ) ) ) {
 		return true;
 	}
 	return 1 === (int) $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = %d WHERE option_name = %s AND option_value < %d", time(), $name, time() - 2 * MINUTE_IN_SECONDS ) );
 }
 
-function cg_cert_dl_unlock( string $job_id ): void {
+function certificate_generator_cert_dl_unlock( string $job_id ): void {
 	global $wpdb;
-	$wpdb->delete( $wpdb->options, array( 'option_name' => 'cg_dljob_lock_' . $job_id ) );
+	$wpdb->delete( $wpdb->options, array( 'option_name' => 'certificate_generator_dljob_lock_' . $job_id ) );
 }
 
-function cg_cert_dl_save( string $job_id, array $job ): void {
-	set_transient( 'cg_dljob_' . $job_id, $job, 6 * HOUR_IN_SECONDS );
+function certificate_generator_cert_dl_save( string $job_id, array $job ): void {
+	set_transient( 'certificate_generator_dljob_' . $job_id, $job, 6 * HOUR_IN_SECONDS );
 }
 
-function cg_ajax_cert_dl_start(): void {
-	cg_cert_dl_guard();
+function certificate_generator_ajax_cert_dl_start(): void {
+	certificate_generator_cert_dl_guard();
 
-	$filters = cg_admin_cert_read_filters( 'POST' );
-	$ids     = cg_admin_cert_query_ids( $filters );
+	$filters = certificate_generator_admin_cert_read_filters( 'POST' );
+	$ids     = certificate_generator_admin_cert_query_ids( $filters );
 	if ( ! $ids ) {
 		wp_send_json_error( array( 'message' => __( 'No recipients matched the selected filters.', 'certificate-generator' ) ) );
 	}
 
 	$job_id = wp_generate_password( 20, false );
-	cg_cert_dl_save(
+	certificate_generator_cert_dl_save(
 		$job_id,
 		array(
 			'user_id' => get_current_user_id(),
@@ -283,7 +281,7 @@ function cg_ajax_cert_dl_start(): void {
 			'zips'    => array(), // part index => private ZIP path
 		)
 	);
-	cg_debug_log( "Bulk download job $job_id started: " . count( $ids ) . ' certificate(s)' );
+	certificate_generator_debug_log( "Bulk download job $job_id started: " . count( $ids ) . ' certificate(s)' );
 
 	wp_send_json_success(
 		array(
@@ -295,29 +293,29 @@ function cg_ajax_cert_dl_start(): void {
 
 /**
  * Render the next certificates for as long as the time budget allows (default: the email
- * queue's CG_QUEUE_RUNTIME_BUDGET), so one request stays well under proxy timeouts.
+ * queue's CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET), so one request stays well under proxy timeouts.
  */
-function cg_ajax_cert_dl_step(): void {
-	cg_cert_dl_guard();
-	$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- cg_cert_dl_guard() checks the nonce
-	cg_cert_dl_job( $job_id );
-	if ( ! cg_cert_dl_lock( $job_id ) ) {
+function certificate_generator_ajax_cert_dl_step(): void {
+	certificate_generator_cert_dl_guard();
+	$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- certificate_generator_cert_dl_guard() checks the nonce
+	certificate_generator_cert_dl_job( $job_id );
+	if ( ! certificate_generator_cert_dl_lock( $job_id ) ) {
 		wp_send_json_success( array( 'busy' => true ) ); // another tab or a retry is mid-step
 	}
 
 	try {
-		$job    = get_transient( 'cg_dljob_' . $job_id ); // re-read under the lock
+		$job    = get_transient( 'certificate_generator_dljob_' . $job_id ); // re-read under the lock
 		$total  = count( $job['ids'] );
-		$budget = (float) apply_filters( 'cg_cert_dl_step_budget', defined( 'CG_QUEUE_RUNTIME_BUDGET' ) ? CG_QUEUE_RUNTIME_BUDGET : 20 );
+		$budget = (float) apply_filters( 'certificate_generator_cert_dl_step_budget', defined( 'CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET' ) ? CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET : 20 );
 		$start  = microtime( true );
 		$before = $job['cursor'];
 		@set_time_limit( (int) $budget + 60 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 
 		while ( $job['cursor'] < $total ) {
 			$batch = array_slice( $job['ids'], $job['cursor'], 50 );
-			$rows  = cg_admin_cert_rows_by_ids( $job['filters']['entity'], $batch );
+			$rows  = certificate_generator_admin_cert_rows_by_ids( $job['filters']['entity'], $batch );
 			foreach ( $batch as $id ) {
-				if ( ! isset( $rows[ $id ] ) || '' === cg_admin_cert_pdf_path( $rows[ $id ] ) ) {
+				if ( ! isset( $rows[ $id ] ) || '' === certificate_generator_admin_cert_pdf_path( $rows[ $id ] ) ) {
 					$job['failed'][] = $id;
 				}
 				++$job['cursor'];
@@ -328,10 +326,10 @@ function cg_ajax_cert_dl_step(): void {
 		}
 		// Saved once per step: if this request dies mid-way, the next one redoes only
 		// cache hits for the certificates this one already rendered.
-		cg_cert_dl_save( $job_id, $job );
-		cg_debug_log( sprintf( 'Bulk download job %s: %d → %d of %d in %.1fs, peak %.0f MB', $job_id, $before, $job['cursor'], $total, microtime( true ) - $start, memory_get_peak_usage() / MB_IN_BYTES ) );
+		certificate_generator_cert_dl_save( $job_id, $job );
+		certificate_generator_debug_log( sprintf( 'Bulk download job %s: %d → %d of %d in %.1fs, peak %.0f MB', $job_id, $before, $job['cursor'], $total, microtime( true ) - $start, memory_get_peak_usage() / MB_IN_BYTES ) );
 	} finally {
-		cg_cert_dl_unlock( $job_id );
+		certificate_generator_cert_dl_unlock( $job_id );
 	}
 
 	wp_send_json_success(
@@ -341,36 +339,36 @@ function cg_ajax_cert_dl_step(): void {
 			'percentage' => round( 100 * $job['cursor'] / $total, 1 ),
 			'complete'   => $job['cursor'] >= $total,
 			'failed'     => count( $job['failed'] ),
-			'parts'      => cg_admin_cert_part_plan( $total, CG_ADMIN_EXPORT_ZIP_PART_SIZE )['num_parts'],
+			'parts'      => certificate_generator_admin_cert_part_plan( $total, CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE )['num_parts'],
 		)
 	);
 }
 
 /** Build one part's private ZIP from the cached PDFs (a missing PDF is rendered again). */
-function cg_ajax_cert_dl_zip(): void {
-	cg_cert_dl_guard();
-	$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- cg_cert_dl_guard() checks the nonce
-	$job    = cg_cert_dl_job( $job_id );
+function certificate_generator_ajax_cert_dl_zip(): void {
+	certificate_generator_cert_dl_guard();
+	$job_id = sanitize_text_field( wp_unslash( $_POST['job_id'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- certificate_generator_cert_dl_guard() checks the nonce
+	$job    = certificate_generator_cert_dl_job( $job_id );
 	$total  = count( $job['ids'] );
-	$plan   = cg_admin_cert_part_plan( $total, CG_ADMIN_EXPORT_ZIP_PART_SIZE );
-	$part   = absint( $_POST['part'] ?? 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- cg_cert_dl_guard() checks the nonce
+	$plan   = certificate_generator_admin_cert_part_plan( $total, CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE );
+	$part   = absint( $_POST['part'] ?? 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- certificate_generator_cert_dl_guard() checks the nonce
 
 	if ( $job['cursor'] < $total || $part >= $plan['num_parts'] ) {
 		wp_send_json_error( array( 'message' => __( 'Invalid download part requested. Please try again from the preview.', 'certificate-generator' ) ) );
 	}
-	if ( ! cg_cert_dl_lock( $job_id ) ) {
+	if ( ! certificate_generator_cert_dl_lock( $job_id ) ) {
 		wp_send_json_success( array( 'busy' => true ) );
 	}
 
 	try {
 		@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors — one part is bounded by the part size
 		$ids      = array_values( array_diff( array_slice( $job['ids'], $part * $plan['part_size'], $plan['part_size'] ), $job['failed'] ) );
-		$rows     = cg_admin_cert_rows_by_ids( $job['filters']['entity'], $ids );
-		$name_col = cg_admin_cert_name_col( $job['filters'] );
+		$rows     = certificate_generator_admin_cert_rows_by_ids( $job['filters']['entity'], $ids );
+		$name_col = certificate_generator_admin_cert_name_col( $job['filters'] );
 		$files    = array();
-		$manifest = array( cg_admin_cert_manifest_header() );
+		$manifest = array( certificate_generator_admin_cert_manifest_header() );
 		foreach ( $ids as $id ) {
-			$entry = isset( $rows[ $id ] ) ? cg_admin_cert_zip_entry( $rows[ $id ], $name_col ) : null;
+			$entry = isset( $rows[ $id ] ) ? certificate_generator_admin_cert_zip_entry( $rows[ $id ], $name_col ) : null;
 			if ( $entry ) {
 				$files[]    = $entry['file'];
 				$manifest[] = $entry['manifest'];
@@ -380,17 +378,17 @@ function cg_ajax_cert_dl_zip(): void {
 		$zip = false;
 		if ( $files ) {
 			$files[] = array(
-				'content'  => cg_admin_cert_manifest_csv( $manifest ),
+				'content'  => certificate_generator_admin_cert_manifest_csv( $manifest ),
 				'filename' => 'manifest.csv',
 			);
-			$zip     = certificate_generator_create_zip_for_email( $files, cg_admin_cert_zip_label( $job['filters'], $part, $plan['num_parts'] ), array( 'private' => true ) );
+			$zip     = certificate_generator_create_zip_for_email( $files, certificate_generator_admin_cert_zip_label( $job['filters'], $part, $plan['num_parts'] ), array( 'private' => true ) );
 		}
 		if ( $zip ) {
 			$job['zips'][ $part ] = $zip['zip_path'];
-			cg_cert_dl_save( $job_id, $job );
+			certificate_generator_cert_dl_save( $job_id, $job );
 		}
 	} finally {
-		cg_cert_dl_unlock( $job_id );
+		certificate_generator_cert_dl_unlock( $job_id );
 	}
 
 	if ( ! $zip ) {
@@ -402,7 +400,7 @@ function cg_ajax_cert_dl_zip(): void {
 			// Raw URL for JS (wp_nonce_url() would HTML-escape the & separators).
 			'download_url' => add_query_arg(
 				array(
-					'action'   => 'cg_cert_dl_file',
+					'action'   => 'certificate_generator_cert_dl_file',
 					'job_id'   => $job_id,
 					'part'     => $part,
 					'_wpnonce' => wp_create_nonce( 'cg_cert_dl_file_' . $job_id ),
@@ -419,35 +417,35 @@ function cg_ajax_cert_dl_zip(): void {
 }
 
 /** Stream a finished part to the admin who owns the job. */
-function cg_handle_cert_dl_file(): void {
+function certificate_generator_handle_cert_dl_file(): void {
 	$job_id = sanitize_text_field( wp_unslash( $_GET['job_id'] ?? '' ) );
 	check_admin_referer( 'cg_cert_dl_file_' . $job_id );
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 	}
 
-	$job  = preg_match( '/^[A-Za-z0-9]{20}$/', $job_id ) ? get_transient( 'cg_dljob_' . $job_id ) : false;
+	$job  = preg_match( '/^[A-Za-z0-9]{20}$/', $job_id ) ? get_transient( 'certificate_generator_dljob_' . $job_id ) : false;
 	$part = absint( $_GET['part'] ?? 0 );
 	$path = ( is_array( $job ) && (int) $job['user_id'] === get_current_user_id() ) ? (string) ( $job['zips'][ $part ] ?? '' ) : '';
 	$real = $path ? realpath( $path ) : false;
 	// The path comes from the job, never the request; still, only private/ is servable.
-	if ( ! $real || 0 !== strpos( wp_normalize_path( $real ), trailingslashit( wp_normalize_path( (string) realpath( cg_private_zip_dir() ) ) ) ) ) {
+	if ( ! $real || 0 !== strpos( wp_normalize_path( $real ), trailingslashit( wp_normalize_path( (string) realpath( certificate_generator_private_zip_dir() ) ) ) ) ) {
 		wp_die( esc_html__( 'This download has expired. Please start it again.', 'certificate-generator' ), 404 );
 	}
 
-	$plan = cg_admin_cert_part_plan( count( $job['ids'] ), CG_ADMIN_EXPORT_ZIP_PART_SIZE );
-	cg_admin_cert_stream_zip( $real, cg_admin_cert_zip_download_name( $job['filters'], $part, $plan['num_parts'] ) );
+	$plan = certificate_generator_admin_cert_part_plan( count( $job['ids'] ), CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE );
+	certificate_generator_admin_cert_stream_zip( $real, certificate_generator_admin_cert_zip_download_name( $job['filters'], $part, $plan['num_parts'] ) );
 }
 
 // ── Individual PDF download handler (admin-side, works with SQL id) ───────────
 
-function cg_handle_admin_individual_cert_download(): void {
+function certificate_generator_handle_admin_individual_cert_download(): void {
 	if ( ! isset( $_GET['action'] ) || 'cg_admin_download_cert' !== $_GET['action'] ) { // phpcs:ignore WordPress.Security.NonceVerification
 		return;
 	}
 
 	$sql_id = absint( $_GET['sql_id'] ?? 0 );
-	$entity = cg_admin_cert_read_filters( 'GET' )['entity'];
+	$entity = certificate_generator_admin_cert_read_filters( 'GET' )['entity'];
 	check_admin_referer( 'cg_admin_dl_cert_' . $entity . '_' . $sql_id );
 
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -480,13 +478,13 @@ function cg_handle_admin_individual_cert_download(): void {
 	}
 	unset( $row['extra_fields'] );
 
-	$fields = class_exists( 'CG_Field_Schema' )
-		? CG_Field_Schema::get_all_renderable_fields( $cert_type )
+	$fields = class_exists( 'CertificateGenerator_Field_Schema' )
+		? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type )
 		: array( 'student_name', 'school_name', 'issue_date' );
 
 	$post_id  = (int) ( $row['wp_post_id'] ?? $row['id'] ?? 0 );
-	$file_url = function_exists( 'generate_certificate_pdf' )
-		? generate_certificate_pdf( $post_id, $fields, $row )
+	$file_url = function_exists( 'certificate_generator_generate_certificate_pdf' )
+		? certificate_generator_generate_certificate_pdf( $post_id, $fields, $row )
 		: null;
 
 	if ( ! $file_url ) {
@@ -500,7 +498,7 @@ function cg_handle_admin_individual_cert_download(): void {
 		wp_die( esc_html__( 'Certificate PDF file not found.', 'certificate-generator' ) );
 	}
 
-	$filename = sanitize_file_name( ( $row[ cg_admin_cert_entities()[ $entity ][0] ] ?? 'recipient' ) . '_certificate.pdf' );
+	$filename = sanitize_file_name( ( $row[ certificate_generator_admin_cert_entities()[ $entity ][0] ] ?? 'recipient' ) . '_certificate.pdf' );
 
 	if ( ob_get_level() ) {
 		ob_end_clean();
@@ -523,9 +521,9 @@ function cg_handle_admin_individual_cert_download(): void {
  * Read and sanitize filter fields from $_GET / $_POST / $_REQUEST.
  *
  * @param string $source 'GET', 'POST', or 'REQUEST' (default).
- * @return array Normalised filter array compatible with cg_build_recipient_filter_sql().
+ * @return array Normalised filter array compatible with certificate_generator_build_recipient_filter_sql().
  */
-function cg_admin_cert_read_filters( string $source = 'REQUEST' ): array {
+function certificate_generator_admin_cert_read_filters( string $source = 'REQUEST' ): array {
 	// phpcs:disable WordPress.Security.NonceVerification
 	if ( $source === 'POST' ) {
 		$bag = $_POST;
@@ -556,7 +554,7 @@ function cg_admin_cert_read_filters( string $source = 'REQUEST' ): array {
 		'events'            => isset( $bag['filter_event'] ) && is_array( $bag['filter_event'] )
 			? array_filter( array_map( 'absint', $bag['filter_event'] ) )
 			: array(),
-		'entity'            => isset( $bag['filter_entity'] ) && isset( cg_admin_cert_entities()[ $bag['filter_entity'] ] )
+		'entity'            => isset( $bag['filter_entity'] ) && isset( certificate_generator_admin_cert_entities()[ $bag['filter_entity'] ] )
 			? $bag['filter_entity']
 			: 'students',
 	);
@@ -566,7 +564,7 @@ function cg_admin_cert_read_filters( string $source = 'REQUEST' ): array {
 /**
  * Recipient tables this page can download from => [ name column, label ].
  */
-function cg_admin_cert_entities(): array {
+function certificate_generator_admin_cert_entities(): array {
 	return array(
 		'students' => array( 'student_name', __( 'Students', 'certificate-generator' ) ),
 		'teachers' => array( 'teacher_name', __( 'Teachers', 'certificate-generator' ) ),
@@ -577,23 +575,23 @@ function cg_admin_cert_entities(): array {
 /**
  * Name column for the filter's recipient type.
  */
-function cg_admin_cert_name_col( array $filters ): string {
-	return cg_admin_cert_entities()[ $filters['entity'] ?? 'students' ][0];
+function certificate_generator_admin_cert_name_col( array $filters ): string {
+	return certificate_generator_admin_cert_entities()[ $filters['entity'] ?? 'students' ][0];
 }
 
 /**
  * Query the selected recipient table using the given filters.
  * Ordered by name ASC, id ASC for deterministic pagination.
  *
- * @param array $filters   Normalised filter array from cg_admin_cert_read_filters().
+ * @param array $filters   Normalised filter array from certificate_generator_admin_cert_read_filters().
  * @param int   $limit     Max rows to return.
  * @param int   $offset    Offset for pagination.
  * @return array[]         Flat row arrays (extra_fields decoded and merged).
  */
-function cg_admin_cert_query( array $filters, int $limit = 200, int $offset = 0 ): array {
+function certificate_generator_admin_cert_query( array $filters, int $limit = 200, int $offset = 0 ): array {
 	if (
 		! class_exists( '\CertificateGenerator\Database\CustomTables' ) ||
-		! function_exists( 'cg_build_recipient_filter_sql' )
+		! function_exists( 'certificate_generator_build_recipient_filter_sql' )
 	) {
 		return array();
 	}
@@ -606,9 +604,9 @@ function cg_admin_cert_query( array $filters, int $limit = 200, int $offset = 0 
 		return array();
 	}
 
-	[ $frags, $params ] = cg_build_recipient_filter_sql( $filters, '' );
+	[ $frags, $params ] = certificate_generator_build_recipient_filter_sql( $filters, '' );
 	$where    = $frags ? ' WHERE ' . implode( ' AND ', $frags ) : '';
-	$name_col = cg_admin_cert_name_col( $filters );
+	$name_col = certificate_generator_admin_cert_name_col( $filters );
 	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	$sql      = "SELECT * FROM {$tbl}{$where} ORDER BY {$name_col} ASC, id ASC LIMIT %d OFFSET %d";
 	$params[] = $limit;
@@ -617,11 +615,11 @@ function cg_admin_cert_query( array $filters, int $limit = 200, int $offset = 0 
 	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	$rows = $wpdb->get_results( $wpdb->prepare( $sql, ...$params ), ARRAY_A );
 
-	return array_map( 'cg_admin_cert_flatten_row', $rows ?: array() );
+	return array_map( 'certificate_generator_admin_cert_flatten_row', $rows ?: array() );
 }
 
 /** Merge a row's extra_fields JSON into it as flat keys. */
-function cg_admin_cert_flatten_row( array $row ): array {
+function certificate_generator_admin_cert_flatten_row( array $row ): array {
 	if ( ! empty( $row['extra_fields'] ) ) {
 		$extra = json_decode( $row['extra_fields'], true );
 		if ( is_array( $extra ) ) {
@@ -633,13 +631,13 @@ function cg_admin_cert_flatten_row( array $row ): array {
 }
 
 /**
- * Ids of every recipient matching the filters, in the same order cg_admin_cert_query() pages
+ * Ids of every recipient matching the filters, in the same order certificate_generator_admin_cert_query() pages
  * through them. A download job stores only these.
  *
  * @return int[]
  */
-function cg_admin_cert_query_ids( array $filters ): array {
-	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) || ! function_exists( 'cg_build_recipient_filter_sql' ) ) {
+function certificate_generator_admin_cert_query_ids( array $filters ): array {
+	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) || ! function_exists( 'certificate_generator_build_recipient_filter_sql' ) ) {
 		return array();
 	}
 	global $wpdb;
@@ -649,9 +647,9 @@ function cg_admin_cert_query_ids( array $filters ): array {
 		return array();
 	}
 
-	[ $frags, $params ] = cg_build_recipient_filter_sql( $filters, '' );
+	[ $frags, $params ] = certificate_generator_build_recipient_filter_sql( $filters, '' );
 	$where              = $frags ? ' WHERE ' . implode( ' AND ', $frags ) : '';
-	$sql                = 'SELECT id FROM ' . $tables->get_table( $entity ) . "{$where} ORDER BY " . cg_admin_cert_name_col( $filters ) . ' ASC, id ASC';
+	$sql                = 'SELECT id FROM ' . $tables->get_table( $entity ) . "{$where} ORDER BY " . certificate_generator_admin_cert_name_col( $filters ) . ' ASC, id ASC';
 
 	// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 	return array_map( 'intval', $wpdb->get_col( $params ? $wpdb->prepare( $sql, ...$params ) : $sql ) );
@@ -660,29 +658,29 @@ function cg_admin_cert_query_ids( array $filters ): array {
 /**
  * Rows for these ids in one query, keyed by id, extra_fields flattened.
  *
- * @param string $entity students|teachers|schools (already validated by cg_admin_cert_read_filters()).
+ * @param string $entity students|teachers|schools (already validated by certificate_generator_admin_cert_read_filters()).
  * @param int[]  $ids
  */
-function cg_admin_cert_rows_by_ids( string $entity, array $ids ): array {
+function certificate_generator_admin_cert_rows_by_ids( string $entity, array $ids ): array {
 	global $wpdb;
 	$ids = array_filter( array_map( 'intval', $ids ) );
-	if ( ! $ids || ! isset( cg_admin_cert_entities()[ $entity ] ) ) {
+	if ( ! $ids || ! isset( certificate_generator_admin_cert_entities()[ $entity ] ) ) {
 		return array();
 	}
 	$table = \CertificateGenerator\Database\CustomTables::instance()->get_table( $entity );
 	$in    = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($in)", ...$ids ), ARRAY_A );
-	return array_column( array_map( 'cg_admin_cert_flatten_row', $rows ?: array() ), null, 'id' );
+	return array_column( array_map( 'certificate_generator_admin_cert_flatten_row', $rows ?: array() ), null, 'id' );
 }
 
 /**
  * Count total recipients matching filters (no LIMIT applied).
  */
-function cg_admin_cert_count( array $filters ): int {
+function certificate_generator_admin_cert_count( array $filters ): int {
 	if (
 		! class_exists( '\CertificateGenerator\Database\CustomTables' ) ||
-		! function_exists( 'cg_build_recipient_filter_sql' )
+		! function_exists( 'certificate_generator_build_recipient_filter_sql' )
 	) {
 		return 0;
 	}
@@ -694,7 +692,7 @@ function cg_admin_cert_count( array $filters ): int {
 		return 0;
 	}
 
-	[ $frags, $params ] = cg_build_recipient_filter_sql( $filters, '' );
+	[ $frags, $params ] = certificate_generator_build_recipient_filter_sql( $filters, '' );
 	$where = $frags ? ' WHERE ' . implode( ' AND ', $frags ) : '';
 	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$sql = "SELECT COUNT(*) FROM {$tbl}{$where}";
@@ -713,7 +711,7 @@ function cg_admin_cert_count( array $filters ): int {
  *
  * @return array{part_size: int, num_parts: int}
  */
-function cg_admin_cert_part_plan( int $total, int $part_size ): array {
+function certificate_generator_admin_cert_part_plan( int $total, int $part_size ): array {
 	$part_size = max( 1, $part_size );
 	if ( $total <= 0 ) {
 		return array( 'part_size' => $part_size, 'num_parts' => 0 );
@@ -722,28 +720,9 @@ function cg_admin_cert_part_plan( int $total, int $part_size ): array {
 }
 
 /**
- * Parse a PHP memory value string ("256M", "1G", "-1") into megabytes.
- * Returns -1 for unlimited.
- */
-function cg_admin_parse_memory_mb( string $val ): int {
-	$val = trim( $val );
-	if ( '-1' === $val ) {
-		return -1;
-	}
-	$unit = strtolower( substr( $val, -1 ) );
-	$num  = (int) $val;
-	return match ( $unit ) {
-		'g'     => $num * 1024,
-		'm'     => $num,
-		'k'     => (int) ceil( $num / 1024 ),
-		default => (int) ceil( $num / 1048576 ), // bare bytes
-	};
-}
-
-/**
  * Build a slug for the ZIP label (passed to the ZIP builder for internal filename).
  */
-function cg_admin_cert_zip_label( array $filters, int $part, int $num_parts ): string {
+function certificate_generator_admin_cert_zip_label( array $filters, int $part, int $num_parts ): string {
 	$pieces = array( 'admin', $filters['entity'] ?? 'students' );
 
 	if ( ! empty( $filters['year'] ) ) {
@@ -763,7 +742,7 @@ function cg_admin_cert_zip_label( array $filters, int $part, int $num_parts ): s
 /**
  * Build the Content-Disposition download filename for the streamed ZIP.
  */
-function cg_admin_cert_zip_download_name( array $filters, int $part, int $num_parts ): string {
+function certificate_generator_admin_cert_zip_download_name( array $filters, int $part, int $num_parts ): string {
 	$pieces = array( 'certificates', $filters['entity'] ?? 'students' );
 
 	if ( ! empty( $filters['year'] ) ) {
@@ -782,25 +761,25 @@ function cg_admin_cert_zip_download_name( array $filters, int $part, int $num_pa
 
 // ── Page renderer ─────────────────────────────────────────────────────────────
 
-function cg_render_admin_cert_download_page(): void {
+function certificate_generator_render_admin_cert_download_page(): void {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ) );
 	}
 
-	$part_size  = CG_ADMIN_EXPORT_ZIP_PART_SIZE;
+	$part_size  = CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE;
 	$years      = function_exists( 'certificate_generator_get_unique_years' ) ? certificate_generator_get_unique_years() : array();
 	$schools    = function_exists( 'certificate_generator_get_unique_schools' ) ? certificate_generator_get_unique_schools() : array();
 	$cert_types = function_exists( 'certificate_generator_get_unique_certificate_types' ) ? certificate_generator_get_unique_certificate_types() : array();
 	$events     = function_exists( 'certificate_generator_get_unique_events' ) ? certificate_generator_get_unique_events() : array();
-	$entities   = cg_admin_cert_entities();
+	$entities   = certificate_generator_admin_cert_entities();
 
 	// Filters come from GET (preview request).
-	$active    = cg_admin_cert_read_filters( 'GET' );
-	$name_col  = cg_admin_cert_name_col( $active );
+	$active    = certificate_generator_admin_cert_read_filters( 'GET' );
+	$name_col  = certificate_generator_admin_cert_name_col( $active );
 	$previewed = isset( $_GET['cg_preview'] ) && '1' === $_GET['cg_preview']; // phpcs:ignore WordPress.Security.NonceVerification
-	$total     = $previewed ? cg_admin_cert_count( $active ) : 0;
-	$rows      = $previewed ? cg_admin_cert_query( $active, $part_size, 0 ) : array();
-	$plan      = cg_admin_cert_part_plan( $total, $part_size );
+	$total     = $previewed ? certificate_generator_admin_cert_count( $active ) : 0;
+	$rows      = $previewed ? certificate_generator_admin_cert_query( $active, $part_size, 0 ) : array();
+	$plan      = certificate_generator_admin_cert_part_plan( $total, $part_size );
 
 	// Turns the ZIP form into a chunked job with a progress bar; without JS the form posts as before.
 	if ( $rows ) {
@@ -811,7 +790,7 @@ function cg_render_admin_cert_download_page(): void {
 			'cgCertDlJob',
 			array(
 				'ajaxurl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( 'cg_cert_dl_job' ),
+				'nonce'   => wp_create_nonce( 'certificate_generator_cert_dl_job' ),
 				'total'   => $total,
 				'i18n'    => array(
 					/* translators: %d: number of certificates */
@@ -840,12 +819,12 @@ function cg_render_admin_cert_download_page(): void {
 	?>
 	<div class="wrap">
 		<?php
-		cg_ui_page_header(
+		certificate_generator_ui_page_header(
 			__( 'Download Certificates', 'certificate-generator' ),
 			__( 'Filter students, teachers or schools, preview matches, then download individual PDFs or bulk ZIPs of all certificates.', 'certificate-generator' )
 		);
 		if ( $error && isset( $error_messages[ $error ] ) ) {
-			cg_ui_notice( 'error', esc_html( $error_messages[ $error ] ) );
+			certificate_generator_ui_notice( 'error', esc_html( $error_messages[ $error ] ) );
 		}
 		?>
 
@@ -854,7 +833,7 @@ function cg_render_admin_cert_download_page(): void {
 			<input type="hidden" name="page" value="cg-cert-download">
 			<input type="hidden" name="cg_preview" value="1">
 
-			<?php cg_ui_card_open( __( 'Filter Recipients', 'certificate-generator' ), array( 'icon' => 'filter', 'class' => 'cg-narrow' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Filter Recipients', 'certificate-generator' ), array( 'icon' => 'filter', 'class' => 'cg-narrow' ) ); ?>
 
 				<table class="form-table cg-dl-filters">
 					<tr>
@@ -992,13 +971,13 @@ function cg_render_admin_cert_download_page(): void {
 						</a>
 					<?php endif; ?>
 				</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 		</form>
 
 		<?php if ( $previewed ) : ?>
 
 			<?php
-			cg_ui_card_open(
+			certificate_generator_ui_card_open(
 				/* translators: %d: number of recipients */
 				sprintf( __( 'Results: %d recipient(s) found', 'certificate-generator' ), $total ),
 				array( 'icon' => 'groups' )
@@ -1020,7 +999,7 @@ function cg_render_admin_cert_download_page(): void {
 				<?php endif; ?>
 
 				<?php if ( empty( $rows ) ) : ?>
-					<?php echo cg_ui_empty( __( 'No recipients match the selected filters. Widen the filters and preview again.', 'certificate-generator' ), admin_url( 'admin.php?page=cg-cert-download' ), __( 'Clear Filters', 'certificate-generator' ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+					<?php echo certificate_generator_ui_empty( __( 'No recipients match the selected filters. Widen the filters and preview again.', 'certificate-generator' ), admin_url( 'admin.php?page=cg-cert-download' ), __( 'Clear Filters', 'certificate-generator' ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 
 				<?php else : ?>
 
@@ -1162,7 +1141,7 @@ function cg_render_admin_cert_download_page(): void {
 					</form>
 
 				<?php endif; ?>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 		<?php endif; ?>
 	</div>

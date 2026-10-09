@@ -1,10 +1,10 @@
 <?php
 /**
  * Exercises the real, currently-wired pipeline end to end:
- *   CSV upload (bulk_import_students(), includes/Services/bulk-import.php)
+ *   CSV upload (certificate_generator_bulk_import_students(), includes/Services/bulk-import.php)
  *     -> row lands in cg_students
- *     -> serial generated + student row updated (CG_Serial_Number_Generator::generate())
- *     -> certificate record bridged into wp_certificate_generator (cg_insert_certificate_record(),
+ *     -> serial generated + student row updated (CertificateGenerator_Serial_Number_Generator::generate())
+ *     -> certificate record bridged into wp_certificate_generator (certificate_generator_insert_certificate_record(),
  *        includes/Services/certificate-search.php — this is the table verify() actually queries)
  *     -> SerialNumberService::verify() finds it
  *
@@ -42,7 +42,7 @@ class CertificatePipelineTest extends WP_UnitTestCase {
 		);
 
 		ob_start();
-		bulk_import_students();
+		certificate_generator_bulk_import_students();
 		$import_output = ob_get_clean();
 
 		unlink( $csv_path );
@@ -64,7 +64,7 @@ class CertificatePipelineTest extends WP_UnitTestCase {
 
 		// ── Step 2: serial generation (the real production call site, per
 		//    includes/Services/certificate-search.php ~line 1240) ──────────
-		$serial_gen = CG_Serial_Number_Generator::get_instance();
+		$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
 		$serial     = $serial_gen->generate(
 			$student_row['certificate_type'],
 			array(
@@ -82,7 +82,7 @@ class CertificatePipelineTest extends WP_UnitTestCase {
 		$this->assertSame( $serial, $updated_row['serial_number'], 'generate() must write the serial back onto the student row.' );
 
 		// ── Step 3: bridge into the verification table ──────────────────────
-		cg_insert_certificate_record(
+		certificate_generator_insert_certificate_record(
 			array(
 				'student_name'     => $student_row['student_name'],
 				'certificate_type' => $student_row['certificate_type'],

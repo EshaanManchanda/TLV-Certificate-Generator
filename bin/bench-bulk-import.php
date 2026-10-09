@@ -46,7 +46,7 @@ $run = function () use ( $csv, $source, $wpdb, $table ) {
 	$q0 = $wpdb->num_queries;
 	$t0 = microtime( true );
 	ob_start();
-	bulk_import_students();
+	certificate_generator_bulk_import_students();
 	$html = ob_get_clean();
 	return array(
 		's'    => microtime( true ) - $t0,

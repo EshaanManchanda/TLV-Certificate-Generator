@@ -85,13 +85,13 @@ class TestCenterPage {
 		}
 
 		echo '<div class="wrap">';
-		\cg_ui_page_header( 'Test Center', 'Runs vendor/bin/phpunit against the live codebase and groups results by feature. Dev/staging only.' );
+		\certificate_generator_ui_page_header( 'Test Center', 'Runs vendor/bin/phpunit against the live codebase and groups results by feature. Dev/staging only.' );
 
 		if ( $run_error ) {
-			\cg_ui_notice( 'error', nl2br( \esc_html( $run_error ) ), false );
+			\certificate_generator_ui_notice( 'error', nl2br( \esc_html( $run_error ) ), false );
 		}
 
-		\cg_ui_card_open( 'PHPUnit', array( 'icon' => 'yes-alt' ) );
+		\certificate_generator_ui_card_open( 'PHPUnit', array( 'icon' => 'yes-alt' ) );
 		echo '<form method="post" data-cg-busy>';
 		\wp_nonce_field( 'cg_run_tests' );
 		echo '<button type="submit" name="cg_run_tests" value="1" class="button button-primary">Run Tests</button>';
@@ -101,9 +101,9 @@ class TestCenterPage {
 		if ( $results !== null ) {
 			$this->render_results( $results );
 		}
-		\cg_ui_card_close();
+		\certificate_generator_ui_card_close();
 
-		\cg_ui_card_open( 'AI-Assisted Test Case Suggestions (Ollama, optional)', array( 'icon' => 'lightbulb' ) );
+		\certificate_generator_ui_card_open( 'AI-Assisted Test Case Suggestions (Ollama, optional)', array( 'icon' => 'lightbulb' ) );
 		echo '<p>Sends one file\'s contents to a locally-running <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> model and asks it to suggest additional PHPUnit test cases in this project\'s [WB]/[BB] style. Nothing is written automatically — review and add anything useful by hand.</p>';
 		echo '<form method="post" data-cg-busy>';
 		\wp_nonce_field( 'cg_ollama_suggest' );
@@ -116,12 +116,12 @@ class TestCenterPage {
 		echo '</form>';
 
 		if ( $ollama_error ) {
-			\cg_ui_notice( 'error', \esc_html( $ollama_error ), false, true );
+			\certificate_generator_ui_notice( 'error', \esc_html( $ollama_error ), false, true );
 		}
 		if ( $ollama_suggestions ) {
 			echo '<pre class="cg-pre">' . \esc_html( $ollama_suggestions ) . '</pre>';
 		}
-		\cg_ui_card_close();
+		\certificate_generator_ui_card_close();
 
 		echo '</div>';
 	}
@@ -307,8 +307,8 @@ class TestCenterPage {
 		}
 
 		echo '<div class="cg-stats">';
-		\cg_ui_stat( 'Passed', $total_pass, '', 'good' );
-		\cg_ui_stat( 'Failed', $total_fail, '', $total_fail ? 'bad' : '' );
+		\certificate_generator_ui_stat( 'Passed', $total_pass, '', 'good' );
+		\certificate_generator_ui_stat( 'Failed', $total_fail, '', $total_fail ? 'bad' : '' );
 		echo '</div>';
 
 		echo '<div class="cg-table-wrap"><table class="widefat striped cg-table"><thead><tr><th>Feature</th><th>Test Classes</th><th>Result</th></tr></thead><tbody>';
@@ -325,7 +325,7 @@ class TestCenterPage {
 				}
 			}
 			echo '<tr><td>' . \esc_html( $feature ) . '</td><td>' . \esc_html( implode( ', ', $classes ) ) . '</td>';
-			echo '<td>' . \wp_kses_post( \cg_ui_badge( intval( $pass ) . ' / ' . intval( $pass + $fail ), $fail === 0 ? ( $pass ? 'good' : 'muted' ) : 'bad' ) ) . '</td></tr>';
+			echo '<td>' . \wp_kses_post( \certificate_generator_ui_badge( intval( $pass ) . ' / ' . intval( $pass + $fail ), $fail === 0 ? ( $pass ? 'good' : 'muted' ) : 'bad' ) ) . '</td></tr>';
 		}
 
 		$uncovered = array_diff( array_keys( $by_class ), $covered );

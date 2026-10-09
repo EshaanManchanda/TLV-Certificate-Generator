@@ -29,13 +29,13 @@ How the two plugins fit together: [`doc/dev/ARCHITECTURE.md`](doc/dev/ARCHITECTU
 
 - **Certificate templates** — upload a background image (e.g. from Canva), drag-position fields, set font/size/colour per field. Long names shrink to fit.
 - **PDF generation** with the bundled [FPDF](lib/fpdf) engine and open-licensed fonts.
-- **QR-code verification** — every certificate gets a QR code linking to a public verification page (`[cg_verify_certificate]`).
+- **QR-code verification** — every certificate gets a QR code linking to a public verification page (`[certificate_generator_verify_certificate]`).
 - **Serial numbers** — configurable format (`PREFIX-{YEAR}-{SEQ}`), bulk assignment for existing records, revoke and reinstate.
 - **Students / Teachers / Schools** — manual entry or CSV import/export, no row limits.
 - **Email** — your own SMTP, Sender.net or Mandrill (or WordPress's mail), per-type email templates with placeholders, CC/BCC.
 - **Bulk send** — filter by school, certificate type or import source; background queue; ZIP bundling when a recipient has several certificates; hourly rate limits; email logs with resend.
 - **Analytics** — delivery charts, expiration reports, recipient renewal reminders.
-- **Search shortcodes** — `[student_search]`, `[teacher_search]`, `[school_search]` let recipients find and download their certificates.
+- **Search shortcodes** — `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]` let recipients find and download their certificates.
 - **Badges and image fields** — optional companion PNG badge; image fields for a signature or seal.
 
 The in-plugin **Certificate Generator → Documentation** page has the full interactive guide (Getting Started, User Guide, Email & Bulk Send, Troubleshooting, FAQ). [`doc/guide/documentation.md`](doc/guide/documentation.md) has the same content plus every developer reference in one file.

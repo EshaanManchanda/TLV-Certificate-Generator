@@ -38,7 +38,7 @@ class PermissionTest extends WP_UnitTestCase {
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
 
 		ob_start();
-		CG_Bulk_Serial_Generator::get_instance()->render_bulk_serial_page();
+		CertificateGenerator_Bulk_Serial_Generator::get_instance()->render_bulk_serial_page();
 		$this->assertSame( '', ob_get_clean() );
 	}
 }

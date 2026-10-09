@@ -13,7 +13,7 @@ None. Since 7.6 no plan caps certificates, emails, import/export rows or templat
 
 | Limit | Value | Notes |
 |---|---|---|
-| Fields per template | 50 | `CG_Field_Schema::MAX_FIELDS`; minimum 2 |
+| Fields per template | 50 | `CertificateGenerator_Field_Schema::MAX_FIELDS`; minimum 2 |
 | Certificate-related file upload | 10 MB | `security-helper.php`; WordPress/PHP upload limits apply first |
 | Template image decode cache (per request) | 64 MB | Oldest image dropped first beyond this |
 
@@ -21,8 +21,8 @@ None. Since 7.6 no plan caps certificates, emails, import/export rows or templat
 
 | Limit | Value | Change with |
 |---|---|---|
-| Certificates per ZIP part | 200 | `CG_ADMIN_EXPORT_ZIP_PART_SIZE` constant |
-| Time per job step | 20 s | `CG_QUEUE_RUNTIME_BUDGET` constant / `cg_cert_dl_step_budget` filter |
+| Certificates per ZIP part | 200 | `CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE` constant |
+| Time per job step | 20 s | `CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET` constant / `certificate_generator_cert_dl_step_budget` filter |
 | Job lifetime | 6 hours | — |
 | Private admin ZIPs kept | 1 day | Cron cleanup |
 | Public ZIPs kept | 7 days | Cron cleanup |
@@ -30,19 +30,19 @@ None. Since 7.6 no plan caps certificates, emails, import/export rows or templat
 
 No hard maximum: the job runs in steps, so the ceiling is disk space and time, not PHP timeout.
 
-## Student search (`[student_search]`)
+## Student search (`[certificate_generator_student_search]`)
 
 | Limit | Value | Change with |
 |---|---|---|
 | "Download All" ZIP shown when certificates > | 3 | — |
-| ZIP downloads per visitor | 5 per minute | `cg_student_zip_rate_limit` filter |
+| ZIP downloads per visitor | 5 per minute | `certificate_generator_student_zip_rate_limit` filter |
 
 ## Bulk import (CSV)
 
 | Limit | Value | Change with |
 |---|---|---|
-| Rows written per transaction | 500 | `CG_Import_Writer::CHUNK` |
-| Stops before PHP timeout | 10 s before `max_execution_time` | `cg_import_deadline` filter; re-upload the same file to continue |
+| Rows written per transaction | 500 | `CertificateGenerator_Import_Writer::CHUNK` |
+| Stops before PHP timeout | 10 s before `max_execution_time` | `certificate_generator_import_deadline` filter; re-upload the same file to continue |
 | Issues shown on screen | First 100 | Full list downloads as CSV |
 | Tested capacity | 10,000 rows | 2.2 s fresh, 4.6 s re-import — see [Benchmarks](#benchmarks) |
 
@@ -55,9 +55,9 @@ No hard maximum: the job runs in steps, so the ceiling is disk space and time, n
 | Emails per batch | 10 | 1 – 50 | Settings → Rate limits |
 | Delay between batches | 480 s | 10 – 3,600 s | Settings → Rate limits |
 | ZIP attached to email | ≤ 25 MB | — | Bigger ZIPs are sent as a download link |
-| Queue rows per cron run | 50 | — | `CG_QUEUE_BATCH_SIZE` |
-| Queue attempts per email | 3 | — | `CG_QUEUE_MAX_ATTEMPTS` |
-| Queue row considered stuck after | 10 min | — | `CG_QUEUE_STALE_MINUTES` |
+| Queue rows per cron run | 50 | — | `CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE` |
+| Queue attempts per email | 3 | — | `CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS` |
+| Queue row considered stuck after | 10 min | — | `CERTIFICATE_GENERATOR_QUEUE_STALE_MINUTES` |
 
 ## Other
 

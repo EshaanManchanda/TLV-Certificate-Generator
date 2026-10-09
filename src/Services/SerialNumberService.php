@@ -15,11 +15,11 @@ class SerialNumberService {
 	private string $reset_period;
 
 	public function __construct() {
-		$this->prefix       = get_option( 'cg_serial_prefix', 'CERT' );
-		$this->length       = (int) get_option( 'cg_serial_length', 8 );
-		$this->suffix       = get_option( 'cg_serial_suffix', '' );
-		$this->include_date = (bool) get_option( 'cg_serial_include_date', false );
-		$this->reset_period = get_option( 'cg_serial_reset_period', 'none' );
+		$this->prefix       = get_option( 'certificate_generator_serial_prefix', 'CERT' );
+		$this->length       = (int) get_option( 'certificate_generator_serial_length', 8 );
+		$this->suffix       = get_option( 'certificate_generator_serial_suffix', '' );
+		$this->include_date = (bool) get_option( 'certificate_generator_serial_include_date', false );
+		$this->reset_period = get_option( 'certificate_generator_serial_reset_period', 'none' );
 	}
 
 	/**
@@ -42,7 +42,7 @@ class SerialNumberService {
 			}
 		}
 
-		cg_debug_log( 'Certificate Generator: no free serial found after 1000 attempts; last tried ' . $serial ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- intentional ops signal.
+		certificate_generator_debug_log( 'Certificate Generator: no free serial found after 1000 attempts; last tried ' . $serial ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- intentional ops signal.
 		return $serial;
 	}
 
@@ -111,7 +111,7 @@ class SerialNumberService {
 
 		// The legacy wp_certificate_generator table (queried above) has no pdf_url
 		// column; the newer wp_cg_certificates table does and can carry the same
-		// serial_number (cg_insert_certificate_record() dedupes serials across both),
+		// serial_number (certificate_generator_insert_certificate_record() dedupes serials across both),
 		// so look there for a downloadable URL to hand the LinkedIn "Add to Profile" button.
 		$pdf_url        = '';
 		$sql_cert_table = $wpdb->prefix . 'cg_certificates';
@@ -163,15 +163,15 @@ class SerialNumberService {
 	/**
 	 * Next number from the single counter shared by all certificate types.
 	 *
-	 * Per-type counters (cg_serial_seq_{type}) with a shared prefix let two types
-	 * issue the same serial, so every type now draws from cg_serial_seq_all.
+	 * Per-type counters (certificate_generator_serial_seq_{type}) with a shared prefix let two types
+	 * issue the same serial, so every type now draws from certificate_generator_serial_seq_all.
 	 */
 	public function next_sequence(): int {
 		global $wpdb;
 
 		$stamp         = $this->period_stamp();
 		$period_suffix = '' === $stamp ? '' : '_' . $stamp;
-		$option_key    = 'cg_serial_seq_all' . $period_suffix;
+		$option_key    = 'certificate_generator_serial_seq_all' . $period_suffix;
 
 		// First use: start above every old per-type counter of this period so no
 		// previously issued number is handed out again. A no-op once the row exists.
@@ -181,7 +181,7 @@ class SerialNumberService {
 				SELECT %s, COALESCE( MAX( CAST( option_value AS UNSIGNED ) ), 0 ), 'no'
 				FROM {$wpdb->options} WHERE option_name LIKE %s",
 				$option_key,
-				$wpdb->esc_like( 'cg_serial_seq_' ) . '%' . $wpdb->esc_like( $period_suffix )
+				$wpdb->esc_like( 'certificate_generator_serial_seq_' ) . '%' . $wpdb->esc_like( $period_suffix )
 			)
 		);
 

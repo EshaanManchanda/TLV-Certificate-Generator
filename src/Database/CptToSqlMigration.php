@@ -47,8 +47,8 @@ class CptToSqlMigration {
 		$this->migrate_email_logs();
 
 		// 7. Update migration flag
-		update_option( 'cg_cpt_to_sql_migration_completed', current_time( 'mysql' ) );
-		update_option( 'cg_cpt_to_sql_migration_stats', $this->stats );
+		update_option( 'certificate_generator_cpt_to_sql_migration_completed', current_time( 'mysql' ) );
+		update_option( 'certificate_generator_cpt_to_sql_migration_stats', $this->stats );
 
 		return $this->stats;
 	}

@@ -1,0 +1,214 @@
+{
+  "source": "https://developer.wordpress.org/plugins/wordpress-org/detailed-plugin-guidelines/",
+  "checked_against": "2026-10-09",
+  "prefix": {
+    "functions": "certificate_generator_",
+    "classes": "CertificateGenerator",
+    "constants": "CERTIFICATE_GENERATOR_",
+    "names": "certificate_generator_",
+    "shortcodes": "certificate_generator_",
+    "text_domain": "certificate-generator"
+  },
+  "notes": "Each automated check id maps to a method on tests/Compliance/GuidelineScanner.php. Run: vendor/bin/phpunit -c phpunit.unit.xml.dist --filter WpOrgGuidelinesTest",
+  "guidelines": [
+    {
+      "id": "G1",
+      "title": "Plugins must be compatible with the GNU General Public License",
+      "summary": "All code, data, images and third-party material must be GPL-compatible.",
+      "checks": [
+        { "id": "gpl_headers", "type": "automated", "description": "Plugin header and readme declare a GPL-2.0-or-later license; LICENSE.txt is present." },
+        { "id": "bundled_license_files", "type": "automated", "description": "Every bundled third-party library and font set ships its license file." }
+      ]
+    },
+    {
+      "id": "G2",
+      "title": "Developers are responsible for the contents and actions of their plugins",
+      "summary": "Every file must comply; licensing of all files and the terms of third-party APIs must be verified.",
+      "checks": [
+        { "id": "developer_responsibility", "type": "manual", "description": "Review third-party API terms (Sender.net, Mandrill) and confirm every bundled asset's license before each release." }
+      ]
+    },
+    {
+      "id": "G3",
+      "title": "A stable version of a plugin must be available from its WordPress Plugin Directory page",
+      "summary": "The directory copy is the one WordPress.org distributes; it must be kept current.",
+      "checks": [
+        { "id": "version_consistency", "type": "automated", "description": "readme Stable tag == plugin header Version == CERTIFICATE_GENERATOR_VERSION == Config::VERSION == top readme changelog entry." }
+      ]
+    },
+    {
+      "id": "G4",
+      "title": "Code must be (mostly) human readable",
+      "summary": "No obfuscation; source and build tools must be publicly available.",
+      "checks": [
+        { "id": "no_obfuscation", "type": "automated", "description": "No eval, base64_decode, gzinflate, gzuncompress, str_rot13 or create_function in shipped code." },
+        { "id": "public_source_link", "type": "automated", "description": "readme.txt links the public development location." },
+        { "id": "minified_files_documented", "type": "automated", "description": "Minified files only appear in bundled vendor libraries that ship a license/source reference." }
+      ]
+    },
+    {
+      "id": "G5",
+      "title": "Trialware is not permitted",
+      "summary": "No locked features, trial periods or quotas that require payment to unlock.",
+      "checks": [
+        { "id": "no_trialware", "type": "automated", "description": "Shipped code contains no license/plan gating or quota-lock wording." }
+      ]
+    },
+    {
+      "id": "G6",
+      "title": "Software as a Service is permitted",
+      "summary": "External services must provide real functionality and be documented in the readme.",
+      "checks": [
+        { "id": "external_services_documented", "type": "automated", "description": "Every hard-coded outbound host appears in the readme's External services section." }
+      ]
+    },
+    {
+      "id": "G7",
+      "title": "Plugins may not track users without their consent",
+      "summary": "No contact with external servers or data collection without explicit, opt-in consent.",
+      "checks": [
+        { "id": "external_services_documented", "type": "automated", "description": "Same check as G6: outbound calls only to documented, user-configured services." },
+        { "id": "no_tracking_code", "type": "automated", "description": "No analytics/telemetry endpoints or usage reporting in shipped code." }
+      ]
+    },
+    {
+      "id": "G8",
+      "title": "Plugins may not send executable code via third-party systems",
+      "summary": "No remote JS/CSS, no updates or installs from outside WordPress.org.",
+      "checks": [
+        { "id": "no_remote_assets", "type": "automated", "description": "wp_enqueue_*/wp_register_* never load a remote URL; no script/link tags pointing off-site." },
+        { "id": "no_external_updater", "type": "automated", "description": "No custom update checkers (update_plugins transient filters, plugin-update-checker)." }
+      ]
+    },
+    {
+      "id": "G9",
+      "title": "Developers and their plugins must not do anything illegal, dishonest, or morally offensive",
+      "summary": "No fake reviews, SEO abuse, keyword stuffing, botnets or misleading claims.",
+      "checks": [
+        { "id": "honest_conduct", "type": "manual", "description": "Readme claims are accurate; no review manipulation or misleading marketing." }
+      ]
+    },
+    {
+      "id": "G10",
+      "title": "Plugins may not embed external links or credits on the public site without explicit permission",
+      "summary": "\"Powered by\" credits must be opt-in and off by default.",
+      "checks": [
+        { "id": "no_frontend_credits", "type": "automated", "description": "No 'powered by' credit in shipped output." }
+      ]
+    },
+    {
+      "id": "G11",
+      "title": "Plugins should not hijack the admin dashboard",
+      "summary": "Upsells and notices must be limited, dismissible, and used sparingly.",
+      "checks": [
+        { "id": "admin_notices_dismissible", "type": "automated", "description": "Every notice printed from an admin_notices callback is dismissible or limited to the plugin's own screens." }
+      ]
+    },
+    {
+      "id": "G12",
+      "title": "Public facing pages on WordPress.org (readmes) must not spam",
+      "summary": "Readmes are for people: no keyword stuffing, at most 5 tags, accurate headers.",
+      "checks": [
+        { "id": "readme_valid", "type": "automated", "description": "Required readme headers present, <= 5 tags, short description <= 150 characters, plugin name matches the header." }
+      ]
+    },
+    {
+      "id": "G13",
+      "title": "Plugins must use WordPress' default libraries",
+      "summary": "Libraries shipped with WordPress (jQuery, PHPMailer, SimplePie...) must not be bundled.",
+      "checks": [
+        { "id": "no_bundled_core_libraries", "type": "automated", "description": "No copies of WordPress-bundled libraries in the shipped files." }
+      ]
+    },
+    {
+      "id": "G14",
+      "title": "Frequent commits to a plugin should be avoided",
+      "summary": "The SVN repository is for releases, not development.",
+      "checks": [
+        { "id": "release_only_svn", "type": "manual", "description": "Only commit tagged releases to WordPress.org SVN; develop on GitHub." }
+      ]
+    },
+    {
+      "id": "G15",
+      "title": "Plugin version numbers must be incremented for each new release",
+      "summary": "Each release needs a higher version number.",
+      "checks": [
+        { "id": "version_consistency", "type": "automated", "description": "Same check as G3." },
+        { "id": "version_format", "type": "automated", "description": "Version is a dotted numeric version (x.y.z)." }
+      ]
+    },
+    {
+      "id": "G16",
+      "title": "A complete plugin must be available at the time of submission",
+      "summary": "Names cannot be reserved; the submitted plugin must work.",
+      "checks": [
+        { "id": "main_header_complete", "type": "automated", "description": "Main plugin file header has Plugin Name, Description, Version, Requires at least, Requires PHP, Author, License and Text Domain." }
+      ]
+    },
+    {
+      "id": "G17",
+      "title": "Plugins must respect trademarks, copyrights, and project names",
+      "summary": "A slug may not begin with another product's trademark.",
+      "checks": [
+        { "id": "slug_not_trademark", "type": "automated", "description": "Slug / text domain does not begin with a known trademarked term." }
+      ]
+    },
+    {
+      "id": "G18",
+      "title": "We reserve the right to maintain the Plugin Directory to the best of our ability",
+      "summary": "WordPress.org may update guidelines and act at its discretion.",
+      "checks": [
+        { "id": "recheck_guidelines", "type": "manual", "description": "Re-read the guidelines before each release; update this file when they change." }
+      ]
+    },
+    {
+      "id": "R1",
+      "title": "Review team: unique, prefixed names",
+      "summary": "All global functions, classes, constants, options, transients, hooks, AJAX actions, cron hooks and shortcodes use a unique prefix of at least 4 characters.",
+      "checks": [
+        { "id": "prefixed_globals", "type": "automated", "description": "Global functions start with certificate_generator_, classes with CertificateGenerator, constants with CERTIFICATE_GENERATOR_ (namespaced code, lib/ and vendor/ exempt)." },
+        { "id": "prefixed_names", "type": "automated", "description": "Options, transients, fired hooks, AJAX actions, cron hooks and shortcodes start with certificate_generator_." }
+      ]
+    },
+    {
+      "id": "R2",
+      "title": "Review team: block direct file access",
+      "summary": "Every PHP file with executable code exits when ABSPATH is not defined.",
+      "checks": [
+        { "id": "abspath_guard", "type": "automated", "description": "Every shipped PHP file with top-level executable code checks ABSPATH." }
+      ]
+    },
+    {
+      "id": "R3",
+      "title": "Review team: internationalisation",
+      "summary": "Translatable strings use the plugin slug as text domain.",
+      "checks": [
+        { "id": "text_domain", "type": "automated", "description": "Every gettext call passes the literal text domain certificate-generator." }
+      ]
+    },
+    {
+      "id": "R4",
+      "title": "Review team: do not load WordPress core files directly",
+      "summary": "No includes of wp-load.php / wp-config.php.",
+      "checks": [
+        { "id": "no_core_bootstrap_includes", "type": "automated", "description": "No include/require of wp-load.php or wp-config.php." }
+      ]
+    },
+    {
+      "id": "R5",
+      "title": "Review team: no debug output in production",
+      "summary": "No unconditional error_log / var_dump / print_r output.",
+      "checks": [
+        { "id": "no_debug_output", "type": "automated", "description": "error_log only inside the WP_DEBUG-gated logger; no var_dump or echoed print_r." }
+      ]
+    },
+    {
+      "id": "R6",
+      "title": "Review team: Plugin Check",
+      "summary": "The official Plugin Check reports no errors on the release ZIP.",
+      "checks": [
+        { "id": "plugin_check", "type": "external", "description": "Build the ZIP (composer zip), copy it to a test site as plugins/certificate-generator (inactive), run: wp plugin check certificate-generator. Expect 0 errors." }
+      ]
+    }
+  ]
+}

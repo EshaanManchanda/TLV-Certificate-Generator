@@ -9,23 +9,23 @@ get_header();
 
 while ( have_posts() ) : the_post();
 
-    $post_id          = get_the_ID();
-    $student_name     = get_post_meta( $post_id, 'student_name', true ) ?: get_the_title();
-    $school_name      = get_post_meta( $post_id, 'school_name', true );
-    $issue_date_raw   = get_post_meta( $post_id, 'issue_date', true );
-    $certificate_type = get_post_meta( $post_id, 'certificate_type', true );
+    $certificate_generator_post_id          = get_the_ID();
+    $certificate_generator_student_name     = get_post_meta( $certificate_generator_post_id, 'student_name', true ) ?: get_the_title();
+    $certificate_generator_school_name      = get_post_meta( $certificate_generator_post_id, 'school_name', true );
+    $certificate_generator_issue_date_raw   = get_post_meta( $certificate_generator_post_id, 'issue_date', true );
+    $certificate_generator_certificate_type = get_post_meta( $certificate_generator_post_id, 'certificate_type', true );
 
     // Format date for display
-    $display_date = $issue_date_raw ? cg_format_date($issue_date_raw) : '';
+    $certificate_generator_display_date = $certificate_generator_issue_date_raw ? certificate_generator_format_date($certificate_generator_issue_date_raw) : '';
 
     // Nonce-protected download URL (valid ~12 h)
-    $download_url = '';
-    if ( $certificate_type && function_exists( 'generate_certificate_pdf_with_data' ) ) {
-        $download_url = add_query_arg( [
+    $certificate_generator_download_url = '';
+    if ( $certificate_generator_certificate_type && function_exists( 'certificate_generator_generate_certificate_pdf_with_data' ) ) {
+        $certificate_generator_download_url = add_query_arg( [
             'cg_download_cert' => '1',
-            'id'               => $post_id,
-            'nonce'            => wp_create_nonce( 'cg_download_cert_' . $post_id ),
-        ], get_permalink( $post_id ) );
+            'id'               => $certificate_generator_post_id,
+            'nonce'            => wp_create_nonce( 'cg_download_cert_' . $certificate_generator_post_id ),
+        ], get_permalink( $certificate_generator_post_id ) );
     }
     ?>
     <style>
@@ -159,34 +159,34 @@ while ( have_posts() ) : the_post();
 
             <span class="cg-verified-tag">Certificate Verified</span>
 
-            <h1 class="cg-name"><?php echo esc_html( $student_name ); ?></h1>
+            <h1 class="cg-name"><?php echo esc_html( $certificate_generator_student_name ); ?></h1>
             <p class="cg-awarded">has been awarded the</p>
-            <p class="cg-cert-type"><?php echo esc_html( $certificate_type ?: 'Certificate of Achievement' ); ?></p>
+            <p class="cg-cert-type"><?php echo esc_html( $certificate_generator_certificate_type ?: 'Certificate of Achievement' ); ?></p>
 
             <div class="cg-meta-row">
-                <?php if ( $school_name ) : ?>
+                <?php if ( $certificate_generator_school_name ) : ?>
                 <div class="cg-meta-item">
                     <span class="cg-meta-label">Institution</span>
-                    <span class="cg-meta-value"><?php echo esc_html( $school_name ); ?></span>
+                    <span class="cg-meta-value"><?php echo esc_html( $certificate_generator_school_name ); ?></span>
                 </div>
                 <?php endif; ?>
 
-                <?php if ( $display_date ) : ?>
+                <?php if ( $certificate_generator_display_date ) : ?>
                 <div class="cg-meta-item">
                     <span class="cg-meta-label">Issue Date</span>
-                    <span class="cg-meta-value"><?php echo esc_html( $display_date ); ?></span>
+                    <span class="cg-meta-value"><?php echo esc_html( $certificate_generator_display_date ); ?></span>
                 </div>
                 <?php endif; ?>
 
                 <?php
                 // Render extra fields for this student's certificate type
-                if ( class_exists( 'CG_Field_Schema' ) ) {
-                    foreach ( CG_Field_Schema::get_extra_fields( $certificate_type ) as $slug ) {
-                        $extra_value = get_post_meta( $post_id, $slug, true );
-                        if ( ! empty( $extra_value ) ) : ?>
+                if ( class_exists( 'CertificateGenerator_Field_Schema' ) ) {
+                    foreach ( CertificateGenerator_Field_Schema::get_extra_fields( $certificate_generator_certificate_type ) as $certificate_generator_slug ) {
+                        $certificate_generator_extra_value = get_post_meta( $certificate_generator_post_id, $certificate_generator_slug, true );
+                        if ( ! empty( $certificate_generator_extra_value ) ) : ?>
                         <div class="cg-meta-item">
-                            <span class="cg-meta-label"><?php echo esc_html( CG_Field_Schema::get_display_label( $slug ) ); ?></span>
-                            <span class="cg-meta-value"><?php echo esc_html( $extra_value ); ?></span>
+                            <span class="cg-meta-label"><?php echo esc_html( CertificateGenerator_Field_Schema::get_display_label( $certificate_generator_slug ) ); ?></span>
+                            <span class="cg-meta-value"><?php echo esc_html( $certificate_generator_extra_value ); ?></span>
                         </div>
                         <?php endif;
                     }
@@ -194,8 +194,8 @@ while ( have_posts() ) : the_post();
                 ?>
             </div>
 
-            <?php if ( $download_url ) : ?>
-            <a href="<?php echo esc_url( $download_url ); ?>" class="cg-btn">
+            <?php if ( $certificate_generator_download_url ) : ?>
+            <a href="<?php echo esc_url( $certificate_generator_download_url ); ?>" class="cg-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="7 10 12 15 17 10"></polyline>

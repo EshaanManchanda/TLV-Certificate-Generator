@@ -38,8 +38,8 @@ default `https://tlvapi.techlovev.in`) is the backend API and has no pricing pag
 | Certificate email, bulk send and queue (no monthly limit) | ✔ | ✔ | ✔ |
 | Email templates (per type, placeholders, CC/BCC) | ✔ | ✔ | ✔ |
 | Recipient renewal reminders (`CG_USE_RENEWAL_REMINDERS`) | ✔ | ✔ | ✔ |
-| Search shortcodes (`[student_search]`, `[teacher_search]`, `[school_search]`) | ✔ | ✔ | ✔ |
-| Verification / QR lookup (`[cg_verify_certificate]`) | ✔ | ✔ | ✔ |
+| Search shortcodes (`[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]`) | ✔ | ✔ | ✔ |
+| Verification / QR lookup (`[certificate_generator_verify_certificate]`) | ✔ | ✔ | ✔ |
 | Analytics, serial numbers | ✔ | ✔ | ✔ |
 | Digital badges, image / e-signature fields | ✔ | ✔ | ✔ |
 | Admin "Download Certificates" ZIP page | ✔ | ✔ | ✔ |
@@ -56,12 +56,12 @@ The free plugin exposes these hooks; the Pro add-on uses them and nothing else:
 
 | Hook | Free plugin | Pro add-on |
 |---|---|---|
-| `cg_settings_tabs` (filter) | Settings page tab list | Adds **API Settings** and **License** |
-| `cg_settings_tab_{key}` (action) | Renders any tab it doesn't own | Renders the API and License tabs |
-| `cg_fonts_page_message` (filter) | Fonts page notice | Handles a .ttf upload, returns the result |
-| `cg_fonts_page_upload_card` (action) | Fonts page, above the lists | Upload form (Pro) |
-| `cg_feature_flags` (filter) | Feature toggles on Settings → Features | Adds the six integration toggles (Pro license) |
-| `cg_admin_menu_integrations` (action) | Fires in the plugin menu, before the Advanced items | Adds the LMS / WooCommerce mapping pages (Pro license) |
+| `certificate_generator_settings_tabs` (filter) | Settings page tab list | Adds **API Settings** and **License** |
+| `certificate_generator_settings_tab_{key}` (action) | Renders any tab it doesn't own | Renders the API and License tabs |
+| `certificate_generator_fonts_page_message` (filter) | Fonts page notice | Handles a .ttf upload, returns the result |
+| `certificate_generator_fonts_page_upload_card` (action) | Fonts page, above the lists | Upload form (Pro) |
+| `certificate_generator_feature_flags` (filter) | Feature toggles on Settings → Features | Adds the six integration toggles (Pro license) |
+| `certificate_generator_admin_menu_integrations` (action) | Fires in the plugin menu, before the Advanced items | Adds the LMS / WooCommerce mapping pages (Pro license) |
 | `CG_PRO_VERSION` (constant) | Hides the "Pro add-on" link on the Plugins screen | Defined when the add-on loads |
 
 ## License keys (local/offline fallback — development only)

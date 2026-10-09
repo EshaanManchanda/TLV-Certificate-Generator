@@ -73,7 +73,7 @@ function certificate_generator_queue_email( $cg_id, $recipient_email, $options =
 	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 	if ( ! $row ) {
-		cg_email_debug_log( "Cannot queue: no cg record for ID $cg_id" );
+		certificate_generator_email_debug_log( "Cannot queue: no cg record for ID $cg_id" );
 		return false;
 	}
 
@@ -148,11 +148,11 @@ function certificate_generator_queue_email( $cg_id, $recipient_email, $options =
 	);
 
 	if ( $result ) {
-		cg_email_debug_log( "Queued cg_id $cg_id → $recipient_email (queue #{$wpdb->insert_id})" );
+		certificate_generator_email_debug_log( "Queued cg_id $cg_id → $recipient_email (queue #{$wpdb->insert_id})" );
 		return $wpdb->insert_id;
 	}
 
-	cg_email_debug_log( "Failed to queue cg_id $cg_id" );
+	certificate_generator_email_debug_log( "Failed to queue cg_id $cg_id" );
 	return false;
 }
 
@@ -168,7 +168,7 @@ function certificate_generator_get_next_batch( $limit = 10 ) {
 	$table_name   = $wpdb->prefix . 'cert_email_queue';
 	$current_time = current_time( 'mysql' );
 
-	$max_attempts = defined( 'CG_QUEUE_MAX_ATTEMPTS' ) ? (int) CG_QUEUE_MAX_ATTEMPTS : 3;
+	$max_attempts = defined( 'CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS : 3;
 	$emails       = $wpdb->get_results(
 		$wpdb->prepare(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -435,13 +435,13 @@ function certificate_generator_bulk_queue_emails( $post_type = '', $cg_ids = arr
 			++$results['unique_emails'];
 			if ( count( $ids ) > 1 ) {
 				++$results['grouped_emails'];
-				cg_email_debug_log( 'Grouped ' . count( $ids ) . " certs for $email → queue #$queue_id" );
+				certificate_generator_email_debug_log( 'Grouped ' . count( $ids ) . " certs for $email → queue #$queue_id" );
 			}
 		} else {
 			$results['errors'][] = "Failed to queue for $email (IDs: " . implode( ',', $ids ) . ')';
 		}
 	}
 
-	cg_email_debug_log( "Bulk queued {$results['queued']} via {$results['unique_emails']} unique emails ({$results['grouped_emails']} grouped), skipped {$results['skipped']}" );
+	certificate_generator_email_debug_log( "Bulk queued {$results['queued']} via {$results['unique_emails']} unique emails ({$results['grouped_emails']} grouped), skipped {$results['skipped']}" );
 	return $results;
 }

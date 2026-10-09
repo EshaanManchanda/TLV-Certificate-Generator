@@ -21,13 +21,13 @@ class Mailer {
 	 * Build from plugin options — selects SMTP or wp_mail transport automatically.
 	 */
 	public static function make(): self {
-		$transport = match ( get_option( 'cg_email_transport', 'wp_mail' ) ) {
+		$transport = match ( get_option( 'certificate_generator_email_transport', 'wp_mail' ) ) {
 			'smtp'     => SmtpTransport::from_options(),
 			'sender'   => SenderTransport::from_options(),
 			'mandrill' => MandrillTransport::from_options(),
 			default    => new WpMailTransport(
-				(string) get_option( 'cg_email_from_email', get_bloginfo( 'admin_email' ) ),
-				(string) get_option( 'cg_email_from_name', get_bloginfo( 'name' ) )
+				(string) get_option( 'certificate_generator_email_from_email', get_bloginfo( 'admin_email' ) ),
+				(string) get_option( 'certificate_generator_email_from_name', get_bloginfo( 'name' ) )
 			),
 		};
 
@@ -57,7 +57,7 @@ class Mailer {
 			if ( file_exists( $path ) && is_readable( $path ) ) {
 				$valid[] = $path;
 			} else {
-				cg_debug_log( sprintf( '[CG Mailer] Attachment skipped — missing or unreadable: %s', $path ) );
+				certificate_generator_debug_log( sprintf( '[CG Mailer] Attachment skipped — missing or unreadable: %s', $path ) );
 			}
 		}
 		return $valid;

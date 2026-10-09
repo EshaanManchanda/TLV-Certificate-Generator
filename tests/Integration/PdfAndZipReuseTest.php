@@ -1,9 +1,9 @@
 <?php
 /**
- * - generate_certificate_pdf_with_data() must give each real certificate its own
+ * - certificate_generator_generate_certificate_pdf_with_data() must give each real certificate its own
  *   file (callers store the path as pdf_path; a shared certificate_preview.pdf
  *   meant a later email could attach another student's certificate).
- * - _cg_create_zip_impl() reuses an unchanged ZIP and rebuilds when a PDF changes.
+ * - certificate_generator_create_zip_impl() reuses an unchanged ZIP and rebuilds when a PDF changes.
  */
 class PdfAndZipReuseTest extends WP_UnitTestCase {
 
@@ -44,7 +44,7 @@ class PdfAndZipReuseTest extends WP_UnitTestCase {
 
 		$urls = array();
 		foreach ( array( 'ASHA RAO', 'RAVI RAO' ) as $name ) {
-			$urls[] = generate_certificate_pdf_with_data(
+			$urls[] = certificate_generator_generate_certificate_pdf_with_data(
 				array(
 					'certificate_type' => 'PHPUnitReuseCert',
 					'issue_date'       => current_time( 'Y-m-d' ),
@@ -60,19 +60,19 @@ class PdfAndZipReuseTest extends WP_UnitTestCase {
 	}
 
 	public function test_zip_is_reused_until_a_pdf_changes(): void {
-		$dir = cg_certificates_dir();
+		$dir = certificate_generator_certificates_dir();
 		$pdf = $dir . '/phpunit-reuse.pdf';
 		file_put_contents( $pdf, str_repeat( 'a', 500 ) );
 		$data = array( array( 'path' => $pdf, 'filename' => 'a.pdf' ) );
 
-		$first = _cg_create_zip_impl( $data, 'reuse@example.test' );
+		$first = certificate_generator_create_zip_impl( $data, 'reuse@example.test' );
 		sleep( 1 ); // without reuse, a rebuild here would get a new timestamped name
-		$second = _cg_create_zip_impl( $data, 'reuse@example.test' );
+		$second = certificate_generator_create_zip_impl( $data, 'reuse@example.test' );
 		$this->assertSame( $first['zip_path'], $second['zip_path'] );
 
 		file_put_contents( $pdf, str_repeat( 'b', 600 ) ); // regenerated PDF: new size
 		sleep( 1 ); // the rebuilt ZIP's name is timestamped to the second
-		$third = _cg_create_zip_impl( $data, 'reuse@example.test' );
+		$third = certificate_generator_create_zip_impl( $data, 'reuse@example.test' );
 		$this->assertNotSame( $first['zip_path'], $third['zip_path'] );
 
 		foreach ( array( $pdf, $first['zip_path'], $third['zip_path'] ) as $f ) {

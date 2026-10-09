@@ -204,7 +204,7 @@ function certificate_generator_compatibility_page() {
 	?>
 	<div class="wrap">
 		<?php
-		cg_ui_page_header(
+		certificate_generator_ui_page_header(
 			'Certificate Generator — Server Compatibility',
 			'Checks this server against what the plugin needs (PHP version, extensions, memory, limits) and suggests fixes.',
 			'<a href="' . esc_url( wp_nonce_url( admin_url( 'tools.php?page=cert-gen-compatibility-check&refresh=1' ), 'refresh_check' ) ) . '" class="button button-primary">Refresh Check</a>'
@@ -213,7 +213,7 @@ function certificate_generator_compatibility_page() {
 
 		<?php if ( $compatibility ) : ?>
 			<?php
-			cg_ui_notice(
+			certificate_generator_ui_notice(
 				$compatibility['compatible'] ? 'success' : 'error',
 				'<strong>Overall status: ' . ( $compatibility['compatible'] ? 'Compatible' : 'Not compatible' ) . '</strong><br>'
 				. 'Hosting type: ' . esc_html( ucwords( str_replace( '_', ' ', $compatibility['hosting_type'] ) ) ) . ' · Last checked: ' . esc_html( current_time( 'mysql' ) ),
@@ -221,7 +221,7 @@ function certificate_generator_compatibility_page() {
 			);
 			?>
 
-			<?php cg_ui_card_open( 'Detailed Check Results', array( 'icon' => 'list-view' ) ); ?>
+			<?php certificate_generator_ui_card_open( 'Detailed Check Results', array( 'icon' => 'list-view' ) ); ?>
 				<div class="cg-table-wrap">
 				<table class="widefat cg-table">
 					<thead>
@@ -241,11 +241,11 @@ function certificate_generator_compatibility_page() {
 							<td>
 								<?php
 								if ( $check_result['passed'] ) {
-									echo cg_ui_badge( 'Pass', 'good' ); // phpcs:ignore WordPress.Security.EscapeOutput
+									echo certificate_generator_ui_badge( 'Pass', 'good' ); // phpcs:ignore WordPress.Security.EscapeOutput
 								} elseif ( $check_result['critical'] ) {
-									echo cg_ui_badge( 'Fail (critical)', 'bad' ); // phpcs:ignore WordPress.Security.EscapeOutput
+									echo certificate_generator_ui_badge( 'Fail (critical)', 'bad' ); // phpcs:ignore WordPress.Security.EscapeOutput
 								} else {
-									echo cg_ui_badge( 'Warning', 'warn' ); // phpcs:ignore WordPress.Security.EscapeOutput
+									echo certificate_generator_ui_badge( 'Warning', 'warn' ); // phpcs:ignore WordPress.Security.EscapeOutput
 								}
 								?>
 							</td>
@@ -263,33 +263,33 @@ function certificate_generator_compatibility_page() {
 					</tbody>
 				</table>
 				</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<?php
 			if ( function_exists( 'certificate_generator_get_installation_recommendation' ) ) {
 				$recommendation = certificate_generator_get_installation_recommendation();
-				cg_ui_card_open( 'Installation Recommendation', array( 'icon' => 'lightbulb' ) );
+				certificate_generator_ui_card_open( 'Installation Recommendation', array( 'icon' => 'lightbulb' ) );
 				?>
 					<p><strong>Mode:</strong> <?php echo esc_html( ucwords( $recommendation['mode'] ) ); ?></p>
 					<p><strong>Message:</strong> <?php echo esc_html( $recommendation['message'] ); ?></p>
 					<p><strong>Action:</strong> <?php echo esc_html( $recommendation['action'] ); ?></p>
 				<?php
-				cg_ui_card_close();
+				certificate_generator_ui_card_close();
 			}
 			?>
 
 			<?php if ( ! empty( $compatibility['recommendations'] ) ) : ?>
-				<?php cg_ui_card_open( 'Hosting-Specific Solutions', array( 'icon' => 'admin-tools' ) ); ?>
+				<?php certificate_generator_ui_card_open( 'Hosting-Specific Solutions', array( 'icon' => 'admin-tools' ) ); ?>
 					<ul class="ul-disc">
 						<?php foreach ( $compatibility['recommendations'] as $recommendation ) : ?>
 							<li><?php echo wp_kses_post( $recommendation ); ?></li>
 						<?php endforeach; ?>
 					</ul>
-				<?php cg_ui_card_close(); ?>
+				<?php certificate_generator_ui_card_close(); ?>
 			<?php endif; ?>
 
 		<?php else : ?>
-			<?php cg_ui_notice( 'error', 'Compatibility checker is not available. Please ensure all plugin files are properly loaded.', false ); ?>
+			<?php certificate_generator_ui_notice( 'error', 'Compatibility checker is not available. Please ensure all plugin files are properly loaded.', false ); ?>
 		<?php endif; ?>
 
 	</div>

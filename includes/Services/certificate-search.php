@@ -11,19 +11,19 @@ require_once __DIR__ . '/../Core/font-manager.php';
 
 /**
  * Resolve customizable shortcode text: an explicit shortcode attribute wins,
- * then the admin-configured default (cg_shortcode_text option), then the
+ * then the admin-configured default (certificate_generator_shortcode_text option), then the
  * hardcoded fallback. Empty values at any level fall through to the next.
  */
-function cg_get_shortcode_text( $key, $atts_value, $default ) {
+function certificate_generator_get_shortcode_text( $key, $atts_value, $default ) {
 	if ( ! empty( $atts_value ) ) {
 		return $atts_value;
 	}
-	$saved = get_option( 'cg_shortcode_text', array() );
+	$saved = get_option( 'certificate_generator_shortcode_text', array() );
 	return ! empty( $saved[ $key ] ) ? $saved[ $key ] : $default;
 }
 
 // Function to convert hex color to RGB string
-function hex2rgb_str( $hex ) {
+function certificate_generator_hex2rgb_str( $hex ) {
 	$hex = str_replace( '#', '', $hex );
 
 	if ( strlen( $hex ) == 3 ) {
@@ -53,7 +53,7 @@ if ( ! defined( 'FPDF_FONTPATH' ) ) {
 }
 require_once CERTIFICATE_GENERATOR_PATH . 'lib/tfpdf/tfpdf.php';
 
-trait CG_PDF_Debug_Drawing {
+trait CertificateGenerator_PDF_Debug_Drawing {
 
 	protected $extgstates = array();
 
@@ -191,8 +191,8 @@ trait CG_PDF_Debug_Drawing {
 	}
 }
 
-class FPDF_Debug extends FPDF {
-	use CG_PDF_Debug_Drawing;
+class CertificateGenerator_FPDF_Debug extends FPDF {
+	use CertificateGenerator_PDF_Debug_Drawing;
 
 	function __construct( $orientation = 'P', $unit = 'mm', $size = 'A4' ) {
 		$this->extgstates = array();
@@ -201,8 +201,8 @@ class FPDF_Debug extends FPDF {
 }
 
 // Same debug-drawing extras, on the Unicode-capable engine custom fonts require.
-class TFPDF_Debug extends tFPDF {
-	use CG_PDF_Debug_Drawing;
+class CertificateGenerator_TFPDF_Debug extends tFPDF {
+	use CertificateGenerator_PDF_Debug_Drawing;
 
 	function __construct( $orientation = 'P', $unit = 'mm', $size = 'A4' ) {
 		$this->extgstates = array();
@@ -217,7 +217,7 @@ class TFPDF_Debug extends tFPDF {
  * parsed data is exactly what FPDF would compute, so the output is byte-for-byte the same.
  * Per-certificate images (QR codes, photos) are not registered and parse as before.
  */
-trait CG_Shared_Image_Parse {
+trait CertificateGenerator_Shared_Image_Parse {
 
 	private static array $cg_shared = array(); // path => true
 	private static array $cg_parsed = array(); // path|mtime|size => FPDF image info
@@ -263,19 +263,19 @@ trait CG_Shared_Image_Parse {
 	}
 }
 
-class CG_FPDF extends FPDF {
-	use CG_Shared_Image_Parse;
+class CertificateGenerator_FPDF extends FPDF {
+	use CertificateGenerator_Shared_Image_Parse;
 }
 
-class CG_TFPDF extends tFPDF {
-	use CG_Shared_Image_Parse;
+class CertificateGenerator_TFPDF extends tFPDF {
+	use CertificateGenerator_Shared_Image_Parse;
 }
 
 // Function to generate the certificate PDF with custom data
-function cg_validate_template_url( $template_url, $skip_http_check = false ) {
+function certificate_generator_validate_template_url( $template_url, $skip_http_check = false ) {
 	// Step 1: Check if the URL is non-empty
 	if ( ! $template_url ) {
-		cg_debug_log( "Invalid or empty template URL: $template_url" );
+		certificate_generator_debug_log( "Invalid or empty template URL: $template_url" );
 		return '<p style="color:red;">Template URL is invalid or missing. Please contact the administrator.</p>';
 	}
 
@@ -288,14 +288,14 @@ function cg_validate_template_url( $template_url, $skip_http_check = false ) {
 
 	// A template on this site is checked on disk: an HTTP request to our own
 	// site per certificate is slow and fails when loopback requests are blocked.
-	$local_path = cg_template_url_to_path( $template_url );
+	$local_path = certificate_generator_template_url_to_path( $template_url );
 	if ( $local_path !== $template_url ) {
 		static $valid = array(); // bulk runs validate the same template once per request
 		if ( isset( $valid[ $local_path ] ) ) {
 			return true;
 		}
 		if ( false === @getimagesize( $local_path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors
-			cg_debug_log( "Template file is not a valid image: $local_path" );
+			certificate_generator_debug_log( "Template file is not a valid image: $local_path" );
 			return '<p style="color:red;">Template URL is not a valid image file. Please upload a valid image (PNG, JPG, etc.).</p>';
 		}
 		$valid[ $local_path ] = true;
@@ -311,7 +311,7 @@ function cg_validate_template_url( $template_url, $skip_http_check = false ) {
 	);
 
 	if ( ! filter_var( $normalized_url, FILTER_VALIDATE_URL ) ) {
-		cg_debug_log( "Invalid template URL after normalization: $template_url" );
+		certificate_generator_debug_log( "Invalid template URL after normalization: $template_url" );
 		return '<p style="color:red;">Template URL is invalid or missing. Please contact the administrator.</p>';
 	}
 
@@ -326,14 +326,14 @@ function cg_validate_template_url( $template_url, $skip_http_check = false ) {
 
 	if ( is_wp_error( $response ) ) {
 		$error_message = $response->get_error_message();
-		cg_debug_log( "Error accessing template URL: $template_url - $error_message" );
+		certificate_generator_debug_log( "Error accessing template URL: $template_url - $error_message" );
 		return '<p style="color:red;">Template URL is inaccessible: ' . esc_html( $error_message ) . '. Please check the URL and try again.</p>';
 	}
 
 	// Step 3: Check the final HTTP status code after redirects
 	$status_code = wp_remote_retrieve_response_code( $response );
 	if ( $status_code !== 200 ) {
-		cg_debug_log( "Template URL returned status code $status_code: $template_url" );
+		certificate_generator_debug_log( "Template URL returned status code $status_code: $template_url" );
 
 		$status_messages = array(
 			301 => 'Template URL is being redirected',
@@ -353,7 +353,7 @@ function cg_validate_template_url( $template_url, $skip_http_check = false ) {
 	// Step 4: Validate the content type
 	$content_type = wp_remote_retrieve_header( $response, 'content-type' );
 	if ( strpos( $content_type, 'image/' ) !== 0 ) {
-		cg_debug_log( "Invalid content type for template URL: $template_url - Content-Type: $content_type" );
+		certificate_generator_debug_log( "Invalid content type for template URL: $template_url - Content-Type: $content_type" );
 		return '<p style="color:red;">Template URL is not a valid image file. Please upload a valid image (PNG, JPG, etc.).</p>';
 	}
 
@@ -369,7 +369,7 @@ function cg_validate_template_url( $template_url, $skip_http_check = false ) {
  * @param string $alignment Alignment type (L, C, R)
  * @return float Calculated X position for text placement
  */
-function cg_calculate_x_position( $field_x, $text_width, $field_width, $alignment ) {
+function certificate_generator_calculate_x_position( $field_x, $text_width, $field_width, $alignment ) {
 	switch ( strtoupper( trim( $alignment ) ) ) {
 		case 'L': // Left Align
 			return $field_x - ( $field_width / 2 );
@@ -388,7 +388,7 @@ function cg_calculate_x_position( $field_x, $text_width, $field_width, $alignmen
  *
  * Falls back to the original URL when the URL doesn't belong to this site.
  */
-function cg_template_url_to_path( string $url ): string {
+function certificate_generator_template_url_to_path( string $url ): string {
 	$site_url = site_url();
 	// Strip query-string / fragment before path conversion
 	$clean_url = strtok( $url, '?#' );
@@ -408,7 +408,7 @@ function cg_template_url_to_path( string $url ): string {
  * Strips surrounding quote characters that may be present in legacy stored data.
  * Defaults to 'C' for any unrecognised value.
  */
-function cg_sanitize_alignment( string $align ): string {
+function certificate_generator_sanitize_alignment( string $align ): string {
 	$align = strtoupper( trim( $align, " \t\n\r\0\x0B'\"" ) );
 	return in_array( $align, array( 'L', 'C', 'R' ), true ) ? $align : 'C';
 }
@@ -422,7 +422,7 @@ function cg_sanitize_alignment( string $align ): string {
  * @param FPDF   $pdf  Font already set at $font_size.
  * @param string $text Text as drawn (already converted for the PDF font).
  */
-function cg_fit_font_size( $pdf, float $font_size, string $text, float $field_width ): float {
+function certificate_generator_fit_font_size( $pdf, float $font_size, string $text, float $field_width ): float {
 	$size = $font_size;
 	$min  = max( 8.0, $font_size * 0.6 );
 	while ( $field_width > 0 && $size > $min && $pdf->GetStringWidth( $text ) > $field_width ) {
@@ -440,7 +440,7 @@ function cg_fit_font_size( $pdf, float $font_size, string $text, float $field_wi
  * @param float  $max_width Maximum width for text
  * @return array Array of text lines
  */
-function cg_wrap_text( $pdf, $text, $max_width ) {
+function certificate_generator_wrap_text( $pdf, $text, $max_width ) {
 	// (Text arrives already converted for the PDF font; lines are returned as-is.)
 	$words        = explode( ' ', $text );
 	$lines        = array();
@@ -483,7 +483,7 @@ function cg_wrap_text( $pdf, $text, $max_width ) {
  * @param float $original_y Original field Y position
  * @param bool  $is_primary Whether this is the primary line (for multi-line text)
  */
-function cg_add_debug_markers( $pdf, $adjusted_x, $adjusted_y, $original_x, $original_y, $is_primary = true ) {
+function certificate_generator_add_debug_markers( $pdf, $adjusted_x, $adjusted_y, $original_x, $original_y, $is_primary = true ) {
 	// Green dot for original position (only for primary line)
 	if ( $is_primary ) {
 		$pdf->SetFillColor( 0, 255, 0 );
@@ -504,7 +504,7 @@ function cg_add_debug_markers( $pdf, $adjusted_x, $adjusted_y, $original_x, $ori
  * @param float $field_width Field width
  * @param float $field_height Field height
  */
-function cg_add_debug_field_boundary( $pdf, $field_x, $field_y, $field_width, $field_height ) {
+function certificate_generator_add_debug_field_boundary( $pdf, $field_x, $field_y, $field_width, $field_height ) {
 	// Save current drawing color
 	$pdf->SetDrawColor( 255, 0, 0 );
 	$pdf->SetLineWidth( 0.2 );
@@ -521,7 +521,7 @@ function cg_add_debug_field_boundary( $pdf, $field_x, $field_y, $field_width, $f
 /**
  * Absolute path to the cg_certificates upload folder. Created on first call if missing.
  */
-function cg_certificates_dir(): string {
+function certificate_generator_certificates_dir(): string {
 	$dir = wp_upload_dir()['basedir'] . '/cg_certificates';
 	if ( ! file_exists( $dir ) ) {
 		wp_mkdir_p( $dir );
@@ -538,37 +538,37 @@ function cg_certificates_dir(): string {
  * suffix so names can't be guessed by counting (certificate_students_row_1000, 1001, …).
  * Stable per key, so the PDF cache and re-downloads still find the same file.
  */
-function cg_certificate_file_stem( string $pdf_key ): string {
+function certificate_generator_certificate_file_stem( string $pdf_key ): string {
 	return 'certificate_' . $pdf_key . '_' . substr( hash_hmac( 'sha256', $pdf_key, wp_salt( 'auth' ) ), 0, 12 );
 }
 
 /**
  * Public URL to the cg_certificates upload folder.
  */
-function cg_certificates_url(): string {
+function certificate_generator_certificates_url(): string {
 	return wp_upload_dir()['baseurl'] . '/cg_certificates';
 }
 
 // ── PDF cache ────────────────────────────────────────────────────────────────
 // A rendered certificate carries "cgk:<md5 of every render input>" in its PDF Keywords.
-// When the inputs haven't changed, _cg_generate_pdf_impl() serves the file on disk
+// When the inputs haven't changed, certificate_generator_generate_pdf_impl() serves the file on disk
 // instead of rendering it again. No extra files, no DB column, same URL as before.
 
 // Bump when a change to the render code changes PDF output, so cached PDFs re-render.
-if ( ! defined( 'CG_PDF_RENDER_REV' ) ) {
-	define( 'CG_PDF_RENDER_REV', 3 ); // 2: long text shrinks to fit its field; wrapped accents kept. 3: open-licensed font replacements
+if ( ! defined( 'CERTIFICATE_GENERATOR_PDF_RENDER_REV' ) ) {
+	define( 'CERTIFICATE_GENERATOR_PDF_RENDER_REV', 3 ); // 2: long text shrinks to fit its field; wrapped accents kept. 3: open-licensed font replacements
 }
 
-/** define( 'CG_DISABLE_PDF_CACHE', true ) in wp-config.php turns the cache off. */
-function cg_pdf_cache_enabled(): bool {
-	return (bool) apply_filters( 'cg_pdf_cache_enabled', ! ( defined( 'CG_DISABLE_PDF_CACHE' ) && CG_DISABLE_PDF_CACHE ) );
+/** define( 'CERTIFICATE_GENERATOR_DISABLE_PDF_CACHE', true ) in wp-config.php turns the cache off. */
+function certificate_generator_pdf_cache_enabled(): bool {
+	return (bool) apply_filters( 'certificate_generator_pdf_cache_enabled', ! ( defined( 'CERTIFICATE_GENERATOR_DISABLE_PDF_CACHE' ) && CERTIFICATE_GENERATOR_DISABLE_PDF_CACHE ) );
 }
 
 /**
  * Cache key stored in a rendered PDF, or '' when absent/unreadable. FPDF writes the Info
  * dictionary just before the catalog and xref table, so it sits in the file's last bytes.
  */
-function cg_pdf_cache_read_key( string $path ): string {
+function certificate_generator_pdf_cache_read_key( string $path ): string {
 	$fh = @fopen( $path, 'rb' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors, WordPress.WP.AlternativeFunctions
 	if ( ! $fh ) {
 		return '';
@@ -585,16 +585,16 @@ function cg_pdf_cache_read_key( string $path ): string {
  * Hash of everything that shapes a certificate PDF. Image files count by path, mtime and
  * size, so replacing a template image under the same URL re-renders its certificates.
  */
-function cg_pdf_cache_key( string $pdf_key, array $tmpl_meta, string $template_url, array $field_positions, array $post_data, string $serial ): string {
+function certificate_generator_pdf_cache_key( string $pdf_key, array $tmpl_meta, string $template_url, array $field_positions, array $post_data, string $serial ): string {
 	$images = array();
 	foreach ( array_merge( array( $template_url ), array_column( $field_positions, 'image_url' ) ) as $url ) {
 		if ( '' !== (string) $url ) {
-			$path     = cg_template_url_to_path( (string) $url );
+			$path     = certificate_generator_template_url_to_path( (string) $url );
 			$images[] = $path . '|' . ( @filemtime( $path ) ?: 0 ) . '|' . ( @filesize( $path ) ?: 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 		}
 	}
-	$qr = class_exists( 'CG_QR_Code_Generator' ) ? CG_QR_Code_Generator::get_instance()->generate_qr_data( array(), $serial ) : '';
-	return md5( (string) wp_json_encode( array( CG_PDF_RENDER_REV, $pdf_key, $tmpl_meta, $images, $field_positions, $post_data, $serial, $qr ) ) );
+	$qr = class_exists( 'CertificateGenerator_QR_Code_Generator' ) ? CertificateGenerator_QR_Code_Generator::get_instance()->generate_qr_data( array(), $serial ) : '';
+	return md5( (string) wp_json_encode( array( CERTIFICATE_GENERATOR_PDF_RENDER_REV, $pdf_key, $tmpl_meta, $images, $field_positions, $post_data, $serial, $qr ) ) );
 }
 
 /**
@@ -602,7 +602,7 @@ function cg_pdf_cache_key( string $pdf_key, array $tmpl_meta, string $template_u
  * Use this everywhere a certificate file needs a human-readable name (ZIP entries, downloads).
  * Do NOT use for the stored/canonical pdf_path on disk — that uses certificate_{post_id}.pdf.
  */
-function cg_certificate_pdf_filename( string $student_name, string $cert_type, string $unique_id = '' ): string {
+function certificate_generator_certificate_pdf_filename( string $student_name, string $cert_type, string $unique_id = '' ): string {
 	$parts = array_filter(
 		array(
 			sanitize_file_name( $student_name ),
@@ -617,7 +617,7 @@ function cg_certificate_pdf_filename( string $student_name, string $cert_type, s
  * Canonical ZIP filename: certificates_{RecipientSlug}_{Timestamp}.zip
  * Use this everywhere multiple certificates are bundled into a ZIP.
  */
-function cg_certificate_zip_filename( string $recipient = '', int $timestamp = 0 ): string {
+function certificate_generator_certificate_zip_filename( string $recipient = '', int $timestamp = 0 ): string {
 	$slug = $recipient
 		? trim( preg_replace( '/[^a-z0-9]+/', '_', strtolower( $recipient ) ), '_' )
 		: 'bulk';
@@ -635,7 +635,7 @@ function cg_certificate_zip_filename( string $recipient = '', int $timestamp = 0
  *     'event_date' => 'Y-m-d'|null,
  *   ]
  */
-function cg_get_pending_certificate_info( $email ) {
+function certificate_generator_get_pending_certificate_info( $email ) {
 	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		return null;
 	}
@@ -737,7 +737,7 @@ function cg_get_pending_certificate_info( $email ) {
 /**
  * Render the "certificate not ready yet" card for students whose cert is pending.
  */
-function cg_render_pending_certificate_screen( array $pending ): string {
+function certificate_generator_render_pending_certificate_screen( array $pending ): string {
 	$options       = get_option( 'certificate_generator_settings_email' );
 	$title_color   = $options['title_color'] ?? '#2c3e50';
 	$text_color    = $options['text_color'] ?? '#7f8c8d';
@@ -805,8 +805,8 @@ function cg_render_pending_certificate_screen( array $pending ): string {
         </div>';
 
 	// Support section.
-	$output .= '<div style="background: linear-gradient(to right, rgba(' . hex2rgb_str( $btn_start ) . ', 0.05), '
-		. 'rgba(' . hex2rgb_str( $btn_end ) . ', 0.05)); border-radius: ' . $border_radius . 'px; '
+	$output .= '<div style="background: linear-gradient(to right, rgba(' . certificate_generator_hex2rgb_str( $btn_start ) . ', 0.05), '
+		. 'rgba(' . certificate_generator_hex2rgb_str( $btn_end ) . ', 0.05)); border-radius: ' . $border_radius . 'px; '
 		. 'padding: 25px; margin: 25px 0; border-left: 4px solid ' . $btn_start . ';">';
 	$output .= '<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">'
 		. '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" '
@@ -874,7 +874,7 @@ function cg_render_pending_certificate_screen( array $pending ): string {
  *                         "closest" date, which used to hand out another event's template.
  * @return object|null  Matched template (stdClass with ID, meta), or null if none found.
  */
-function cg_select_certificate_template( $certificate_type, $issue_date_iso = '', $strict = true ) {
+function certificate_generator_select_certificate_template( $certificate_type, $issue_date_iso = '', $strict = true ) {
 	// Try SQL tables first
 	if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		$tables    = \CertificateGenerator\Database\CustomTables::instance();
@@ -890,7 +890,7 @@ function cg_select_certificate_template( $certificate_type, $issue_date_iso = ''
 			}
 
 			// Get all templates for this type
-			cg_debug_log( "Template query: looking for cert_type='$certificate_type', issue='$normalised_issue'" );
+			certificate_generator_debug_log( "Template query: looking for cert_type='$certificate_type', issue='$normalised_issue'" );
 
 			$candidates = $GLOBALS['wpdb']->get_results(
 				$GLOBALS['wpdb']->prepare(
@@ -900,15 +900,15 @@ function cg_select_certificate_template( $certificate_type, $issue_date_iso = ''
 				ARRAY_A
 			);
 
-			cg_debug_log( 'Found ' . count( $candidates ) . ' templates with exact match' );
+			certificate_generator_debug_log( 'Found ' . count( $candidates ) . ' templates with exact match' );
 
 			// Case-insensitive fallback
 			if ( empty( $candidates ) ) {
 				$all = $GLOBALS['wpdb']->get_results( "SELECT * FROM $tpl_table WHERE status = 'published'", ARRAY_A );
-				cg_debug_log( 'Checking ' . count( $all ) . ' templates for case-insensitive match' );
+				certificate_generator_debug_log( 'Checking ' . count( $all ) . ' templates for case-insensitive match' );
 				foreach ( $all as $tpl ) {
 					if ( strtolower( trim( $tpl['certificate_type'] ) ) === strtolower( trim( $certificate_type ) ) ) {
-						cg_debug_log( 'Found case-insensitive match: ' . $tpl['certificate_type'] );
+						certificate_generator_debug_log( 'Found case-insensitive match: ' . $tpl['certificate_type'] );
 						$candidates[] = $tpl;
 					}
 				}
@@ -964,7 +964,7 @@ function cg_select_certificate_template( $certificate_type, $issue_date_iso = ''
  *
  * If the template has explicit per-slot field_{N}_name mappings (set via
  * TemplatesPage.php's entity-scoped field dropdown), use those directly.
- * Otherwise, fall back to the original positional CG_Field_Schema-derived
+ * Otherwise, fall back to the original positional CertificateGenerator_Field_Schema-derived
  * list so templates saved before this feature keep rendering unchanged.
  *
  * @param array<string,array>  $tmpl_meta             Postmeta-shaped template meta.
@@ -972,7 +972,7 @@ function cg_select_certificate_template( $certificate_type, $issue_date_iso = ''
  * @param int                  $template_field_count  Number of slots to resolve.
  * @return string[] Ordered field names, one per slot.
  */
-function cg_resolve_template_fields( array $tmpl_meta, string $cert_type, int $template_field_count ): array {
+function certificate_generator_resolve_template_fields( array $tmpl_meta, string $cert_type, int $template_field_count ): array {
 	$has_explicit_mapping = false;
 	for ( $i = 1; $i <= $template_field_count; $i++ ) {
 		if ( ! empty( $tmpl_meta[ "field_{$i}_name" ][0] ?? '' ) ) {
@@ -991,8 +991,8 @@ function cg_resolve_template_fields( array $tmpl_meta, string $cert_type, int $t
 	}
 
 	// Legacy fallback — byte-compatible with the pre-existing positional behaviour.
-	$all_renderable = class_exists( 'CG_Field_Schema' )
-		? CG_Field_Schema::get_all_renderable_fields( $cert_type )
+	$all_renderable = class_exists( 'CertificateGenerator_Field_Schema' )
+		? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type )
 		: array( 'student_name', 'school_name', 'teacher_name', 'issue_date' );
 	$fields = $all_renderable;
 	while ( count( $fields ) < $template_field_count ) {
@@ -1001,7 +1001,7 @@ function cg_resolve_template_fields( array $tmpl_meta, string $cert_type, int $t
 	return array_slice( $fields, 0, $template_field_count );
 }
 
-function cg_build_field_positions( array $fields, array $tmpl_meta, bool $is_sql_table, string $photo_url = '' ): array {
+function certificate_generator_build_field_positions( array $fields, array $tmpl_meta, bool $is_sql_table, string $photo_url = '' ): array {
 	$field_positions = array();
 
 	foreach ( $fields as $index => $field ) {
@@ -1015,7 +1015,7 @@ function cg_build_field_positions( array $fields, array $tmpl_meta, bool $is_sql
 			$y       = $tmpl_meta[ "{$field_key}_position_y" ][0] ?? $tmpl_meta[ "field_{$field_key}_position_y" ][0] ?? '';
 			$width   = $tmpl_meta[ "{$field_key}_width" ][0] ?? $tmpl_meta[ "field_{$field_key}_width" ][0] ?? '100';
 			$height  = $tmpl_meta[ "{$field_key}_height" ][0] ?? $tmpl_meta[ "field_{$field_key}_height" ][0] ?? '';
-			$align   = cg_sanitize_alignment(
+			$align   = certificate_generator_sanitize_alignment(
 				$tmpl_meta[ "{$field_key}_alignment" ][0] ?? $tmpl_meta[ "field_{$field_key}_alignment" ][0] ?? 'C'
 			);
 			$visible = $tmpl_meta[ "{$field_key}_visible" ][0] ?? $tmpl_meta[ "field_{$field_key}_visible" ][0] ?? '1';
@@ -1024,7 +1024,7 @@ function cg_build_field_positions( array $fields, array $tmpl_meta, bool $is_sql
 			$y       = $tmpl_meta[ "field_{$field_key}_position_y" ][0] ?? '';
 			$width   = $tmpl_meta[ "field_{$field_key}_width" ][0] ?? '100';
 			$height  = $tmpl_meta[ "field_{$field_key}_height" ][0] ?? '';
-			$align   = cg_sanitize_alignment( $tmpl_meta[ "field_{$field_key}_alignment" ][0] ?? 'C' );
+			$align   = certificate_generator_sanitize_alignment( $tmpl_meta[ "field_{$field_key}_alignment" ][0] ?? 'C' );
 			$visible = $tmpl_meta[ "field_{$field_key}_visible" ][0] ?? '1';
 		}
 
@@ -1051,7 +1051,7 @@ function cg_build_field_positions( array $fields, array $tmpl_meta, bool $is_sql
 	return $field_positions;
 }
 
-function _cg_generate_pdf_with_data_impl( $post_data ) {
+function certificate_generator_generate_pdf_with_data_impl( $post_data ) {
 	// ── Debug flags ───────────────────────────────────────────────────────────
 	// Set $debug_mode = true only when actively debugging; false for production.
 	$debug_mode = defined( 'WP_DEBUG' ) && WP_DEBUG;
@@ -1060,11 +1060,11 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	// Follows WP_DEBUG: set WP_DEBUG = true in wp-config.php to enable visual markers.
 	$visual_debug = true; // overlay markers only in debug mode
 
-	cg_debug_log( 'Post Data: ' . wp_json_encode( $post_data ) );
+	certificate_generator_debug_log( 'Post Data: ' . wp_json_encode( $post_data ) );
 
 	// ── Guard: certificate_type is required ───────────────────────────────────
 	if ( empty( $post_data['certificate_type'] ) ) {
-		cg_debug_log( 'Certificate Generator: generate_certificate_pdf_with_data called without certificate_type.' );
+		certificate_generator_debug_log( 'Certificate Generator: certificate_generator_generate_certificate_pdf_with_data called without certificate_type.' );
 		return false;
 	}
 
@@ -1079,7 +1079,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 		if ( $dt ) {
 			$issue_date_iso          = $dt->format( 'Y-m-d' );   // for template matching
 			$post_data['issue_date'] = $dt->format( 'd-m-Y' );   // for PDF display
-			cg_debug_log( 'issue_date ISO: ' . $issue_date_iso . ', display: ' . $post_data['issue_date'] );
+			certificate_generator_debug_log( 'issue_date ISO: ' . $issue_date_iso . ', display: ' . $post_data['issue_date'] );
 		}
 	}
 
@@ -1102,7 +1102,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	}
 
 	if ( ! $certificate_template ) {
-		$certificate_template = cg_select_certificate_template(
+		$certificate_template = certificate_generator_select_certificate_template(
 			$post_data['certificate_type'],
 			$issue_date_iso,
 			! $is_preview   // strict=false for preview, strict=true for generation
@@ -1116,7 +1116,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 			$post_data['certificate_type'],
 			$post_data['issue_date'] ?? $issue_date_iso
 		);
-		cg_debug_log( 'Certificate Generator: ' . $msg );
+		certificate_generator_debug_log( 'Certificate Generator: ' . $msg );
 		return false;
 	}
 	// One query for all template meta (replaces N individual get_post_meta calls)
@@ -1147,7 +1147,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 
 	if ( empty( $template_url ) ) {
 		$tmpl_id = $certificate_template->id ?? $certificate_template->ID ?? '?';
-		cg_debug_log( 'Certificate Generator: Template URL is missing for template ID: ' . $tmpl_id );
+		certificate_generator_debug_log( 'Certificate Generator: Template URL is missing for template ID: ' . $tmpl_id );
 		return false;
 	}
 
@@ -1163,30 +1163,30 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	certificate_generator_log_debug( "Font requested: {$font_style}" );
 
 	// Validate template URL
-	cg_debug_log( "Validating template URL: {$template_url}" );
-	if ( function_exists( 'cg_validate_template_url' ) ) {
-		$validation_result = cg_validate_template_url( $template_url, $is_preview );
+	certificate_generator_debug_log( "Validating template URL: {$template_url}" );
+	if ( function_exists( 'certificate_generator_validate_template_url' ) ) {
+		$validation_result = certificate_generator_validate_template_url( $template_url, $is_preview );
 		if ( $validation_result !== true ) {
-			cg_debug_log( 'Certificate Generator: Template URL validation failed: ' . ( is_string( $validation_result ) ? wp_strip_all_tags( $validation_result ) : 'unknown' ) );
+			certificate_generator_debug_log( 'Certificate Generator: Template URL validation failed: ' . ( is_string( $validation_result ) ? wp_strip_all_tags( $validation_result ) : 'unknown' ) );
 			return false;
 		}
 	}
-	cg_debug_log( 'Template URL validation successful' );
+	certificate_generator_debug_log( 'Template URL validation successful' );
 
 	// Get template field count - limits how many fields to render
 	$template_field_count = (int) ( $tmpl_meta['template_field_count'][0] ?? 3 );
 
 	// Resolve the ordered field list — explicit per-slot mapping when the template
-	// has one, otherwise the original positional CG_Field_Schema behaviour.
+	// has one, otherwise the original positional CertificateGenerator_Field_Schema behaviour.
 	$cert_type_key = $post_data['certificate_type'];
-	$fields        = cg_resolve_template_fields( $tmpl_meta, $cert_type_key, $template_field_count );
+	$fields        = certificate_generator_resolve_template_fields( $tmpl_meta, $cert_type_key, $template_field_count );
 
-	cg_debug_log( 'Dynamic Fields (mapped): ' . wp_json_encode( $fields ) );
+	certificate_generator_debug_log( 'Dynamic Fields (mapped): ' . wp_json_encode( $fields ) );
 
 	// Fetch field positions dynamically from the certificate template.
 	// Check if data is from SQL table (has id and template_url keys)
 	$is_sql_table    = isset( $certificate_template->id ) && ! isset( $certificate_template->ID );
-	$field_positions = cg_build_field_positions( $fields, $tmpl_meta, $is_sql_table, (string) ( $post_data['photo_url'] ?? '' ) );
+	$field_positions = certificate_generator_build_field_positions( $fields, $tmpl_meta, $is_sql_table, (string) ( $post_data['photo_url'] ?? '' ) );
 	foreach ( $fields as $field_num => $field ) {
 		// --- Normalise and provide sensible fallbacks for missing/invalid values ---
 		// Template uses A4 units (mm) via FPDF; compute page dims based on orientation
@@ -1198,7 +1198,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 		$pos['x']       = is_numeric( $pos['x'] ) ? floatval( $pos['x'] ) : '';
 		$pos['y']       = is_numeric( $pos['y'] ) ? floatval( $pos['y'] ) : '';
 		$pos['width']   = is_numeric( $pos['width'] ) ? floatval( $pos['width'] ) : 100.0;
-		$pos['align']   = cg_sanitize_alignment( (string) ( $pos['align'] ?? 'C' ) );
+		$pos['align']   = certificate_generator_sanitize_alignment( (string) ( $pos['align'] ?? 'C' ) );
 		$pos['visible'] = ( $pos['visible'] === '0' || $pos['visible'] === 0 || $pos['visible'] === 'false' ) ? '0' : '1';
 
 		// If X/Y are missing or empty, calculate reasonable defaults based on field order
@@ -1216,7 +1216,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 			$pos['y'] = $template_height * ( 0.25 + ( $fraction * 0.5 ) );
 		}
 
-		cg_debug_log( "Field position for {$field}: " . wp_json_encode( $field_positions[ $field ] ) );
+		certificate_generator_debug_log( "Field position for {$field}: " . wp_json_encode( $field_positions[ $field ] ) );
 	}
 
 	// Generate PDF. A custom uploaded font needs the Unicode-capable tFPDF
@@ -1224,8 +1224,8 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	// fonts and would otherwise silently fall back to Helvetica.
 	$page_size = $tmpl_meta['page_size'][0] ?? 'A4';
 	$pdf       = $font_manager->is_custom_font( $font_style )
-		? new TFPDF_Debug( $template_orientation, 'mm', $page_size )
-		: new FPDF_Debug( $template_orientation, 'mm', $page_size );
+		? new CertificateGenerator_TFPDF_Debug( $template_orientation, 'mm', $page_size )
+		: new CertificateGenerator_FPDF_Debug( $template_orientation, 'mm', $page_size );
 	$pdf->AddPage();
 
 	// Set text color
@@ -1236,7 +1236,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	$used_font = $font_manager->add_font_to_pdf( $pdf, $font_style, '', $font_size );
 
 	// Add template background
-	$pdf->Image( cg_template_url_to_path( $template_url ), 0, 0, $template_orientation === 'landscape' ? 297 : 210, $template_orientation === 'landscape' ? 210 : 297 );
+	$pdf->Image( certificate_generator_template_url_to_path( $template_url ), 0, 0, $template_orientation === 'landscape' ? 297 : 210, $template_orientation === 'landscape' ? 210 : 297 );
 
 	// Add debug information legend if visual debugging is enabled
 	if ( $visual_debug ) {
@@ -1306,7 +1306,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	foreach ( $field_positions as $field => $position ) {
 		if ( $position['visible'] == '0' ) {
 			if ( $debug_mode ) {
-				cg_debug_log( "Skipping hidden field: {$field}" );
+				certificate_generator_debug_log( "Skipping hidden field: {$field}" );
 			}
 			continue; // Skip hidden fields
 		}
@@ -1314,9 +1314,9 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 		if ( in_array( $position['type'] ?? 'text', array( 'image', 'photo' ), true ) ) {
 			if ( ! empty( $position['image_url'] ) && is_numeric( $position['x'] ) && is_numeric( $position['y'] ) ) {
 				try {
-					$pdf->Image( cg_template_url_to_path( $position['image_url'] ), $position['x'], $position['y'], floatval( $position['width'] ), is_numeric( $position['height'] ?? '' ) ? floatval( $position['height'] ) : 0 );
+					$pdf->Image( certificate_generator_template_url_to_path( $position['image_url'] ), $position['x'], $position['y'], floatval( $position['width'] ), is_numeric( $position['height'] ?? '' ) ? floatval( $position['height'] ) : 0 );
 				} catch ( Exception $e ) {
-					cg_debug_log( "Error adding image field {$field}: " . $e->getMessage() );
+					certificate_generator_debug_log( "Error adding image field {$field}: " . $e->getMessage() );
 				}
 			}
 			// No photo uploaded for this student — skip silently, don't error the whole certificate.
@@ -1325,7 +1325,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 
 		if ( empty( $post_data[ $field ] ) || ! is_numeric( $position['x'] ) || ! is_numeric( $position['y'] ) ) {
 			if ( $debug_mode ) {
-				cg_debug_log( "Invalid data or position for $field: X={$position['x']}, Y={$position['y']}, Data=" . ( empty( $post_data[ $field ] ) ? 'empty' : 'present' ) );
+				certificate_generator_debug_log( "Invalid data or position for $field: X={$position['x']}, Y={$position['y']}, Data=" . ( empty( $post_data[ $field ] ) ? 'empty' : 'present' ) );
 			}
 			continue;
 		}
@@ -1336,18 +1336,18 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 
 		// **Shrink long text to fit, then measure**
 		$field_width = floatval( $position['width'] );
-		$fit_size    = cg_fit_font_size( $pdf, (float) $font_size, $text, $field_width );
+		$fit_size    = certificate_generator_fit_font_size( $pdf, (float) $font_size, $text, $field_width );
 		$text_width  = $pdf->GetStringWidth( $text );
 
 		// **Calculate proper line height based on font size**
 		$line_height = $fit_size * 0.5; // Tighter line spacing for better appearance
 
-		cg_debug_log( "Processing field {$field}: text_width={$text_width}, field_width={$field_width}, alignment={$position['align']}" );
+		certificate_generator_debug_log( "Processing field {$field}: text_width={$text_width}, field_width={$field_width}, alignment={$position['align']}" );
 
 		// **Determine if text needs wrapping**
 		if ( $text_width > $field_width ) {
 			// **Multi-line text with word wrapping**
-			$lines = cg_wrap_text( $pdf, $text, $field_width );
+			$lines = certificate_generator_wrap_text( $pdf, $text, $field_width );
 
 			// Calculate total text block height
 			$total_text_height = count( $lines ) * $line_height;
@@ -1361,7 +1361,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 				$line_width = $pdf->GetStringWidth( $line_text );
 
 				// Calculate X position based on alignment
-				$adjusted_x = cg_calculate_x_position( $position['x'], $line_width, $field_width, $position['align'] );
+				$adjusted_x = certificate_generator_calculate_x_position( $position['x'], $line_width, $field_width, $position['align'] );
 				$adjusted_y = $start_y + ( $i * $line_height );
 
 				// Output the text
@@ -1369,35 +1369,35 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 
 				// Add debug visualization if enabled
 				if ( $visual_debug ) {
-					cg_add_debug_markers( $pdf, $adjusted_x, $adjusted_y, $position['x'], $position['y'], $i === 0 );
+					certificate_generator_add_debug_markers( $pdf, $adjusted_x, $adjusted_y, $position['x'], $position['y'], $i === 0 );
 				}
 			}
 
 			// Add debug visualization for field boundary
 			if ( $visual_debug ) {
-				cg_add_debug_field_boundary( $pdf, $position['x'], $position['y'], $field_width, $total_text_height );
+				certificate_generator_add_debug_field_boundary( $pdf, $position['x'], $position['y'], $field_width, $total_text_height );
 			}
 		} else {
 			// **Single line text**
 
 			// Calculate X position based on alignment
-			$adjusted_x = cg_calculate_x_position( $position['x'], $text_width, $field_width, $position['align'] );
+			$adjusted_x = certificate_generator_calculate_x_position( $position['x'], $text_width, $field_width, $position['align'] );
 
 			// Output the text
 			$pdf->Text( $adjusted_x, $position['y'], $text );
 
 			// Add debug visualization if enabled
 			if ( $visual_debug ) {
-				cg_add_debug_markers( $pdf, $adjusted_x, $position['y'], $position['x'], $position['y'], true );
-				cg_add_debug_field_boundary( $pdf, $position['x'], $position['y'], $field_width, $font_size + 2 );
+				certificate_generator_add_debug_markers( $pdf, $adjusted_x, $position['y'], $position['x'], $position['y'], true );
+				certificate_generator_add_debug_field_boundary( $pdf, $position['x'], $position['y'], $field_width, $font_size + 2 );
 			}
 		}
 	}
 
 	// ── QR Code & Serial Number for Preview ─────────────────────────────
 	$qr_generator = null;
-	if ( class_exists( 'CG_QR_Code_Generator' ) ) {
-		$qr_generator = CG_QR_Code_Generator::get_instance();
+	if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
+		$qr_generator = CertificateGenerator_QR_Code_Generator::get_instance();
 	}
 
 	$serial_gen    = null;
@@ -1416,10 +1416,10 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 
 	// Reuse existing serial for the same student + certificate type
 	if ( empty( $serial_number ) && $student_name && $cert_type ) {
-		$serial_number = cg_find_existing_serial( $student_name, $cert_type, (string) ( $post_data['issue_date'] ?? '' ) );
+		$serial_number = certificate_generator_find_existing_serial( $student_name, $cert_type, (string) ( $post_data['issue_date'] ?? '' ) );
 	}
-	if ( empty( $serial_number ) && class_exists( 'CG_Serial_Number_Generator' ) ) {
-		$serial_gen = CG_Serial_Number_Generator::get_instance();
+	if ( empty( $serial_number ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
+		$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
 		// Store the serial on the matching entity row (email/name + type + issue date).
 		$student_data_for_serial = array(
 			'table'        => isset( $post_data['student_name'] ) ? 'students' : ( isset( $post_data['teacher_name'] ) ? 'teachers' : 'schools' ),
@@ -1466,7 +1466,7 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	$upload_dir   = wp_upload_dir();
 	$pdf_filename = $is_preview
 		? 'certificate_preview_' . intval( $post_data['_preview_post_id'] ) . '.pdf'
-		: cg_certificate_pdf_filename( (string) $student_name, (string) $cert_type, trim( $serial_number . '_' . wp_generate_password( 6, false ), '_' ) );
+		: certificate_generator_certificate_pdf_filename( (string) $student_name, (string) $cert_type, trim( $serial_number . '_' . wp_generate_password( 6, false ), '_' ) );
 	$pdf_path       = $upload_dir['path'] . '/' . $pdf_filename;
 	$pdf->Output( 'F', $pdf_path );
 
@@ -1475,13 +1475,13 @@ function _cg_generate_pdf_with_data_impl( $post_data ) {
 	// runs (throwaway PDFs); a certificate without a serial yet still gets
 	// logged so analytics doesn't undercount deferred/no-serial issuance.
 	if ( empty( $post_data['_preview_post_id'] ) ) {
-		cg_insert_certificate_record( $post_data + array( 'template_id' => $certificate_template->id ?? null ), $serial_number );
+		certificate_generator_insert_certificate_record( $post_data + array( 'template_id' => $certificate_template->id ?? null ), $serial_number );
 	}
 
 	return $upload_dir['url'] . '/' . $pdf_filename;
 }
 
-// ── Public shim for generate_certificate_pdf_with_data ───────────────────────
+// ── Public shim for certificate_generator_generate_certificate_pdf_with_data ───────────────────────
 // When CG_USE_NEW_PDF=true, legacy-shims.php defines this function and routes
 // it through PdfGenerator::makeFromArray(). When the flag is off (default),
 // this wrapper is used so all 5 call sites continue to work unchanged.
@@ -1490,8 +1490,8 @@ if ( ! class_exists( '\CertificateGenerator\Core\Config' )
 	/**
 	 * @deprecated v8 Use \CertificateGenerator\Services\PdfGenerator::makeFromArray() instead.
 	 */
-	function generate_certificate_pdf_with_data( $post_data ) {
-		return _cg_generate_pdf_with_data_impl( $post_data );
+	function certificate_generator_generate_certificate_pdf_with_data( $post_data ) {
+		return certificate_generator_generate_pdf_with_data_impl( $post_data );
 	}
 }
 
@@ -1501,7 +1501,7 @@ if ( ! class_exists( '\CertificateGenerator\Core\Config' )
  * misspelling). Only the name and data snapshot change; serial, issue date and
  * status stay as issued.
  */
-function cg_sync_certificate_record_name( array $post_data, string $serial_number ): void {
+function certificate_generator_sync_certificate_record_name( array $post_data, string $serial_number ): void {
 	$name = '';
 	foreach ( array( 'student_name', 'teacher_name', 'school_name' ) as $key ) {
 		if ( is_string( $post_data[ $key ] ?? null ) && trim( $post_data[ $key ] ) !== '' ) {
@@ -1533,7 +1533,7 @@ function cg_sync_certificate_record_name( array $post_data, string $serial_numbe
  * has been generated.  This is the record that the public verification
  * shortcode and serial-number sequencer query against.
  */
-function cg_insert_certificate_record( array $post_data, string $serial_number, string $generated_via = 'manual' ): void {
+function certificate_generator_insert_certificate_record( array $post_data, string $serial_number, string $generated_via = 'manual' ): void {
 	global $wpdb;
 	$table = $wpdb->prefix . 'certificate_generator';
 
@@ -1550,7 +1550,7 @@ function cg_insert_certificate_record( array $post_data, string $serial_number, 
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( $exists ) {
-			cg_sync_certificate_record_name( $post_data, $serial_number );
+			certificate_generator_sync_certificate_record_name( $post_data, $serial_number );
 			return;
 		}
 	}
@@ -1592,7 +1592,7 @@ function cg_insert_certificate_record( array $post_data, string $serial_number, 
 				$issue_iso = $issue_dt ? $issue_dt->format( 'Y-m-d' ) : '';
 				$cache_key = $cert_type . '|' . $issue_iso;
 				if ( ! array_key_exists( $cache_key, $template_id_cache ) ) {
-					$tpl                             = cg_select_certificate_template( $cert_type, $issue_iso );
+					$tpl                             = certificate_generator_select_certificate_template( $cert_type, $issue_iso );
 					$template_id_cache[ $cache_key ] = $tpl->id ?? null;
 				}
 				$template_id = $template_id_cache[ $cache_key ];
@@ -1656,7 +1656,7 @@ function cg_insert_certificate_record( array $post_data, string $serial_number, 
  * "Participation" certificates for different events must get two serials.
  * Returns the serial string if found, empty string otherwise.
  */
-function cg_find_existing_serial( string $student_name, string $certificate_type, string $issue_date = '' ): string {
+function certificate_generator_find_existing_serial( string $student_name, string $certificate_type, string $issue_date = '' ): string {
 	if ( empty( $student_name ) || empty( $certificate_type ) ) {
 		return '';
 	}
@@ -1693,12 +1693,12 @@ function cg_find_existing_serial( string $student_name, string $certificate_type
  * Helper: resolve the best-matching certificate template for a given post.
  *
  * Reads `certificate_type` and `issue_date` from post meta, normalises the
- * date to Y-m-d, and delegates to cg_select_certificate_template().
+ * date to Y-m-d, and delegates to certificate_generator_select_certificate_template().
  *
  * @param  int $post_id  Post ID of a student / teacher / school post.
  * @return WP_Post|false        The matched template post, or false if none found.
  */
-function cg_resolve_student_template( int $post_id ) {
+function certificate_generator_resolve_student_template( int $post_id ) {
 	$certificate_type = get_post_meta( $post_id, 'certificate_type', true );
 
 	// SQL fallback: post meta absent but a SQL row may exist for this wp_post_id
@@ -1722,7 +1722,7 @@ function cg_resolve_student_template( int $post_id ) {
 				if ( ! empty( $_row['certificate_type'] ) ) {
 					$certificate_type = $_row['certificate_type'];
 					add_filter(
-						'cg_resolve_student_template_issue_date_' . $post_id,
+						'certificate_generator_resolve_student_template_issue_date_' . $post_id,
 						fn() => $_row['issue_date'] ?? '',
 						1
 					);
@@ -1738,7 +1738,7 @@ function cg_resolve_student_template( int $post_id ) {
 
 	// Normalise issue_date to Y-m-d for template matching
 	$issue_date_raw = apply_filters(
-		'cg_resolve_student_template_issue_date_' . $post_id,
+		'certificate_generator_resolve_student_template_issue_date_' . $post_id,
 		get_post_meta( $post_id, 'issue_date', true )
 	);
 	$issue_date_iso = '';
@@ -1754,7 +1754,7 @@ function cg_resolve_student_template( int $post_id ) {
 		}
 	}
 
-	return cg_select_certificate_template( $certificate_type, $issue_date_iso );
+	return certificate_generator_select_certificate_template( $certificate_type, $issue_date_iso );
 }
 
 /**
@@ -1765,7 +1765,7 @@ function cg_resolve_student_template( int $post_id ) {
  * @param  int        $post_id      Used ONLY as CPT fallback when $entity_data is null/empty.
  * @return object|false
  */
-function cg_resolve_entity_template( ?array $entity_data, int $post_id = 0 ) {
+function certificate_generator_resolve_entity_template( ?array $entity_data, int $post_id = 0 ) {
 	if ( ! empty( $entity_data['certificate_type'] ) ) {
 		$certificate_type = $entity_data['certificate_type'];
 		$issue_date_raw   = $entity_data['issue_date'] ?? '';
@@ -1793,10 +1793,10 @@ function cg_resolve_entity_template( ?array $entity_data, int $post_id = 0 ) {
 		}
 	}
 
-	return cg_select_certificate_template( $certificate_type, $issue_date_iso );
+	return certificate_generator_select_certificate_template( $certificate_type, $issue_date_iso );
 }
 
-function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
+function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 	// If student_data is provided (from SQL table), use it instead of post meta
 	$use_table_data = is_array( $student_data ) && ! empty( $student_data );
 
@@ -1854,11 +1854,11 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 	}
 
 	// Start error logging
-	cg_debug_log( "Starting certificate generation for post ID: $post_id (table_data: " . ( $use_table_data ? 'yes' : 'no' ) . ')' );
-	cg_debug_log( 'Requested fields: ' . wp_json_encode( $fields ) );
+	certificate_generator_debug_log( "Starting certificate generation for post ID: $post_id (table_data: " . ( $use_table_data ? 'yes' : 'no' ) . ')' );
+	certificate_generator_debug_log( 'Requested fields: ' . wp_json_encode( $fields ) );
 
 	if ( ! $certificate_type ) {
-		cg_debug_log( 'Certificate Generator: Certificate type is missing for post ID: ' . $post_id );
+		certificate_generator_debug_log( 'Certificate Generator: Certificate type is missing for post ID: ' . $post_id );
 		return false;
 	}
 
@@ -1866,9 +1866,9 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 	// The quota counts newly issued serials, so a row that already has its serial is an
 	// issued certificate and stays downloadable at the limit.
 	$already_issued = $use_table_data && ! empty( $student_data['serial_number'] );
-	$proceed        = $already_issued ? true : apply_filters( 'cg_pre_generate_certificate', true );
+	$proceed        = $already_issued ? true : apply_filters( 'certificate_generator_pre_generate_certificate', true );
 	if ( is_wp_error( $proceed ) ) {
-		cg_debug_log( 'Certificate Generator: Blocked by usage limit — ' . $proceed->get_error_message() );
+		certificate_generator_debug_log( 'Certificate Generator: Blocked by usage limit — ' . $proceed->get_error_message() );
 		return false;
 	}
 
@@ -1892,10 +1892,10 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 		$certificate_template = $_tpl_row ? (object) $_tpl_row : null;
 	}
 	if ( ! $certificate_template ) {
-		$certificate_template = cg_select_certificate_template( $certificate_type, $issue_date_iso );
+		$certificate_template = certificate_generator_select_certificate_template( $certificate_type, $issue_date_iso );
 	}
 	if ( ! $certificate_template ) {
-		cg_debug_log( 'Certificate Generator: No certificate template found for type: ' . $certificate_type );
+		certificate_generator_debug_log( 'Certificate Generator: No certificate template found for type: ' . $certificate_type );
 		return false;
 	}
 
@@ -1925,7 +1925,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 	$template_url = $tmpl_meta['template_url'][0] ?? '';
 
 	if ( empty( $template_url ) ) {
-		cg_debug_log( 'Certificate Generator: Template URL is missing for template ID: ' . ( $certificate_template->ID ?? $certificate_template->id ?? 'unknown' ) );
+		certificate_generator_debug_log( 'Certificate Generator: Template URL is missing for template ID: ' . ( $certificate_template->ID ?? $certificate_template->id ?? 'unknown' ) );
 		return false;
 	}
 
@@ -1937,22 +1937,22 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 	$font_style           = $tmpl_meta['font_style'][0] ?? 'helvetica';
 
 	// Validate the template URL
-	cg_debug_log( "Validating template URL: {$template_url}" );
-	if ( function_exists( 'cg_validate_template_url' ) ) {
-		$validation_result = cg_validate_template_url( $template_url );
+	certificate_generator_debug_log( "Validating template URL: {$template_url}" );
+	if ( function_exists( 'certificate_generator_validate_template_url' ) ) {
+		$validation_result = certificate_generator_validate_template_url( $template_url );
 		if ( $validation_result !== true ) {
-			cg_debug_log( 'Certificate Generator: Template URL validation failed: ' . $validation_result );
+			certificate_generator_debug_log( 'Certificate Generator: Template URL validation failed: ' . $validation_result );
 			return false;
 		}
 	}
-	cg_debug_log( 'Template URL validation successful' );
+	certificate_generator_debug_log( 'Template URL validation successful' );
 
 	// Get template field count - limits how many fields to render
 	$template_field_count = (int) ( $tmpl_meta['template_field_count'][0] ?? 3 );
 
 	// Resolve the ordered field list — explicit per-slot mapping when the template
-	// has one, otherwise the original positional CG_Field_Schema behaviour.
-	$fields = cg_resolve_template_fields( $tmpl_meta, $certificate_type, $template_field_count );
+	// has one, otherwise the original positional CertificateGenerator_Field_Schema behaviour.
+	$fields = certificate_generator_resolve_template_fields( $tmpl_meta, $certificate_type, $template_field_count );
 
 	// Flatten extra_fields JSON from the student/entity row into $student_data so that
 	// extra field values (e.g. 'team_name' stored in extra_fields) are accessible by key.
@@ -1965,19 +1965,19 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 	$missing_positions = array();
 	$is_sql_table      = isset( $certificate_template->id ) && ! isset( $certificate_template->ID );
-	$field_positions   = cg_build_field_positions(
+	$field_positions   = certificate_generator_build_field_positions(
 		$fields,
 		$tmpl_meta,
 		$is_sql_table,
 		is_array( $student_data ) ? (string) ( $student_data['photo_url'] ?? '' ) : ''
 	);
 	foreach ( $field_positions as $field => $fp ) {
-		cg_debug_log( "Field position for {$field}: " . wp_json_encode( $fp ) );
+		certificate_generator_debug_log( "Field position for {$field}: " . wp_json_encode( $fp ) );
 	}
 
 	if ( empty( $field_positions ) ) {
 		$missing_fields = implode( ', ', $missing_positions );
-		cg_debug_log( 'Certificate generation failed: No valid field positions found. Missing positions for: ' . $missing_fields );
+		certificate_generator_debug_log( 'Certificate generation failed: No valid field positions found. Missing positions for: ' . $missing_fields );
 		return false;
 	}
 
@@ -1987,7 +1987,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 		$pos['x']       = is_numeric( $pos['x'] ) ? floatval( $pos['x'] ) : '';
 		$pos['y']       = is_numeric( $pos['y'] ) ? floatval( $pos['y'] ) : '';
 		$pos['width']   = is_numeric( $pos['width'] ) ? floatval( $pos['width'] ) : 100.0;
-		$pos['align']   = cg_sanitize_alignment( (string) ( $pos['align'] ?? 'C' ) );
+		$pos['align']   = certificate_generator_sanitize_alignment( (string) ( $pos['align'] ?? 'C' ) );
 		$pos['visible'] = ( $pos['visible'] === '0' || $pos['visible'] === 0 || $pos['visible'] === 'false' ) ? '0' : '1';
 	}
 	unset( $pos );
@@ -2005,7 +2005,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 		}
 	}
 	if ( ! $has_valid_position ) {
-		cg_debug_log( 'Certificate Generator: All field positions are zero or hidden for this template — the PDF may appear blank. Configure field positions in Templates → Edit Template.' );
+		certificate_generator_debug_log( 'Certificate Generator: All field positions are zero or hidden for this template — the PDF may appear blank. Configure field positions in Templates → Edit Template.' );
 	}
 
 	// Fetch post data - from SQL table or post meta
@@ -2021,7 +2021,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 		if ( empty( $value ) ) {
 			$missing_data[] = $field_name;
-			cg_debug_log( "Missing data for field {$field_name}" );
+			certificate_generator_debug_log( "Missing data for field {$field_name}" );
 			continue;
 		}
 
@@ -2036,7 +2036,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 					$value = date_format( $date_obj, 'd-m-Y' );
 				}
 			}
-			cg_debug_log( 'Formatted issue_date: ' . $value );
+			certificate_generator_debug_log( 'Formatted issue_date: ' . $value );
 		}
 
 		$post_data[ $field_name ] = $value;
@@ -2045,24 +2045,24 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 	// Check if we have any post data
 	if ( empty( $post_data ) ) {
 		$missing_fields = implode( ', ', $missing_data );
-		cg_debug_log( 'Certificate generation failed: No valid post data found. Missing data for: ' . $missing_fields );
+		certificate_generator_debug_log( 'Certificate generation failed: No valid post data found. Missing data for: ' . $missing_fields );
 		return false;
 	}
 
 	// Debug: Log post data
-	cg_debug_log( 'Post data for PDF: ' . wp_json_encode( $post_data ) );
+	certificate_generator_debug_log( 'Post data for PDF: ' . wp_json_encode( $post_data ) );
 
 	// ── PDF cache ────────────────────────────────────────────────────────
 	// An issued certificate whose inputs are unchanged is served from disk: no render,
 	// no DB writes, no usage. Rows without a serial render so one gets issued.
 	$cache_key = '';
-	if ( $already_issued && cg_pdf_cache_enabled() ) {
-		$cache_key = cg_pdf_cache_key( $pdf_key, $tmpl_meta, $template_url, $field_positions, $post_data, (string) $student_data['serial_number'] );
-		if ( cg_pdf_cache_read_key( cg_certificates_dir() . '/' . cg_certificate_file_stem( $pdf_key ) . '.pdf' ) === $cache_key ) {
-			cg_debug_log( "PDF cache hit: $pdf_key" );
-			return cg_certificates_url() . '/' . cg_certificate_file_stem( $pdf_key ) . '.pdf';
+	if ( $already_issued && certificate_generator_pdf_cache_enabled() ) {
+		$cache_key = certificate_generator_pdf_cache_key( $pdf_key, $tmpl_meta, $template_url, $field_positions, $post_data, (string) $student_data['serial_number'] );
+		if ( certificate_generator_pdf_cache_read_key( certificate_generator_certificates_dir() . '/' . certificate_generator_certificate_file_stem( $pdf_key ) . '.pdf' ) === $cache_key ) {
+			certificate_generator_debug_log( "PDF cache hit: $pdf_key" );
+			return certificate_generator_certificates_url() . '/' . certificate_generator_certificate_file_stem( $pdf_key ) . '.pdf';
 		}
-		cg_debug_log( "PDF cache miss: $pdf_key" );
+		certificate_generator_debug_log( "PDF cache miss: $pdf_key" );
 	}
 
 	try {
@@ -2081,13 +2081,13 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 		// Add template background
 		try {
-			$bg_path = cg_template_url_to_path( $template_url );
+			$bg_path = certificate_generator_template_url_to_path( $template_url );
 			if ( method_exists( $pdf, 'share_image' ) ) {
 				$pdf->share_image( $bg_path );
 			}
 			$pdf->Image( $bg_path, 0, 0, $template_orientation === 'landscape' ? 297 : 210, $template_orientation === 'landscape' ? 210 : 297 );
 		} catch ( Exception $e ) {
-			cg_debug_log( 'Error adding template image: ' . $e->getMessage() );
+			certificate_generator_debug_log( 'Error adding template image: ' . $e->getMessage() );
 			return false;
 		}
 
@@ -2095,7 +2095,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 		foreach ( $field_positions as $field => $position ) {
 			// Skip if field is not visible
 			if ( $position['visible'] == '0' ) {
-				cg_debug_log( "Skipping hidden field: {$field}" );
+				certificate_generator_debug_log( "Skipping hidden field: {$field}" );
 				continue;
 			}
 
@@ -2105,13 +2105,13 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 			if ( in_array( $position['type'] ?? 'text', array( 'image', 'photo' ), true ) ) {
 				if ( ! empty( $position['image_url'] ) && is_numeric( $position['x'] ) && is_numeric( $position['y'] ) ) {
 					try {
-						$img_path = cg_template_url_to_path( $position['image_url'] );
+						$img_path = certificate_generator_template_url_to_path( $position['image_url'] );
 						if ( 'image' === $position['type'] && method_exists( $pdf, 'share_image' ) ) {
 							$pdf->share_image( $img_path ); // static per-template image (e.g. signature); photos differ per student
 						}
 						$pdf->Image( $img_path, $position['x'], $position['y'], floatval( $position['width'] ), is_numeric( $position['height'] ?? '' ) ? floatval( $position['height'] ) : 0 );
 					} catch ( Exception $e ) {
-						cg_debug_log( "Error adding image field {$field}: " . $e->getMessage() );
+						certificate_generator_debug_log( "Error adding image field {$field}: " . $e->getMessage() );
 					}
 				}
 				// No photo uploaded for this student — skip silently, don't error the whole certificate.
@@ -2119,12 +2119,12 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 			}
 
 			if ( ! isset( $post_data[ $field ] ) ) {
-				cg_debug_log( "Field $field exists in positions but not in post data" );
+				certificate_generator_debug_log( "Field $field exists in positions but not in post data" );
 				continue;
 			}
 
 			if ( empty( $post_data[ $field ] ) || ! is_numeric( $position['x'] ) || ! is_numeric( $position['y'] ) ) {
-				cg_debug_log( "Invalid data or position for $field: X={$position['x']}, Y={$position['y']}, Data=" . ( empty( $post_data[ $field ] ) ? 'empty' : 'present' ) );
+				certificate_generator_debug_log( "Invalid data or position for $field: X={$position['x']}, Y={$position['y']}, Data=" . ( empty( $post_data[ $field ] ) ? 'empty' : 'present' ) );
 				continue;
 			}
 
@@ -2134,18 +2134,18 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 			// **Shrink long text to fit, then measure**
 			$field_width = floatval( $position['width'] );
-			$fit_size    = cg_fit_font_size( $pdf, (float) $font_size, $text, $field_width );
+			$fit_size    = certificate_generator_fit_font_size( $pdf, (float) $font_size, $text, $field_width );
 			$text_width  = $pdf->GetStringWidth( $text );
 
 			// **Calculate proper line height based on font size**
 			$line_height = $fit_size * 0.5; // Tighter line spacing for better appearance
 
-			cg_debug_log( "Processing field {$field}: text_width={$text_width}, field_width={$field_width}, alignment={$position['align']}" );
+			certificate_generator_debug_log( "Processing field {$field}: text_width={$text_width}, field_width={$field_width}, alignment={$position['align']}" );
 
 			// **Determine if text needs wrapping**
 			if ( $text_width > $field_width ) {
 				// **Multi-line text with word wrapping**
-				$lines = cg_wrap_text( $pdf, $text, $field_width );
+				$lines = certificate_generator_wrap_text( $pdf, $text, $field_width );
 
 				// Calculate total text block height
 				$total_text_height = count( $lines ) * $line_height;
@@ -2159,7 +2159,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 					$line_width = $pdf->GetStringWidth( $line_text );
 
 					// Calculate X position based on alignment
-					$adjusted_x = cg_calculate_x_position( $position['x'], $line_width, $field_width, $position['align'] );
+					$adjusted_x = certificate_generator_calculate_x_position( $position['x'], $line_width, $field_width, $position['align'] );
 					$adjusted_y = $start_y + ( $i * $line_height );
 
 					// Output the text
@@ -2169,7 +2169,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 				// **Single line text**
 
 				// Calculate X position based on alignment
-				$adjusted_x = cg_calculate_x_position( $position['x'], $text_width, $field_width, $position['align'] );
+				$adjusted_x = certificate_generator_calculate_x_position( $position['x'], $text_width, $field_width, $position['align'] );
 
 				// Output the text
 				$pdf->Text( $adjusted_x, $position['y'], $text );
@@ -2178,8 +2178,8 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 		// ── QR Code & Serial Number Integration ──────────────────────────
 		$qr_generator = null;
-		if ( class_exists( 'CG_QR_Code_Generator' ) ) {
-			$qr_generator = CG_QR_Code_Generator::get_instance();
+		if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
+			$qr_generator = CertificateGenerator_QR_Code_Generator::get_instance();
 		}
 
 		$serial_gen       = null;
@@ -2193,10 +2193,10 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 		// Reuse existing serial for the same student + certificate type
 		if ( empty( $serial_number ) && $name_for_lookup && $certificate_type ) {
-			$serial_number = cg_find_existing_serial( $name_for_lookup, $certificate_type, (string) $issue_date_iso );
+			$serial_number = certificate_generator_find_existing_serial( $name_for_lookup, $certificate_type, (string) $issue_date_iso );
 		}
-		if ( empty( $serial_number ) && class_exists( 'CG_Serial_Number_Generator' ) ) {
-			$serial_gen = CG_Serial_Number_Generator::get_instance();
+		if ( empty( $serial_number ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
+			$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
 			// Store the serial on this exact entity row (by id when it came from the SQL table).
 			$serial_src              = $use_table_data ? $student_data : $post_data;
 			$student_data_for_serial = array(
@@ -2276,7 +2276,7 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 
 		// Persist to certificate_generator table for verification, serial
 		// sequencing, and analytics counting (even without a serial yet).
-		if ( function_exists( 'cg_insert_certificate_record' ) ) {
+		if ( function_exists( 'certificate_generator_insert_certificate_record' ) ) {
 			$record_data = array(
 				'student_name'     => $post_data['student_name'] ?? get_post_meta( $post_id, 'student_name', true ),
 				'teacher_name'     => $post_data['teacher_name'] ?? get_post_meta( $post_id, 'teacher_name', true ),
@@ -2287,32 +2287,32 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 				'recipient_type'   => $post_data['recipient_type'] ?? ( $detached_entity ?: get_post_type( $post_id ) ),
 				'template_id'      => $certificate_template->id ?? null,
 			);
-			cg_insert_certificate_record( $record_data, $serial_number );
+			certificate_generator_insert_certificate_record( $record_data, $serial_number );
 		}
 
 		// Output PDF into dedicated cg_certificates folder.
 		$upload_dir  = wp_upload_dir();
-		$upload_path = cg_certificates_dir();
+		$upload_path = certificate_generator_certificates_dir();
 
-		$pdf_path = $upload_path . DIRECTORY_SEPARATOR . cg_certificate_file_stem( $pdf_key ) . '.pdf';
+		$pdf_path = $upload_path . DIRECTORY_SEPARATOR . certificate_generator_certificate_file_stem( $pdf_key ) . '.pdf';
 		// The old guessable name (before 7.5.3): remove it now that this certificate has a private one.
 		if ( file_exists( $upload_path . DIRECTORY_SEPARATOR . "certificate_$pdf_key.pdf" ) ) {
 			wp_delete_file( $upload_path . DIRECTORY_SEPARATOR . "certificate_$pdf_key.pdf" );
 		}
 		$pdf_path = wp_normalize_path( $pdf_path );
 
-		cg_debug_log( "PDF file path: $pdf_path" );
+		certificate_generator_debug_log( "PDF file path: $pdf_path" );
 
 		// Check if directory is writable
 		if ( ! wp_is_writable( $upload_path ) ) {
-			cg_debug_log( 'Certificate Generator: Upload directory is not writable: ' . $upload_path );
+			certificate_generator_debug_log( 'Certificate Generator: Upload directory is not writable: ' . $upload_path );
 			return false;
 		}
 
 		// Stamp the cache key (computed now when a serial was just issued).
-		if ( $use_table_data && ! empty( $serial_number ) && cg_pdf_cache_enabled() ) {
+		if ( $use_table_data && ! empty( $serial_number ) && certificate_generator_pdf_cache_enabled() ) {
 			if ( '' === $cache_key ) {
-				$cache_key = cg_pdf_cache_key( $pdf_key, $tmpl_meta, $template_url, $field_positions, $post_data, (string) $serial_number );
+				$cache_key = certificate_generator_pdf_cache_key( $pdf_key, $tmpl_meta, $template_url, $field_positions, $post_data, (string) $serial_number );
 			}
 			$pdf->SetKeywords( 'cgk:' . $cache_key );
 		}
@@ -2333,24 +2333,24 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 		} catch ( Exception $e ) {
 			wp_delete_file( $tmp_path );
 			$error_msg = "PDF generation failed for post ID $post_id: " . $e->getMessage();
-			cg_debug_log( 'Certificate Generator: ' . $error_msg );
-			cg_debug_log( 'Template URL: ' . $template_url );
-			cg_debug_log( 'PDF Path: ' . $pdf_path );
-			cg_debug_log( 'Field Positions: ' . wp_json_encode( $field_positions ) );
-			cg_debug_log( 'Post Data: ' . wp_json_encode( $post_data ) );
+			certificate_generator_debug_log( 'Certificate Generator: ' . $error_msg );
+			certificate_generator_debug_log( 'Template URL: ' . $template_url );
+			certificate_generator_debug_log( 'PDF Path: ' . $pdf_path );
+			certificate_generator_debug_log( 'Field Positions: ' . wp_json_encode( $field_positions ) );
+			certificate_generator_debug_log( 'Post Data: ' . wp_json_encode( $post_data ) );
 			return false;
 		}
 
 		// Check if file was created successfully
 		if ( ! file_exists( $pdf_path ) ) {
 			$error_msg = "PDF file not created at: $pdf_path";
-			cg_debug_log( 'Certificate Generator: ' . $error_msg );
-			cg_debug_log( 'Free disk space: ' . disk_free_space( $upload_path ) . ' bytes' );
+			certificate_generator_debug_log( 'Certificate Generator: ' . $error_msg );
+			certificate_generator_debug_log( 'Free disk space: ' . disk_free_space( $upload_path ) . ' bytes' );
 			return false;
 		}
 
-		$file_url = cg_certificates_url() . '/' . cg_certificate_file_stem( $pdf_key ) . '.pdf';
-		cg_debug_log( "PDF generated successfully. URL: $file_url" );
+		$file_url = certificate_generator_certificates_url() . '/' . certificate_generator_certificate_file_stem( $pdf_key ) . '.pdf';
+		certificate_generator_debug_log( "PDF generated successfully. URL: $file_url" );
 
 		// Store the actual file path in a post meta for easier retrieval
 		update_post_meta( $post_id, 'certificate_file_path', $pdf_path );
@@ -2400,16 +2400,16 @@ function _cg_generate_pdf_impl( $post_id, $fields, $student_data = null ) {
 		}
 
 		// Third argument: true only when this render issued a new serial ($serial_gen is set only when generate() ran).
-		do_action( 'cg_certificate_generated', $post_id, $pdf_path, null !== $serial_gen );
+		do_action( 'certificate_generator_certificate_generated', $post_id, $pdf_path, null !== $serial_gen );
 
 		return $file_url;
 	} catch ( Exception $e ) {
-		cg_debug_log( 'Exception during PDF generation: ' . $e->getMessage() );
+		certificate_generator_debug_log( 'Exception during PDF generation: ' . $e->getMessage() );
 		return false;
 	}
 }
 
-// ── Public shim for generate_certificate_pdf ─────────────────────────────────
+// ── Public shim for certificate_generator_generate_certificate_pdf ─────────────────────────────────
 // When CG_USE_NEW_PDF=true, legacy-shims.php defines this function and routes
 // it through PdfGenerator::make(). When the flag is off (default), this wrapper
 // is used so all ~11 call sites continue to work unchanged.
@@ -2418,15 +2418,15 @@ if ( ! class_exists( '\CertificateGenerator\Core\Config' )
 	/**
 	 * @deprecated v8 Use \CertificateGenerator\Services\PdfGenerator::make() instead.
 	 */
-	function generate_certificate_pdf( $post_id, $fields = array(), $student_data = null ) {
-		return _cg_generate_pdf_impl( $post_id, $fields, $student_data );
+	function certificate_generator_generate_certificate_pdf( $post_id, $fields = array(), $student_data = null ) {
+		return certificate_generator_generate_pdf_impl( $post_id, $fields, $student_data );
 	}
 }
 
 /**
  * Generate certificate PDF for email purposes
  *
- * This function wraps generate_certificate_pdf and returns both the file path and URL
+ * This function wraps certificate_generator_generate_certificate_pdf and returns both the file path and URL
  * to make it compatible with the email system in email-functions.php
  *
  * @param int        $post_id The post ID of the student, teacher, or school
@@ -2434,13 +2434,13 @@ if ( ! class_exists( '\CertificateGenerator\Core\Config' )
  * @param array|null $email_options Optional email options
  * @return array|bool Array containing 'path' and 'url' of the generated PDF, or false on failure
  */
-function generate_certificate_pdf_email( $post_id, $fields, $email_options = null ) {
+function certificate_generator_generate_certificate_pdf_email( $post_id, $fields, $email_options = null ) {
 	// Resolve fields when caller didn't supply them.
 	if ( empty( $fields ) ) {
 		$post_type = get_post_type( $post_id );
 		$cert_type = get_post_meta( $post_id, 'certificate_type', true );
-		if ( class_exists( 'CG_Field_Schema' ) && $cert_type ) {
-			$fields = CG_Field_Schema::get_all_renderable_fields( $cert_type );
+		if ( class_exists( 'CertificateGenerator_Field_Schema' ) && $cert_type ) {
+			$fields = CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type );
 		} else {
 			switch ( $post_type ) {
 				case 'teachers':
@@ -2455,17 +2455,17 @@ function generate_certificate_pdf_email( $post_id, $fields, $email_options = nul
 		}
 	}
 
-	// generate_certificate_pdf() does SQL-first data lookup, writes postmeta, returns URL.
-	$certificate_url = generate_certificate_pdf( $post_id, $fields );
+	// certificate_generator_generate_certificate_pdf() does SQL-first data lookup, writes postmeta, returns URL.
+	$certificate_url = certificate_generator_generate_certificate_pdf( $post_id, $fields );
 	if ( ! $certificate_url ) {
-		cg_debug_log( "Certificate Generator: PDF generation failed for post ID: {$post_id}" );
+		certificate_generator_debug_log( "Certificate Generator: PDF generation failed for post ID: {$post_id}" );
 		return false;
 	}
 
-	// Path was written to postmeta by generate_certificate_pdf — read it back.
+	// Path was written to postmeta by certificate_generator_generate_certificate_pdf — read it back.
 	$certificate_path = wp_normalize_path( (string) get_post_meta( $post_id, 'certificate_file_path', true ) );
 	if ( empty( $certificate_path ) || ! file_exists( $certificate_path ) ) {
-		cg_debug_log( "Certificate Generator: PDF file missing after generation for post ID: {$post_id}" );
+		certificate_generator_debug_log( "Certificate Generator: PDF file missing after generation for post ID: {$post_id}" );
 		return false;
 	}
 
@@ -2476,8 +2476,8 @@ function generate_certificate_pdf_email( $post_id, $fields, $email_options = nul
 }
 
 // Shortcode to search for teacher certificates
-add_shortcode( 'teacher_search', 'teacher_search_shortcode' );
-function teacher_search_shortcode( $atts = array() ) {
+add_shortcode( 'certificate_generator_teacher_search', 'certificate_generator_teacher_search_shortcode' );
+function certificate_generator_teacher_search_shortcode( $atts = array() ) {
 	$atts = shortcode_atts(
 		array(
 			'title'       => '',
@@ -2486,7 +2486,7 @@ function teacher_search_shortcode( $atts = array() ) {
 			'help_text'   => '',
 		),
 		$atts,
-		'teacher_search'
+		'certificate_generator_teacher_search'
 	);
 	if ( isset( $_GET['teacher_email'] ) ) {
 		$email = sanitize_email( wp_unslash( $_GET['teacher_email'] ) );
@@ -2550,12 +2550,12 @@ function teacher_search_shortcode( $atts = array() ) {
 			$school_name      = $_t_row['school_name'] ?? '';
 			$certificate_type = $_t_row['certificate_type'] ?? '';
 			$issue_date       = $_t_row['issue_date'] ?? '';
-			$template_url     = '';  // resolved below by generate_certificate_pdf / cg_resolve_student_template
+			$template_url     = '';  // resolved below by certificate_generator_generate_certificate_pdf / certificate_generator_resolve_student_template
 			if ( true ) { // scope wrapper — matches old while($query->have_posts()) body below
 
 				// ── Double-match pre-check: certificate_type + issue_date → event_date ──
-				if ( ! cg_resolve_entity_template( $_t_row, $post_id ) ) {
-					cg_debug_log(
+				if ( ! certificate_generator_resolve_entity_template( $_t_row, $post_id ) ) {
+					certificate_generator_debug_log(
 						'Certificate Generator: No matching template for teacher post ' . $post_id
 						. ' (type="' . $certificate_type . '", issue_date="' . $issue_date . '")'
 					);
@@ -2573,7 +2573,7 @@ function teacher_search_shortcode( $atts = array() ) {
 				}
 
 				$fields   = array( 'teacher_name', 'school_name', 'issue_date' );
-				$file_url = generate_certificate_pdf( $post_id, $fields, $_t_row );
+				$file_url = certificate_generator_generate_certificate_pdf( $post_id, $fields, $_t_row );
 
 				if ( $file_url ) {
 					$certificates_data[] = array(
@@ -2739,8 +2739,8 @@ function teacher_search_shortcode( $atts = array() ) {
 			$output .= '<li style="margin-bottom: 0;">' . __( 'Certificate Type', 'certificate-generator' ) . '</li>';
 			$output .= '</ul></div>';
 
-			$output .= '<div style="background: linear-gradient(to right, rgba(' . hex2rgb_str( $btn_start ) . ', 0.05), ' .
-				'rgba(' . hex2rgb_str( $btn_end ) . ', 0.05)); border-radius: ' . $border_radius . 'px; ' .
+			$output .= '<div style="background: linear-gradient(to right, rgba(' . certificate_generator_hex2rgb_str( $btn_start ) . ', 0.05), ' .
+				'rgba(' . certificate_generator_hex2rgb_str( $btn_end ) . ', 0.05)); border-radius: ' . $border_radius . 'px; ' .
 				'padding: 25px; margin: 25px 0; border-left: 4px solid ' . $btn_start . ';">';
 			$output .= '<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">' .
 				'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" ' .
@@ -2793,7 +2793,7 @@ function teacher_search_shortcode( $atts = array() ) {
 		// Trigger background processing for certificates that failed direct generation
 		if ( ! empty( $certificates_to_generate_bg ) ) {
 			// Ensure the action name matches the one hooked in your plugin
-			wp_schedule_single_event( time(), 'generate_certificates_background_teachers', array( $certificates_to_generate_bg ) );
+			wp_schedule_single_event( time(), 'certificate_generator_generate_certificates_background_teachers', array( $certificates_to_generate_bg ) );
 		}
 
 		// If any certificates had errors, show the error message
@@ -2846,9 +2846,9 @@ function teacher_search_shortcode( $atts = array() ) {
 		// Heading with icon
 		$output .= '<div style="text-align: center; margin-bottom: 30px;">' .
 			'<h2 style="color: ' . $title_color . '; margin: 0; font-size: 28px; font-weight: 700;">' .
-			cg_get_shortcode_text( 'teacher_title', $atts['title'], __( 'Teacher Certificate Lookup', 'certificate-generator' ) ) . '</h2>' .
+			certificate_generator_get_shortcode_text( 'teacher_title', $atts['title'], __( 'Teacher Certificate Lookup', 'certificate-generator' ) ) . '</h2>' .
 			'<p style="color: ' . $text_color . '; margin-top: 10px; font-size: 16px;">' .
-			cg_get_shortcode_text( 'teacher_subtitle', $atts['subtitle'], __( 'Enter teacher email to find their certificates', 'certificate-generator' ) ) . '</p>' .
+			certificate_generator_get_shortcode_text( 'teacher_subtitle', $atts['subtitle'], __( 'Enter teacher email to find their certificates', 'certificate-generator' ) ) . '</p>' .
 			'</div>';
 
 		// Input field with floating label effect
@@ -2887,14 +2887,14 @@ function teacher_search_shortcode( $atts = array() ) {
 			'stroke-linejoin="round" style="margin-right: 8px;">' .
 			'<circle cx="11" cy="11" r="8"></circle>' .
 			'<line x1="21" y1="21" x2="16.65" y2="16.65"></line>' .
-			'</svg>' . cg_get_shortcode_text( 'teacher_button', $atts['button_text'], __( 'Search Certificates', 'certificate-generator' ) ) . '</button>';
+			'</svg>' . certificate_generator_get_shortcode_text( 'teacher_button', $atts['button_text'], __( 'Search Certificates', 'certificate-generator' ) ) . '</button>';
 
 		$output .= '</form>';
 
 		// Add help text
 		$output .= '<div style="text-align: center; margin-top: 20px; padding: 0 15px;">';
 		$output .= '<p style="color: ' . $text_color . '; font-size: 14px;">' .
-			cg_get_shortcode_text( 'teacher_help', $atts['help_text'], __( 'Enter the email address of the teacher to find their certificates.', 'certificate-generator' ) ) .
+			certificate_generator_get_shortcode_text( 'teacher_help', $atts['help_text'], __( 'Enter the email address of the teacher to find their certificates.', 'certificate-generator' ) ) .
 			'</p>';
 		$output .= '</div>';
 
@@ -2904,8 +2904,8 @@ function teacher_search_shortcode( $atts = array() ) {
 }
 
 // Shortcode to search for school certificates
-add_shortcode( 'school_search', 'school_search_shortcode' );
-function school_search_shortcode( $atts = array() ) {
+add_shortcode( 'certificate_generator_school_search', 'certificate_generator_school_search_shortcode' );
+function certificate_generator_school_search_shortcode( $atts = array() ) {
 	$atts = shortcode_atts(
 		array(
 			'title'       => '',
@@ -2914,7 +2914,7 @@ function school_search_shortcode( $atts = array() ) {
 			'help_text'   => '',
 		),
 		$atts,
-		'school_search'
+		'certificate_generator_school_search'
 	);
 	// Check if input parameters are provided
 	if ( isset( $_GET['school_name'] ) && isset( $_GET['place'] ) ) {
@@ -3010,8 +3010,8 @@ function school_search_shortcode( $atts = array() ) {
 				$fields         = array( 'school_name', 'place', 'issue_date' );
 
 				// ── Double-match pre-check: certificate_type + issue_date → event_date ──
-				if ( ! cg_resolve_entity_template( $_sc_row, $post_id ) ) {
-					cg_debug_log(
+				if ( ! certificate_generator_resolve_entity_template( $_sc_row, $post_id ) ) {
+					certificate_generator_debug_log(
 						'Certificate Generator: No matching template for school post ' . $post_id
 						. ' (type="' . $current_cert_type . '", issue_date="' . $current_issue_date . '")'
 					);
@@ -3024,7 +3024,7 @@ function school_search_shortcode( $atts = array() ) {
 				}
 
 				// Try to generate PDF directly
-				$pdf_result = generate_certificate_pdf( $post_id, $fields, $_sc_row );
+				$pdf_result = certificate_generator_generate_certificate_pdf( $post_id, $fields, $_sc_row );
 
 				if ( is_wp_error( $pdf_result ) ) {
 					++$error_count;
@@ -3036,7 +3036,7 @@ function school_search_shortcode( $atts = array() ) {
 					// Log detailed error for direct generation failure
 					$timestamp   = gmdate( 'Y-m-d H:i:s' );
 					$log_message = "[$timestamp] Direct generation error for school certificate (Post ID: $post_id): {$pdf_result->get_error_message()}\n";
-					cg_debug_log( $log_message );
+					certificate_generator_debug_log( $log_message );
 				} elseif ( $pdf_result && ! empty( $pdf_result ) ) {
 					// Sanitize file names for ZIP with improved uniqueness
 					$s_name_sanitized    = sanitize_file_name( $current_school_name );
@@ -3045,7 +3045,7 @@ function school_search_shortcode( $atts = array() ) {
 					$timestamp           = current_time( 'timestamp' );
 
 					$unique_id       = $post_id . '-' . substr( md5( $s_name_sanitized . $place_sanitized . $timestamp ), 0, 8 );
-					$unique_filename = cg_certificate_pdf_filename( $current_school_name, $current_cert_type, $unique_id );
+					$unique_filename = certificate_generator_certificate_pdf_filename( $current_school_name, $current_cert_type, $unique_id );
 
 					// Convert URL to file path
 					$upload_dir = wp_upload_dir();
@@ -3250,8 +3250,8 @@ function school_search_shortcode( $atts = array() ) {
 			foreach ( $certificates_to_generate_bg as $cert_job ) {
 				// Ensure post_id and fields are set before scheduling
 				if ( isset( $cert_job['post_id'], $cert_job['fields'] ) ) {
-					if ( ! wp_next_scheduled( 'process_single_certificate_hook_school', array( $cert_job['post_id'], $cert_job['fields'], 'schools' ) ) ) {
-						wp_schedule_single_event( time() + 10, 'process_single_certificate_hook_school', array( $cert_job['post_id'], $cert_job['fields'], 'schools' ) );
+					if ( ! wp_next_scheduled( 'certificate_generator_process_single_certificate_hook_school', array( $cert_job['post_id'], $cert_job['fields'], 'schools' ) ) ) {
+						wp_schedule_single_event( time() + 10, 'certificate_generator_process_single_certificate_hook_school', array( $cert_job['post_id'], $cert_job['fields'], 'schools' ) );
 					}
 				}
 			}
@@ -3290,9 +3290,9 @@ function school_search_shortcode( $atts = array() ) {
 		// Heading with icon
 		$output .= '<div style="text-align: center; margin-bottom: 30px;">' .
 		'<h2 style="color: ' . esc_attr( $title_color ) . '; margin: 0; font-size: 28px; font-weight: 700;">' .
-		cg_get_shortcode_text( 'school_title', $atts['title'], __( 'School Certificate Lookup', 'certificate-generator' ) ) . '</h2>' .
+		certificate_generator_get_shortcode_text( 'school_title', $atts['title'], __( 'School Certificate Lookup', 'certificate-generator' ) ) . '</h2>' .
 		'<p style="color: ' . esc_attr( $text_color ) . '; margin-top: 10px; font-size: 16px;">' .
-		cg_get_shortcode_text( 'school_subtitle', $atts['subtitle'], __( 'Enter school name and place to find certificates', 'certificate-generator' ) ) . '</p>' .
+		certificate_generator_get_shortcode_text( 'school_subtitle', $atts['subtitle'], __( 'Enter school name and place to find certificates', 'certificate-generator' ) ) . '</p>' .
 		'</div>';
 
 		// Input field for School Name
@@ -3352,14 +3352,14 @@ function school_search_shortcode( $atts = array() ) {
 		'stroke-linejoin="round" style="margin-right: 8px;">' .
 		'<circle cx="11" cy="11" r="8"></circle>' .
 		'<line x1="21" y1="21" x2="16.65" y2="16.65"></line>' .
-		'</svg>' . cg_get_shortcode_text( 'school_button', $atts['button_text'], __( 'Search Certificates', 'certificate-generator' ) ) . '</button>';
+		'</svg>' . certificate_generator_get_shortcode_text( 'school_button', $atts['button_text'], __( 'Search Certificates', 'certificate-generator' ) ) . '</button>';
 
 		$output .= '</form>';
 
 		// Add help text
 		$output .= '<div style="text-align: center; margin-top: 20px; padding: 0 15px;">';
 		$output .= '<p style="color: ' . esc_attr( $text_color ) . '; font-size: 14px;">' .
-		cg_get_shortcode_text( 'school_help', $atts['help_text'], __( 'Enter the school name and place to locate the certificates.', 'certificate-generator' ) ) .
+		certificate_generator_get_shortcode_text( 'school_help', $atts['help_text'], __( 'Enter the school name and place to locate the certificates.', 'certificate-generator' ) ) .
 		'</p>';
 		$output .= '</div>';
 
@@ -3368,7 +3368,7 @@ function school_search_shortcode( $atts = array() ) {
 
 	// Trigger background processing for certificates
 	if ( ! empty( $certificates_to_generate ) ) {
-		wp_schedule_single_event( time(), 'generate_certificates_background', array( $certificates_to_generate ) );
+		wp_schedule_single_event( time(), 'certificate_generator_generate_certificates_background', array( $certificates_to_generate ) );
 	}
 
 	return $output;
@@ -3376,12 +3376,12 @@ function school_search_shortcode( $atts = array() ) {
 
 /**
  * Certificates for every students-table row with this email. PDFs come from the cache when
- * unchanged. Shared by [student_search] and its "Download All" ZIP endpoint.
+ * unchanged. Shared by [certificate_generator_student_search] and its "Download All" ZIP endpoint.
  *
  * @return array{found: int, certificates: array[], no_template: array[]} found = matching rows,
  *         published template or not; no_template = rows still waiting for a published template.
  */
-function cg_student_certificates_for_email( string $email ): array {
+function certificate_generator_student_certificates_for_email( string $email ): array {
 	global $wpdb;
 
 	$rows = array();
@@ -3394,7 +3394,7 @@ function cg_student_certificates_for_email( string $email ): array {
 			);
 		}
 	}
-	cg_debug_log( 'Student search: ' . count( $rows ) . ' row(s) for the searched email' );
+	certificate_generator_debug_log( 'Student search: ' . count( $rows ) . ' row(s) for the searched email' );
 
 	$certificates = array();
 	$no_template  = array();
@@ -3417,22 +3417,22 @@ function cg_student_certificates_for_email( string $email ): array {
 
 		// No published template for this type + event date (e.g. still scheduled) — skip;
 		// the pending/scheduled screen explains it to the student.
-		if ( ! cg_select_certificate_template( $certificate_type, $issue_date_iso, false ) ) {
+		if ( ! certificate_generator_select_certificate_template( $certificate_type, $issue_date_iso, false ) ) {
 			$no_template[] = array(
 				'name'             => $student_name,
 				'certificate_type' => $certificate_type,
 				'issue_date'       => $issue_date,
 			);
-			cg_debug_log( 'Certificate Generator: No matching template for student row ' . (int) ( $student['id'] ?? 0 ) . ' (type="' . $certificate_type . '", issue_date="' . $issue_date . '")' );
+			certificate_generator_debug_log( 'Certificate Generator: No matching template for student row ' . (int) ( $student['id'] ?? 0 ) . ' (type="' . $certificate_type . '", issue_date="' . $issue_date . '")' );
 			continue;
 		}
 
-		$fields = class_exists( 'CG_Field_Schema' )
-			? CG_Field_Schema::get_all_renderable_fields( $certificate_type )
+		$fields = class_exists( 'CertificateGenerator_Field_Schema' )
+			? CertificateGenerator_Field_Schema::get_all_renderable_fields( $certificate_type )
 			: array( 'student_name', 'school_name', 'issue_date' );
 
-		// Use generate_certificate_pdf with student data from SQL table
-		$file_url = generate_certificate_pdf( $post_id, $fields, $student );
+		// Use certificate_generator_generate_certificate_pdf with student data from SQL table
+		$file_url = certificate_generator_generate_certificate_pdf( $post_id, $fields, $student );
 
 		if ( $file_url ) {
 			$s_name  = sanitize_file_name( $student_name );
@@ -3444,7 +3444,7 @@ function cg_student_certificates_for_email( string $email ): array {
 			$certificates[] = array(
 				'url'              => $file_url,
 				'path'             => str_replace( $upload_dir['baseurl'], $upload_dir['basedir'], $file_url ),
-				'filename'         => cg_certificate_pdf_filename( $student_name, $certificate_type, $unique_id ),
+				'filename'         => certificate_generator_certificate_pdf_filename( $student_name, $certificate_type, $unique_id ),
 				'post_id'          => $post_id,
 				'student_name'     => $s_name,
 				'school_name'      => $sc_name,
@@ -3464,8 +3464,8 @@ function cg_student_certificates_for_email( string $email ): array {
 /**
  * Build (or reuse) the "Download All" ZIP for an email. False when there is nothing to zip.
  */
-function cg_student_zip_for_email( string $email ) {
-	$certificates = cg_student_certificates_for_email( $email )['certificates'];
+function certificate_generator_student_zip_for_email( string $email ) {
+	$certificates = certificate_generator_student_certificates_for_email( $email )['certificates'];
 	if ( empty( $certificates ) || ! function_exists( 'certificate_generator_create_zip_for_email' ) ) {
 		return false;
 	}
@@ -3473,27 +3473,27 @@ function cg_student_zip_for_email( string $email ) {
 }
 
 /**
- * "Download All Certificates (ZIP)" from [student_search]. The ZIP is built when clicked,
+ * "Download All Certificates (ZIP)" from [certificate_generator_student_search]. The ZIP is built when clicked,
  * not on every page view. Same trust model as the page: the email is the lookup key, and
  * everything is re-derived from it here — no path or file name comes from the request.
  * Served from admin-ajax.php: hide-login plugins 404 the rest of /wp-admin/ (admin-post.php
  * included) for visitors, but keep admin-ajax.php open.
  */
-add_action( 'wp_ajax_cg_student_zip', 'cg_handle_student_zip_download' );
-add_action( 'wp_ajax_nopriv_cg_student_zip', 'cg_handle_student_zip_download' );
-function cg_handle_student_zip_download(): void {
-	if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'cg_student_zip' ) ) {
+add_action( 'wp_ajax_certificate_generator_student_zip', 'certificate_generator_handle_student_zip_download' );
+add_action( 'wp_ajax_nopriv_certificate_generator_student_zip', 'certificate_generator_handle_student_zip_download' );
+function certificate_generator_handle_student_zip_download(): void {
+	if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'certificate_generator_student_zip' ) ) {
 		wp_die( esc_html__( 'This download link has expired. Please search for your certificates again.', 'certificate-generator' ), '', array( 'response' => 403 ) );
 	}
 
-	$limit = (int) apply_filters( 'cg_student_zip_rate_limit', 5 );
+	$limit = (int) apply_filters( 'certificate_generator_student_zip_rate_limit', 5 );
 	if ( class_exists( 'CertificateGenerator_SecurityHelper' )
 		&& ! CertificateGenerator_SecurityHelper::check_rate_limit( 'student_zip', $limit, MINUTE_IN_SECONDS )
 	) {
 		wp_die( esc_html__( 'Too many downloads. Please wait a minute and try again.', 'certificate-generator' ), '', array( 'response' => 429 ) );
 	}
 
-	$zip = cg_student_zip_for_email( sanitize_email( wp_unslash( $_GET['student_email'] ?? '' ) ) );
+	$zip = certificate_generator_student_zip_for_email( sanitize_email( wp_unslash( $_GET['student_email'] ?? '' ) ) );
 	if ( ! $zip || empty( $zip['zip_url'] ) ) {
 		wp_die( esc_html__( 'No certificates were found for this email.', 'certificate-generator' ), '', array( 'response' => 404 ) );
 	}
@@ -3503,8 +3503,8 @@ function cg_handle_student_zip_download(): void {
 }
 
 // Shortcode to search for student certificates
-add_shortcode( 'student_search', 'scs_student_search_shortcode' );
-function scs_student_search_shortcode( $atts = array() ) {
+add_shortcode( 'certificate_generator_student_search', 'certificate_generator_student_search_shortcode' );
+function certificate_generator_student_search_shortcode( $atts = array() ) {
 	$atts = shortcode_atts(
 		array(
 			'title'       => '',
@@ -3513,11 +3513,11 @@ function scs_student_search_shortcode( $atts = array() ) {
 			'help_text'   => '',
 		),
 		$atts,
-		'student_search'
+		'certificate_generator_student_search'
 	);
 	if ( isset( $_GET['student_email'] ) ) {
 		$email  = sanitize_email( wp_unslash( $_GET['student_email'] ) );
-		$result = cg_student_certificates_for_email( $email );
+		$result = certificate_generator_student_certificates_for_email( $email );
 
 		// SQL is the primary source. CPT fallback removed.
 		$total_certificates = $result['found'];
@@ -3528,26 +3528,26 @@ function scs_student_search_shortcode( $atts = array() ) {
 
 			// If no PDFs generated but student exists, check for pending/scheduled template.
 			if ( empty( $certificates ) ) {
-				$pending = cg_get_pending_certificate_info( $email );
+				$pending = certificate_generator_get_pending_certificate_info( $email );
 				if ( $pending ) {
-					$output = cg_render_pending_certificate_screen( $pending );
+					$output = certificate_generator_render_pending_certificate_screen( $pending );
 					wp_reset_postdata();
 					return $output;
 				}
 			}
 
-			// "Download All" builds the ZIP when clicked (cg_handle_student_zip_download), not on every page view.
+			// "Download All" builds the ZIP when clicked (certificate_generator_handle_student_zip_download), not on every page view.
 			$bulk_download_link = '';
 			if ( count( $certificates ) > 3 ) {
 				$zip_link           = wp_nonce_url(
 					add_query_arg(
 						array(
-							'action'        => 'cg_student_zip',
+							'action'        => 'certificate_generator_student_zip',
 							'student_email' => rawurlencode( $email ),
 						),
 						admin_url( 'admin-ajax.php' )
 					),
-					'cg_student_zip'
+					'certificate_generator_student_zip'
 				);
 				$bulk_download_link = '<a href="' . esc_url( $zip_link ) . '" class="bulk-download-button" style="display: inline-block; margin-top: 15px; padding: 10px 20px; background: linear-gradient(to right, #3498db, #2980b9); color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Download All Certificates (ZIP)</a>';
 			}
@@ -3762,8 +3762,8 @@ function scs_student_search_shortcode( $atts = array() ) {
             </div>';
 
 			// Support section
-			$output .= '<div style="background: linear-gradient(to right, rgba(' . hex2rgb_str( $btn_start ) . ', 0.05), ' .
-				'rgba(' . hex2rgb_str( $btn_end ) . ', 0.05)); border-radius: ' . $border_radius . 'px; ' .
+			$output .= '<div style="background: linear-gradient(to right, rgba(' . certificate_generator_hex2rgb_str( $btn_start ) . ', 0.05), ' .
+				'rgba(' . certificate_generator_hex2rgb_str( $btn_end ) . ', 0.05)); border-radius: ' . $border_radius . 'px; ' .
 				'padding: 25px; margin: 25px 0; border-left: 4px solid ' . $btn_start . ';">';
 			$output .= '<div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">' .
 				'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" ' .
@@ -3820,7 +3820,7 @@ function scs_student_search_shortcode( $atts = array() ) {
 
 			// Use the existing hex2rgb function with default color if not set
 			$hex_color = isset( $hex_color ) ? $hex_color : '#000000';
-			$rgb       = hex2rgb_str( $hex_color );
+			$rgb       = certificate_generator_hex2rgb_str( $hex_color );
 		}
 
 		wp_reset_postdata();
@@ -3845,9 +3845,9 @@ function scs_student_search_shortcode( $atts = array() ) {
 		// Heading with icon
 		$output .= '<div style="text-align: center; margin-bottom: 30px;">' .
 			'<h2 style="color: ' . $title_color . '; margin: 0; font-size: 28px; font-weight: 700;">' .
-			cg_get_shortcode_text( 'student_title', $atts['title'], __( 'Certificate Lookup', 'certificate-generator' ) ) . '</h2>' .
+			certificate_generator_get_shortcode_text( 'student_title', $atts['title'], __( 'Certificate Lookup', 'certificate-generator' ) ) . '</h2>' .
 			'<p style="color: ' . $text_color . '; margin-top: 10px; font-size: 16px;">' .
-			cg_get_shortcode_text( 'student_subtitle', $atts['subtitle'], __( 'Enter your email to find your certificates', 'certificate-generator' ) ) . '</p>' .
+			certificate_generator_get_shortcode_text( 'student_subtitle', $atts['subtitle'], __( 'Enter your email to find your certificates', 'certificate-generator' ) ) . '</p>' .
 			'</div>';
 
 		// Input field with floating label effect
@@ -3886,14 +3886,14 @@ function scs_student_search_shortcode( $atts = array() ) {
 			'stroke-linejoin="round" style="margin-right: 8px;">' .
 			'<circle cx="11" cy="11" r="8"></circle>' .
 			'<line x1="21" y1="21" x2="16.65" y2="16.65"></line>' .
-			'</svg>' . cg_get_shortcode_text( 'student_button', $atts['button_text'], __( 'Search Certificates', 'certificate-generator' ) ) . '</button>';
+			'</svg>' . certificate_generator_get_shortcode_text( 'student_button', $atts['button_text'], __( 'Search Certificates', 'certificate-generator' ) ) . '</button>';
 
 		$output .= '</form>';
 
 		// Add help text
 		$output .= '<div style="text-align: center; margin-top: 20px; padding: 0 15px;">';
 		$output .= '<p style="color: ' . $text_color . '; font-size: 14px;">' .
-			cg_get_shortcode_text( 'student_help', $atts['help_text'], __( 'Enter the email address you used during registration to find your certificates.', 'certificate-generator' ) ) .
+			certificate_generator_get_shortcode_text( 'student_help', $atts['help_text'], __( 'Enter the email address you used during registration to find your certificates.', 'certificate-generator' ) ) .
 			'</p>';
 		$output .= '</div>';
 

@@ -45,7 +45,7 @@ class BulkGenerationPerformanceTest extends WP_UnitTestCase {
 		memory_reset_peak_usage();
 
 		ob_start();
-		bulk_import_students();
+		certificate_generator_bulk_import_students();
 		$output = ob_get_clean();
 
 		$elapsed = microtime( true ) - $start_time;

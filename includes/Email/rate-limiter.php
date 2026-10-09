@@ -87,7 +87,7 @@ function certificate_generator_can_send_email() {
  * @return int Number of unique emails sent
  */
 function certificate_generator_get_sent_count( $seconds = 3600 ) {
-	$cache_key = 'cg_sent_count_' . $seconds;
+	$cache_key = 'certificate_generator_sent_count_' . $seconds;
 	$cached    = get_transient( $cache_key );
 	if ( $cached !== false ) {
 		return (int) $cached;
@@ -234,8 +234,8 @@ function certificate_generator_estimate_send_time( $num_emails ) {
  */
 function certificate_generator_reset_rate_limits() {
 	// Clear transients used for rate limiting
-	delete_transient( 'cert_gen_rate_limit_hour' );
-	delete_transient( 'cert_gen_rate_limit_minute' );
+	delete_transient( 'certificate_generator_gen_rate_limit_hour' );
+	delete_transient( 'certificate_generator_gen_rate_limit_minute' );
 
 	return true;
 }
@@ -259,7 +259,7 @@ function certificate_generator_update_rate_limit_config( $config ) {
 	$result = update_option( 'certificate_generator_rate_limits', $updated );
 
 	if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-		cg_debug_log( 'Rate limit config updated: ' . wp_json_encode( $updated ) );
+		certificate_generator_debug_log( 'Rate limit config updated: ' . wp_json_encode( $updated ) );
 	}
 
 	return $result;

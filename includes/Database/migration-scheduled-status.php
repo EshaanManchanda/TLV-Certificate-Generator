@@ -5,10 +5,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Idempotent migration: add 'scheduled' to wp_cg_certificate_templates.status ENUM.
 // Runs once on plugins_loaded; skipped if the value already exists.
-add_action( 'plugins_loaded', 'cg_migrate_scheduled_status', 20 );
+add_action( 'plugins_loaded', 'certificate_generator_migrate_scheduled_status', 20 );
 
-function cg_migrate_scheduled_status() {
-	if ( get_option( 'cg_migration_scheduled_status_done' ) ) {
+function certificate_generator_migrate_scheduled_status() {
+	if ( get_option( 'certificate_generator_migration_scheduled_status_done' ) ) {
 		return;
 	}
 
@@ -29,7 +29,7 @@ function cg_migrate_scheduled_status() {
 
 	// Already has 'scheduled' in the ENUM — mark done and exit.
 	if ( strpos( $col->Type, "'scheduled'" ) !== false ) {
-		update_option( 'cg_migration_scheduled_status_done', true );
+		update_option( 'certificate_generator_migration_scheduled_status_done', true );
 		return;
 	}
 
@@ -38,5 +38,5 @@ function cg_migrate_scheduled_status() {
 		 MODIFY status ENUM('draft','scheduled','published','archived') DEFAULT 'draft'"
 	);
 
-	update_option( 'cg_migration_scheduled_status_done', true );
+	update_option( 'certificate_generator_migration_scheduled_status_done', true );
 }

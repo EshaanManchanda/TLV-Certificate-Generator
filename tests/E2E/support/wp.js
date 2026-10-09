@@ -182,7 +182,7 @@ function seedCertificate(c) {
 
 const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-const resetRateLimit = () => sql("DELETE FROM {p}options WHERE option_name LIKE '\\_transient\\_cg\\_rl\\_%' OR option_name LIKE '\\_transient\\_timeout\\_cg\\_rl\\_%'");
+const resetRateLimit = () => sql("DELETE FROM {p}options WHERE option_name LIKE '\\_transient\\_certificate\\_generator\\_rl\\_%' OR option_name LIKE '\\_transient\\_timeout\\_certificate\\_generator\\_rl\\_%'");
 
 /** Run a cron hook synchronously. */
 const runCron = (hook, args = []) => wpEval(`do_action_ref_array(${php(hook)}, ${php(args)}); echo 1;`, { allPlugins: true });
@@ -193,7 +193,7 @@ function ensurePage(title, content) {
 		$t = ${php(`E2E ${title}`)};
 		$p = get_page_by_title($t, OBJECT, 'page');
 		$id = $p ? $p->ID : wp_insert_post(['post_title' => $t, 'post_content' => ${php(content)}, 'post_status' => 'publish', 'post_type' => 'page']);
-		delete_transient('cg_verify_page_url');
+		delete_transient('certificate_generator_verify_page_url');
 		echo json_encode(get_permalink($id));`);
 }
 
@@ -216,7 +216,7 @@ function cleanupE2E() {
 		        'schools'  => $wpdb->get_col("SELECT id FROM {$p}cg_schools WHERE school_name LIKE $like OR email LIKE $mail OR import_source='e2e'")];
 		$dir = wp_upload_dir()['basedir'] . '/cg_certificates/';
 		foreach ($ids as $type => $list) foreach ($list as $id) {
-			// rows with no WP post (see _cg_generate_pdf_impl); names end in a hash suffix since 7.5.3
+			// rows with no WP post (see certificate_generator_generate_pdf_impl); names end in a hash suffix since 7.5.3
 			foreach (glob($dir . "certificate_{$type}_row_{$id}{,_*}.pdf", GLOB_BRACE) ?: [] as $f) @unlink($f);
 			if ($type === 'students') { foreach (glob($dir . "certificate_{$id}{,_*}.{pdf,png}", GLOB_BRACE) ?: [] as $f) @unlink($f); }
 		}
@@ -233,7 +233,7 @@ function cleanupE2E() {
 			if (strpos($pg->post_title, 'E2E ') === 0) { wp_delete_post($pg->ID, true); $n['pages'] = ($n['pages'] ?? 0) + 1; }
 		require_once ABSPATH . 'wp-admin/includes/user.php';
 		foreach (get_users(['search' => '*@e2e.test', 'search_columns' => ['user_email']]) as $u) { wp_delete_user($u->ID); $n['users'] = ($n['users'] ?? 0) + 1; }
-		delete_transient('cg_verify_page_url');
+		delete_transient('certificate_generator_verify_page_url');
 		echo json_encode($n);`);
 }
 

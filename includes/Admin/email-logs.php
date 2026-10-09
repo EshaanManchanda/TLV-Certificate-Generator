@@ -63,24 +63,24 @@ function certificate_generator_email_logs_page() {
 				sprintf( __( 'Resend all failed (%d)', 'certificate-generator' ), $failed_count )
 			) . '</button>';
 		}
-		cg_ui_page_header(
+		certificate_generator_ui_page_header(
 			__( 'Certificate Email Logs', 'certificate-generator' ),
 			__( 'Every certificate email the plugin has tried to send, with its delivery result. Failed sends can be retried from here.', 'certificate-generator' ),
 			$header_btns
 		);
 		if ( $deleted ) {
-			cg_ui_notice( 'success', esc_html__( 'Selected logs deleted successfully.', 'certificate-generator' ) );
+			certificate_generator_ui_notice( 'success', esc_html__( 'Selected logs deleted successfully.', 'certificate-generator' ) );
 		}
 		?>
 
 		<div class="cg-stats">
 			<?php
-			cg_ui_stat( __( 'Total Sent', 'certificate-generator' ), $stats['total_sent'], '', 'good' );
-			cg_ui_stat( __( 'Failed', 'certificate-generator' ), $stats['total_failed'], '', $stats['total_failed'] ? 'bad' : '' );
-			cg_ui_stat( __( 'Success Rate', 'certificate-generator' ), $stats['success_rate'] . '%' );
-			cg_ui_stat( __( 'Today', 'certificate-generator' ), $stats['today'] );
-			cg_ui_stat( __( 'This Week', 'certificate-generator' ), $stats['this_week'] );
-			cg_ui_stat( __( 'This Month', 'certificate-generator' ), $stats['this_month'] );
+			certificate_generator_ui_stat( __( 'Total Sent', 'certificate-generator' ), $stats['total_sent'], '', 'good' );
+			certificate_generator_ui_stat( __( 'Failed', 'certificate-generator' ), $stats['total_failed'], '', $stats['total_failed'] ? 'bad' : '' );
+			certificate_generator_ui_stat( __( 'Success Rate', 'certificate-generator' ), $stats['success_rate'] . '%' );
+			certificate_generator_ui_stat( __( 'Today', 'certificate-generator' ), $stats['today'] );
+			certificate_generator_ui_stat( __( 'This Week', 'certificate-generator' ), $stats['this_week'] );
+			certificate_generator_ui_stat( __( 'This Month', 'certificate-generator' ), $stats['this_month'] );
 			?>
 		</div>
 
@@ -139,8 +139,8 @@ function certificate_generator_email_logs_page() {
 						<?php
 						echo wp_kses_post(
 							$has_filters
-							? cg_ui_empty_row( 8, __( 'No email logs match these filters.', 'certificate-generator' ), admin_url( 'admin.php?page=certificate-email-logs' ), __( 'Clear Filters', 'certificate-generator' ) )
-							: cg_ui_empty_row( 8, __( 'No certificate emails sent yet. Logs appear here after the first send.', 'certificate-generator' ), admin_url( 'admin.php?page=certificate-bulk-send' ), __( 'Go to Bulk Send', 'certificate-generator' ) )
+							? certificate_generator_ui_empty_row( 8, __( 'No email logs match these filters.', 'certificate-generator' ), admin_url( 'admin.php?page=certificate-email-logs' ), __( 'Clear Filters', 'certificate-generator' ) )
+							: certificate_generator_ui_empty_row( 8, __( 'No certificate emails sent yet. Logs appear here after the first send.', 'certificate-generator' ), admin_url( 'admin.php?page=certificate-bulk-send' ), __( 'Go to Bulk Send', 'certificate-generator' ) )
 						);
 						?>
 					<?php else : ?>
@@ -158,14 +158,14 @@ function certificate_generator_email_logs_page() {
 								</td>
 								<td><?php echo esc_html( $log->certificate_type ); ?></td>
 								<td>
-									<?php echo '' !== (string) $log->post_type ? cg_ui_badge( ucfirst( (string) $log->post_type ), 'info' ) : '—'; // phpcs:ignore WordPress.Security.EscapeOutput ?>
+									<?php echo '' !== (string) $log->post_type ? certificate_generator_ui_badge( ucfirst( (string) $log->post_type ), 'info' ) : '—'; // phpcs:ignore WordPress.Security.EscapeOutput ?>
 								</td>
 								<td><?php echo esc_html( $log->email_subject ); ?></td>
 								<td>
 									<?php if ( $log->status === 'sent' ) : ?>
-										<?php echo cg_ui_badge( __( 'Sent', 'certificate-generator' ), 'good' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+										<?php echo certificate_generator_ui_badge( __( 'Sent', 'certificate-generator' ), 'good' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 									<?php else : ?>
-										<?php echo cg_ui_badge( __( 'Failed', 'certificate-generator' ), 'bad', (string) $log->error_message ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+										<?php echo certificate_generator_ui_badge( __( 'Failed', 'certificate-generator' ), 'bad', (string) $log->error_message ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 										<?php if ( $log->error_message ) : ?>
 											<div class="cg-hint" title="<?php echo esc_attr( $log->error_message ); ?>"><?php echo esc_html( wp_trim_words( $log->error_message, 5 ) ); ?></div>
 										<?php endif; ?>
@@ -227,7 +227,7 @@ function certificate_generator_email_logs_page() {
 		$('#cg-resend-all-failed').on('click', function() {
 			var button = this;
 			CGUI.busy(button, true);
-			$.post(ajaxurl, { action: 'cg_resend_all_failed', nonce: resendNonce })
+			$.post(ajaxurl, { action: 'certificate_generator_resend_all_failed', nonce: resendNonce })
 				.done(function(response) {
 					alert((response.data && response.data.message) || '<?php echo esc_js( __( 'Done.', 'certificate-generator' ) ); ?>');
 					location.reload();
@@ -247,7 +247,7 @@ function certificate_generator_email_logs_page() {
 				url: ajaxurl,
 				type: 'POST',
 				data: {
-					action: 'cg_resend_email_log',
+					action: 'certificate_generator_resend_email_log',
 					log_id: button.data('log-id'),
 					nonce: resendNonce
 				},

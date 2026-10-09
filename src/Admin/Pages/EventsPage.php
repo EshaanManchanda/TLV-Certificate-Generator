@@ -119,13 +119,13 @@ class EventsPage {
 		?>
 		<div class="wrap">
 			<?php
-			cg_ui_page_header(
+			certificate_generator_ui_page_header(
 				'Events',
 				'Group students, teachers, schools and templates under one event code.',
 				'<a href="' . esc_url( $edit_url ) . '" class="button button-primary">Add New</a>'
 			);
 			if ( $message ) {
-				cg_ui_notice( 'success', esc_html( $message ) );
+				certificate_generator_ui_notice( 'success', esc_html( $message ) );
 			}
 			?>
 
@@ -195,8 +195,8 @@ class EventsPage {
 							<?php
 							echo wp_kses_post(
 								( $search || $status_f )
-								? cg_ui_empty_row( 9, 'No events match these filters.', $list_url, 'Clear filters' )
-								: cg_ui_empty_row( 9, 'No events yet. Create one to group records under an event code.', $edit_url, 'Add event' )
+								? certificate_generator_ui_empty_row( 9, 'No events match these filters.', $list_url, 'Clear filters' )
+								: certificate_generator_ui_empty_row( 9, 'No events yet. Create one to group records under an event code.', $edit_url, 'Add event' )
 							);
 							?>
 							<?php
@@ -218,7 +218,7 @@ class EventsPage {
 							<td><?php echo esc_html( $row['start_date'] ?? '—' ); ?></td>
 							<td><?php echo esc_html( $row['end_date'] ?? '—' ); ?></td>
 							<td><?php echo esc_html( $row['registration_deadline'] ?? '—' ); ?></td>
-							<td><?php echo cg_ui_badge( ucfirst( $row['status'] ?? 'draft' ), self::STATUS_BADGES[ $row['status'] ?? 'draft' ] ?? 'muted' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></td>
+							<td><?php echo certificate_generator_ui_badge( ucfirst( $row['status'] ?? 'draft' ), self::STATUS_BADGES[ $row['status'] ?? 'draft' ] ?? 'muted' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></td>
 							<td><?php echo $parts ? esc_html( implode( ' · ', $parts ) ) : '—'; ?></td>
 							<td>
 								<a href="<?php echo esc_url( add_query_arg( 'id', $row_id, $edit_url ) ); ?>">Edit</a>
@@ -352,18 +352,18 @@ class EventsPage {
 		?>
 		<div class="wrap">
 			<?php
-			cg_ui_page_header(
+			certificate_generator_ui_page_header(
 				$id ? 'Edit Event' : 'Add New Event',
 				'An event code ties students, teachers, schools and templates together.',
 				'<a href="' . esc_url( $list_url ) . '" class="button">← Back to Events</a>'
 			);
 			foreach ( $errors as $e ) {
-				cg_ui_notice( 'error', esc_html( $e ), false );
+				certificate_generator_ui_notice( 'error', esc_html( $e ), false );
 			}
 			if ( $message ) {
-				cg_ui_notice( 'success', esc_html( $message ) );
+				certificate_generator_ui_notice( 'success', esc_html( $message ) );
 			}
-			cg_ui_card_open( 'Event details', array( 'class' => 'cg-narrow' ) );
+			certificate_generator_ui_card_open( 'Event details', array( 'class' => 'cg-narrow' ) );
 			?>
 			<form method="post">
 				<?php wp_nonce_field( 'cg_save_event', 'cg_event_nonce' ); ?>
@@ -395,20 +395,20 @@ class EventsPage {
 					<a href="<?php echo esc_url( $list_url ); ?>" class="button">Cancel</a>
 				</p>
 			</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<?php if ( $id ) : ?>
-				<?php cg_ui_card_open( 'Linked Records', array( 'class' => 'cg-narrow' ) ); ?>
+				<?php certificate_generator_ui_card_open( 'Linked Records', array( 'class' => 'cg-narrow' ) ); ?>
 				<div class="cg-stats">
 					<?php
-					cg_ui_stat( 'Students', $link_counts['students'] );
-					cg_ui_stat( 'Teachers', $link_counts['teachers'] );
-					cg_ui_stat( 'Schools', $link_counts['schools'] );
-					cg_ui_stat( 'Templates', $link_counts['certificate_templates'] );
+					certificate_generator_ui_stat( 'Students', $link_counts['students'] );
+					certificate_generator_ui_stat( 'Teachers', $link_counts['teachers'] );
+					certificate_generator_ui_stat( 'Schools', $link_counts['schools'] );
+					certificate_generator_ui_stat( 'Templates', $link_counts['certificate_templates'] );
 					?>
 				</div>
 				<p class="cg-hint">Link records to this event from their own Add/Edit screens (Event field), or via the <code>event_code</code> column in bulk import CSVs.</p>
-				<?php cg_ui_card_close(); ?>
+				<?php certificate_generator_ui_card_close(); ?>
 			<?php endif; ?>
 		</div>
 		<?php

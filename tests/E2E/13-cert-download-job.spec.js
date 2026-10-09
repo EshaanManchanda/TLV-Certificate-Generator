@@ -1,12 +1,12 @@
 // @ts-check
 // §13 Bulk certificate download at scale — the Download Certificates page runs as a
 // chunked job (progress bar, one private ZIP per part), the no-JS form still works, and
-// [student_search] builds its "Download All" ZIP only when clicked.
+// [certificate_generator_student_search] builds its "Download All" ZIP only when clicked.
 const { test, expect, adminUrl } = require('./support/fixtures');
 const wp = require('./support/wp');
 
 const TYPE = 'E2E DlJob';
-const COUNT = 230; // > CG_ADMIN_EXPORT_ZIP_PART_SIZE (200) → two parts
+const COUNT = 230; // > CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE (200) → two parts
 
 /** Names inside a downloaded ZIP (read with PHP's ZipArchive). */
 const zipEntries = (file) => wp.wpEval(`
@@ -41,7 +41,7 @@ test.describe('§13 Bulk certificate download', () => {
 					'status' => 'active', 'import_source' => 'e2e',
 				]);
 			}
-			// Four certificates for one student, for the [student_search] ZIP.
+			// Four certificates for one student, for the [certificate_generator_student_search] ZIP.
 			for ($i = 1; $i <= 4; $i++) {
 				$wpdb->insert($wpdb->prefix . 'cg_students', [
 					'student_name' => 'E2E Zip Student', 'email' => 'zip-student@e2e.test', 'school_name' => 'E2E School ' . $i,
@@ -49,7 +49,7 @@ test.describe('§13 Bulk certificate download', () => {
 					'status' => 'active', 'import_source' => 'e2e',
 				]);
 			}
-			delete_transient('cg_unique_cert_types');
+			delete_transient('certificate_generator_unique_cert_types');
 			echo 1;`);
 	});
 
@@ -68,7 +68,7 @@ test.describe('§13 Bulk certificate download', () => {
 
 		const steps = [];
 		page.on('response', async (r) => {
-			if (r.url().includes('admin-ajax.php') && r.request().postData()?.includes('cg_cert_dl_step')) steps.push((await r.json()).data);
+			if (r.url().includes('admin-ajax.php') && r.request().postData()?.includes('certificate_generator_cert_dl_step')) steps.push((await r.json()).data);
 		});
 		await start.click();
 		const links = page.locator('#cg-job-links a');
@@ -120,13 +120,13 @@ test.describe('§13 Bulk certificate download', () => {
 		await ctx.close();
 	});
 
-	test('[student_search] builds the Download All ZIP only when clicked', async ({ anon }) => {
-		const url = wp.ensurePage('Student Search DL', '[student_search]');
-		const zipsBefore = wp.wpEval("echo json_encode(count(glob(cg_certificates_dir() . '/certificates_zip_student_e2e_test_*.zip')));");
+	test('[certificate_generator_student_search] builds the Download All ZIP only when clicked', async ({ anon }) => {
+		const url = wp.ensurePage('Student Search DL', '[certificate_generator_student_search]');
+		const zipsBefore = wp.wpEval("echo json_encode(count(glob(certificate_generator_certificates_dir() . '/certificates_zip_student_e2e_test_*.zip')));");
 		await anon.goto(`${url}${url.includes('?') ? '&' : '?'}student_email=zip-student@e2e.test`);
 		const all = anon.locator('a.bulk-download-button').first();
-		await expect(all).toHaveAttribute('href', /action=cg_student_zip/);
-		expect(wp.wpEval("echo json_encode(count(glob(cg_certificates_dir() . '/certificates_zip_student_e2e_test_*.zip')));")).toBe(zipsBefore);
+		await expect(all).toHaveAttribute('href', /action=certificate_generator_student_zip/);
+		expect(wp.wpEval("echo json_encode(count(glob(certificate_generator_certificates_dir() . '/certificates_zip_student_e2e_test_*.zip')));")).toBe(zipsBefore);
 
 		const res = await anon.request.get(String(await all.getAttribute('href')));
 		expect(res.headers()['content-type']).toContain('zip');

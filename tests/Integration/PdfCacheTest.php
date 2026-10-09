@@ -1,6 +1,6 @@
 <?php
 /**
- * Deterministic PDF cache in _cg_generate_pdf_impl(): an unchanged certificate is
+ * Deterministic PDF cache in certificate_generator_generate_pdf_impl(): an unchanged certificate is
  * served from disk (no render, no DB writes, no usage); any change to the row,
  * the template or the template image re-renders it. Usage counts new serials only.
  */
@@ -53,7 +53,7 @@ class PdfCacheTest extends WP_UnitTestCase {
 		$this->template_id = (int) $wpdb->insert_id;
 
 		$this->renders = 0;
-		add_action( 'cg_certificate_generated', array( $this, 'count_render' ) );
+		add_action( 'certificate_generator_certificate_generated', array( $this, 'count_render' ) );
 	}
 
 	public function count_render(): void {
@@ -83,7 +83,7 @@ class PdfCacheTest extends WP_UnitTestCase {
 	}
 
 	private function generate( array $row ): string {
-		$url = generate_certificate_pdf( (int) $row['id'], array(), $row );
+		$url = certificate_generator_generate_certificate_pdf( (int) $row['id'], array(), $row );
 		$this->assertNotEmpty( $url, 'PDF generation failed' );
 		return str_replace( wp_upload_dir()['baseurl'], wp_upload_dir()['basedir'], $url );
 	}
@@ -92,7 +92,7 @@ class PdfCacheTest extends WP_UnitTestCase {
 		$row  = $this->make_row( 'ASHA RAO' );
 		$path = $this->generate( $row );
 		$this->assertSame( 1, $this->renders );
-		$this->assertNotSame( '', cg_pdf_cache_read_key( $path ), 'Rendered PDF must carry its cache key' );
+		$this->assertNotSame( '', certificate_generator_pdf_cache_read_key( $path ), 'Rendered PDF must carry its cache key' );
 
 		$mtime = filemtime( $path );
 		$again = $this->generate( $row );
@@ -141,15 +141,15 @@ class PdfCacheTest extends WP_UnitTestCase {
 		file_put_contents( $path, '%PDF-1.3 truncated' );
 		$this->generate( $row );
 		$this->assertSame( 2, $this->renders );
-		$this->assertNotSame( '', cg_pdf_cache_read_key( $path ) );
+		$this->assertNotSame( '', certificate_generator_pdf_cache_read_key( $path ) );
 	}
 
 	public function test_cache_can_be_disabled(): void {
-		add_filter( 'cg_pdf_cache_enabled', '__return_false' );
+		add_filter( 'certificate_generator_pdf_cache_enabled', '__return_false' );
 		$row = $this->make_row( 'TARA RAO' );
 		$this->generate( $row );
 		$this->generate( $row );
-		remove_filter( 'cg_pdf_cache_enabled', '__return_false' );
+		remove_filter( 'certificate_generator_pdf_cache_enabled', '__return_false' );
 		$this->assertSame( 2, $this->renders );
 	}
 }

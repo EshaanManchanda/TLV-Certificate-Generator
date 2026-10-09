@@ -13,7 +13,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Page title + one-line explanation + optional action buttons.
  */
-function cg_ui_page_header( string $title, string $lead = '', string $actions_html = '' ): void {
+function certificate_generator_ui_page_header( string $title, string $lead = '', string $actions_html = '' ): void {
 	echo '<div class="cg-page-header"><div>';
 	echo '<h1 class="wp-heading-inline">' . esc_html( $title ) . '</h1>';
 	if ( '' !== $lead ) {
@@ -33,7 +33,7 @@ function cg_ui_page_header( string $title, string $lead = '', string $actions_ht
  * @param bool   $inline Keep it where it is printed (e.g. inside a card). Without it WP's
  *                       common.js moves the notice up under the page header.
  */
-function cg_ui_notice( string $type, string $message, bool $dismissible = true, bool $inline = false ): void {
+function certificate_generator_ui_notice( string $type, string $message, bool $dismissible = true, bool $inline = false ): void {
 	$type    = in_array( $type, array( 'success', 'error', 'warning', 'info' ), true ) ? $type : 'info';
 	$allowed = array(
 		'a'      => array(
@@ -57,11 +57,11 @@ function cg_ui_notice( string $type, string $message, bool $dismissible = true, 
 }
 
 /**
- * Open a card. Close it with cg_ui_card_close().
+ * Open a card. Close it with certificate_generator_ui_card_close().
  *
  * @param array{icon?:string,actions_html?:string,class?:string,id?:string} $args
  */
-function cg_ui_card_open( string $title = '', array $args = array() ): void {
+function certificate_generator_ui_card_open( string $title = '', array $args = array() ): void {
 	$class = trim( 'cg-card ' . ( $args['class'] ?? '' ) );
 	$id    = isset( $args['id'] ) ? ' id="' . esc_attr( $args['id'] ) . '"' : '';
 	echo '<section class="' . esc_attr( $class ) . '"' . $id . '>'; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped above.
@@ -82,7 +82,7 @@ function cg_ui_card_open( string $title = '', array $args = array() ): void {
 /**
  * Close a card, optionally with a footer.
  */
-function cg_ui_card_close( string $footer_html = '' ): void {
+function certificate_generator_ui_card_close( string $footer_html = '' ): void {
 	echo '</div>';
 	if ( '' !== $footer_html ) {
 		echo '<div class="cg-card__foot">' . $footer_html . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput -- trusted *_html.
@@ -95,7 +95,7 @@ function cg_ui_card_close( string $footer_html = '' ): void {
  *
  * @param string $variant ''|good|warn|bad.
  */
-function cg_ui_stat( string $label, $value, string $hint = '', string $variant = '' ): void {
+function certificate_generator_ui_stat( string $label, $value, string $hint = '', string $variant = '' ): void {
 	$class = 'cg-stat' . ( '' !== $variant ? ' cg-stat--' . sanitize_html_class( $variant ) : '' );
 	echo '<div class="' . esc_attr( $class ) . '">';
 	echo '<div class="cg-stat__label">' . esc_html( $label ) . '</div>';
@@ -111,7 +111,7 @@ function cg_ui_stat( string $label, $value, string $hint = '', string $variant =
  *
  * @param string $variant good|warn|bad|info|muted.
  */
-function cg_ui_badge( string $text, string $variant = 'muted', string $title = '', string $class = '' ): string {
+function certificate_generator_ui_badge( string $text, string $variant = 'muted', string $title = '', string $class = '' ): string {
 	return '<span class="' . esc_attr( trim( 'cg-badge cg-badge--' . sanitize_html_class( $variant ) . ' ' . $class ) ) . '"'
 		. ( '' !== $title ? ' title="' . esc_attr( $title ) . '"' : '' ) . '>' . esc_html( $text ) . '</span>';
 }
@@ -119,7 +119,7 @@ function cg_ui_badge( string $text, string $variant = 'muted', string $title = '
 /**
  * Empty state with an optional next-step button.
  */
-function cg_ui_empty( string $message, string $cta_url = '', string $cta_label = '', string $icon = 'info-outline' ): string {
+function certificate_generator_ui_empty( string $message, string $cta_url = '', string $cta_label = '', string $icon = 'info-outline' ): string {
 	$html  = '<div class="cg-empty">';
 	$html .= '<span class="dashicons dashicons-' . esc_attr( $icon ) . '" aria-hidden="true"></span>';
 	$html .= '<p class="cg-empty__msg">' . esc_html( $message ) . '</p>';
@@ -132,16 +132,16 @@ function cg_ui_empty( string $message, string $cta_url = '', string $cta_label =
 /**
  * Empty state as a full-width table row.
  */
-function cg_ui_empty_row( int $colspan, string $message, string $cta_url = '', string $cta_label = '' ): string {
+function certificate_generator_ui_empty_row( int $colspan, string $message, string $cta_url = '', string $cta_label = '' ): string {
 	return '<tr class="no-items"><td class="cg-empty-cell" colspan="' . (int) $colspan . '">'
-		. cg_ui_empty( $message, $cta_url, $cta_label ) . '</td></tr>';
+		. certificate_generator_ui_empty( $message, $cta_url, $cta_label ) . '</td></tr>';
 }
 
 /**
  * Progress bar driven by CGUI.progress(). Hidden until JS shows it, unless $visible.
  * Pass $total to render a static (server-side) value.
  */
-function cg_ui_progress( string $id, string $label = '', bool $visible = false, int $done = 0, int $total = 0 ): void {
+function certificate_generator_ui_progress( string $id, string $label = '', bool $visible = false, int $done = 0, int $total = 0 ): void {
 	$count = '';
 	$class = 'cg-progress';
 	if ( $total > 0 ) {
@@ -165,7 +165,7 @@ function cg_ui_progress( string $id, string $label = '', bool $visible = false, 
 /**
  * Inline spinner.
  */
-function cg_ui_spinner( bool $small = false, string $id = '' ): string {
+function certificate_generator_ui_spinner( bool $small = false, string $id = '' ): string {
 	return '<span class="cg-spinner' . ( $small ? ' cg-spinner--sm' : '' ) . '"'
 		. ( '' !== $id ? ' id="' . esc_attr( $id ) . '" hidden' : '' )
 		. ' role="status" aria-label="' . esc_attr__( 'Loading', 'certificate-generator' ) . '"></span>';
@@ -174,7 +174,7 @@ function cg_ui_spinner( bool $small = false, string $id = '' ): string {
 /**
  * Native <dialog>. Open with CGUI.modal(id).open(); any [data-cg-close] closes it.
  */
-function cg_ui_dialog_open( string $id, string $title ): void {
+function certificate_generator_ui_dialog_open( string $id, string $title ): void {
 	printf(
 		'<dialog class="cg-dialog" id="%1$s" aria-labelledby="%1$s-title"><div class="cg-dialog__head"><h2 id="%1$s-title">%2$s</h2>'
 		. '<button type="button" class="cg-dialog__close" data-cg-close aria-label="%3$s"><span class="dashicons dashicons-no-alt"></span></button></div>'
@@ -185,7 +185,7 @@ function cg_ui_dialog_open( string $id, string $title ): void {
 	);
 }
 
-function cg_ui_dialog_close( string $actions_html = '' ): void {
+function certificate_generator_ui_dialog_close( string $actions_html = '' ): void {
 	echo '</div>';
 	if ( '' !== $actions_html ) {
 		echo '<div class="cg-dialog__actions">' . $actions_html . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput -- trusted *_html.
@@ -200,7 +200,7 @@ function cg_ui_dialog_close( string $actions_html = '' ): void {
  *        slug => [ label, badge text, badge variant ] to show a status pill after the label.
  * @param string $base_url URL the `tab` query arg is added to.
  */
-function cg_ui_tabs( array $tabs, string $current, string $base_url, string $arg = 'tab' ): void {
+function certificate_generator_ui_tabs( array $tabs, string $current, string $base_url, string $arg = 'tab' ): void {
 	echo '<nav class="nav-tab-wrapper wp-clearfix">';
 	foreach ( $tabs as $slug => $tab ) {
 		$tab = (array) $tab;
@@ -210,7 +210,7 @@ function cg_ui_tabs( array $tabs, string $current, string $base_url, string $arg
 			$slug === $current ? ' nav-tab-active' : '',
 			$slug === $current ? ' aria-current="page"' : '',
 			esc_html( $tab[0] ),
-			! empty( $tab[1] ) ? ' ' . cg_ui_badge( $tab[1], $tab[2] ?? 'muted' ) : '' // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
+			! empty( $tab[1] ) ? ' ' . certificate_generator_ui_badge( $tab[1], $tab[2] ?? 'muted' ) : '' // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
 		);
 	}
 	echo '</nav>';

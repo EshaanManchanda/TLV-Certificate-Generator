@@ -37,7 +37,7 @@ class FieldManager {
 	 * Distinct custom-field keys actually used in an entity type's extra_fields
 	 * JSON column, so the template field-mapping dropdown can offer real custom
 	 * fields without needing a separate registration step (unlike the old
-	 * CG_Field_Schema registry, which only CSV import ever wrote to).
+	 * CertificateGenerator_Field_Schema registry, which only CSV import ever wrote to).
 	 *
 	 * @return string[]
 	 */

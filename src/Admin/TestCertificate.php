@@ -15,17 +15,17 @@ use CertificateGenerator\Email\Mailer;
  */
 class TestCertificate {
 
-	public const DONE_OPTION = 'cg_test_certificate_sent';
+	public const DONE_OPTION = 'certificate_generator_test_certificate_sent';
 
 	public static function register(): void {
-		add_action( 'wp_ajax_cg_send_test_certificate', array( self::class, 'ajax_send' ) );
+		add_action( 'wp_ajax_certificate_generator_send_test_certificate', array( self::class, 'ajax_send' ) );
 	}
 
 	/**
 	 * @return array{ok:bool,message:string}
 	 */
 	public static function send( int $template_id, \WP_User $user ): array {
-		if ( ! function_exists( 'cg_template_sample_data' ) || ! function_exists( 'generate_certificate_pdf_with_data' ) ) {
+		if ( ! function_exists( 'certificate_generator_template_sample_data' ) || ! function_exists( 'certificate_generator_generate_certificate_pdf_with_data' ) ) {
 			return array( 'ok' => false, 'message' => __( 'Certificate generation is not loaded.', 'certificate-generator' ) );
 		}
 		$to = (string) $user->user_email;
@@ -33,13 +33,13 @@ class TestCertificate {
 			return array( 'ok' => false, 'message' => __( 'Your WordPress profile has no valid email address.', 'certificate-generator' ) );
 		}
 
-		$data = cg_template_sample_data( $template_id );
+		$data = certificate_generator_template_sample_data( $template_id );
 		if ( null === $data ) {
 			return array( 'ok' => false, 'message' => __( 'Template not found. Save the template first.', 'certificate-generator' ) );
 		}
 		$data['student_name'] = $user->display_name ?: $user->user_login;
 
-		$url  = (string) generate_certificate_pdf_with_data( $data );
+		$url  = (string) certificate_generator_generate_certificate_pdf_with_data( $data );
 		$up   = wp_upload_dir();
 		$path = $url ? str_replace( $up['baseurl'], $up['basedir'], $url ) : '';
 		if ( ! $path || ! file_exists( $path ) ) {
@@ -74,7 +74,7 @@ class TestCertificate {
 	}
 
 	public static function ajax_send(): void {
-		check_ajax_referer( 'cg_send_test_certificate', 'nonce' );
+		check_ajax_referer( 'certificate_generator_send_test_certificate', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ), 403 );
 		}

@@ -7,7 +7,7 @@ use CertificateGenerator\Database\EmailLogRepository;
 
 /**
  * Writes one row to wp_cert_email_logs and busts sent-count transients
- * on the cg_email_sent action when CG_USE_EVENTS is enabled.
+ * on the certificate_generator_email_sent action when CG_USE_EVENTS is enabled.
  *
  * This is the ONLY log writer when the flag is on — the legacy
  * certificate_generator_log_email() writes nothing and delegates here.
@@ -27,8 +27,8 @@ class LogEmailListener {
 		$this->repo->log_send( $data );
 
 		if ( ( $data['status'] ?? '' ) === 'sent' ) {
-			delete_transient( 'cg_sent_count_3600' );
-			delete_transient( 'cg_sent_count_60' );
+			delete_transient( 'certificate_generator_sent_count_3600' );
+			delete_transient( 'certificate_generator_sent_count_60' );
 		}
 	}
 }

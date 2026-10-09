@@ -7,7 +7,7 @@ class SmokeTest extends WP_UnitTestCase {
 	}
 
 	public function test_plugin_loaded(): void {
-		$this->assertTrue( function_exists( 'cg_generate_pdf_from_row' ) );
+		$this->assertTrue( function_exists( 'certificate_generator_generate_pdf_from_row' ) );
 	}
 
 	public function test_custom_tables_exist(): void {

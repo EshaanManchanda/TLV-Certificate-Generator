@@ -14,21 +14,21 @@ class CertificatePrivacyTest extends WP_UnitTestCase {
 
 	public function tear_down(): void {
 		$_SERVER = $this->server;
-		remove_all_filters( 'cg_client_ip' );
+		remove_all_filters( 'certificate_generator_client_ip' );
 		parent::tear_down();
 	}
 
 	public function test_file_names_carry_a_secret_suffix_and_are_stable(): void {
-		$a = cg_certificate_file_stem( 'students_row_1000' );
-		$b = cg_certificate_file_stem( 'students_row_1001' );
+		$a = certificate_generator_certificate_file_stem( 'students_row_1000' );
+		$b = certificate_generator_certificate_file_stem( 'students_row_1001' );
 
 		$this->assertMatchesRegularExpression( '/^certificate_students_row_1000_[0-9a-f]{12}$/', $a );
-		$this->assertSame( $a, cg_certificate_file_stem( 'students_row_1000' ), 'same key, same file (cache still works)' );
+		$this->assertSame( $a, certificate_generator_certificate_file_stem( 'students_row_1000' ), 'same key, same file (cache still works)' );
 		$this->assertNotSame( substr( $a, -12 ), substr( $b, -12 ) );
 	}
 
 	public function test_certificate_folder_cannot_be_listed(): void {
-		$this->assertFileExists( cg_certificates_dir() . '/index.php' );
+		$this->assertFileExists( certificate_generator_certificates_dir() . '/index.php' );
 	}
 
 	private function hit( string $action ): bool {

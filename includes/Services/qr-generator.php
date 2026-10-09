@@ -3,7 +3,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_QR_Code_Generator {
+class CertificateGenerator_QR_Code_Generator {
 	private static $instance = null;
 
 	public static function get_instance() {
@@ -19,7 +19,7 @@ class CG_QR_Code_Generator {
 	}
 
 	private function get_verify_page_url(): string {
-		$cached = get_transient( 'cg_verify_page_url' );
+		$cached = get_transient( 'certificate_generator_verify_page_url' );
 		if ( $cached ) {
 			return $cached;
 		}
@@ -28,12 +28,12 @@ class CG_QR_Code_Generator {
 		$page_id = $wpdb->get_var(
 			"SELECT ID FROM {$wpdb->posts}
              WHERE post_status = 'publish' AND post_type = 'page'
-             AND post_content LIKE '%[cg_verify_certificate%'
+             AND post_content LIKE '%[certificate_generator_verify_certificate%'
              LIMIT 1"
 		);
 
 		$url = $page_id ? get_permalink( $page_id ) : home_url( '/' );
-		set_transient( 'cg_verify_page_url', $url, HOUR_IN_SECONDS );
+		set_transient( 'certificate_generator_verify_page_url', $url, HOUR_IN_SECONDS );
 		return $url;
 	}
 

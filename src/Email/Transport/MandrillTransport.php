@@ -26,9 +26,9 @@ class MandrillTransport implements TransportInterface {
 
 		return new self(
 			array(
-				'api_key'    => (string) get_option( 'cg_mandrill_api_key', '' ),
-				'from_email' => (string) get_option( 'cg_email_from_email', get_bloginfo( 'admin_email' ) ),
-				'from_name'  => (string) get_option( 'cg_email_from_name', get_bloginfo( 'name' ) ),
+				'api_key'    => (string) get_option( 'certificate_generator_mandrill_api_key', '' ),
+				'from_email' => (string) get_option( 'certificate_generator_email_from_email', get_bloginfo( 'admin_email' ) ),
+				'from_name'  => (string) get_option( 'certificate_generator_email_from_name', get_bloginfo( 'name' ) ),
 			)
 		);
 	}

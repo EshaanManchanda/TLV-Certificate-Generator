@@ -8,14 +8,14 @@ Canonical settings are owned by `src/Services/SettingsService.php` (prefix `cg_`
 
 | Option | Purpose |
 |---|---|
-| `cg_email_transport` | `wp_mail` or `smtp` |
-| `cg_email_from_name` / `cg_email_from_email` | Sender identity — for SMTP, `cg_email_from_email` must exactly match the authenticated SMTP account or delivery bounces ("Sender address rejected") |
-| `cg_email_subject` / `cg_email_body` | Global fallback HTML template with placeholders (see below) — used when no per-certificate-type template matches |
-| `cg_smtp_host` / `cg_smtp_port` / `cg_smtp_username` / `cg_smtp_password` (encrypted) / `cg_smtp_encryption` | SMTP connection details, used by `src/Email/Transport/SmtpTransport.php` |
+| `certificate_generator_email_transport` | `wp_mail` or `smtp` |
+| `certificate_generator_email_from_name` / `certificate_generator_email_from_email` | Sender identity — for SMTP, `certificate_generator_email_from_email` must exactly match the authenticated SMTP account or delivery bounces ("Sender address rejected") |
+| `certificate_generator_email_subject` / `certificate_generator_email_body` | Global fallback HTML template with placeholders (see below) — used when no per-certificate-type template matches |
+| `certificate_generator_smtp_host` / `certificate_generator_smtp_port` / `certificate_generator_smtp_username` / `certificate_generator_smtp_password` (encrypted) / `certificate_generator_smtp_encryption` | SMTP connection details, used by `src/Email/Transport/SmtpTransport.php` |
 
 ### Per-certificate-type email templates
 
-Beyond the single global template above, the `wp_cg_email_templates` table (see [`DATABASE.md`](../dev/DATABASE.md)) stores named templates keyed 1:1 to a `certificate_type` — subject, title, message, attach-certificate toggle, reply-to, cc, bcc. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first and only falls back to `cg_email_subject`/`cg_email_body` when no row matches. Managed from **Settings → Email**; this is the **Email Templates** row in the [plan comparison](PLAN-COMPARISON.md) (Pro/Business only).
+Beyond the single global template above, the `wp_cg_email_templates` table (see [`DATABASE.md`](../dev/DATABASE.md)) stores named templates keyed 1:1 to a `certificate_type` — subject, title, message, attach-certificate toggle, reply-to, cc, bcc. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first and only falls back to `certificate_generator_email_subject`/`certificate_generator_email_body` when no row matches. Managed from **Settings → Email**; this is the **Email Templates** row in the [plan comparison](PLAN-COMPARISON.md) (Pro/Business only).
 
 ### Email placeholders
 
@@ -39,11 +39,11 @@ Rate limits for bulk sending (defaults: 60 emails/hour, 10 emails/minute) are co
 
 | Option | Purpose |
 |---|---|
-| `cg_serial_prefix` | Prefix string, e.g. `CERT` |
-| `cg_serial_length` | Sequence digit padding |
-| `cg_serial_suffix` | Optional suffix |
-| `cg_serial_reset_period` | When the sequence counter resets |
-| `cg_serial_include_date` | Whether to embed the year, e.g. `CERT-2025-00142` |
+| `certificate_generator_serial_prefix` | Prefix string, e.g. `CERT` |
+| `certificate_generator_serial_length` | Sequence digit padding |
+| `certificate_generator_serial_suffix` | Optional suffix |
+| `certificate_generator_serial_reset_period` | When the sequence counter resets |
+| `certificate_generator_serial_include_date` | Whether to embed the year, e.g. `CERT-2025-00142` |
 
 ## Licensing
 
@@ -73,7 +73,7 @@ Auto-issues a certificate when a student completes a course (or, for WooCommerce
 | `CG_USE_SENSEI_INTEGRATION` | Sensei LMS | **Certificate Generator → Sensei LMS** (`cg-sensei`) |
 | `CG_USE_WOOCOMMERCE_INTEGRATION` | WooCommerce (order completion) | **Certificate Generator → WooCommerce** (`cg-woocommerce`) |
 
-Each mapping page lets an admin map a course (or, for WooCommerce, a product) to a certificate template and a trigger (`course_complete` / `quiz_pass` / `both`, where applicable), stored in the shared `wp_cg_lms_course_map` table. All of them share one implementation base in the Pro add-on — `AbstractLmsListener` / `AbstractLmsMapper` — that resolves the enrolled/purchasing WP user to a `wp_cg_students` row (auto-creating one and tagging `import_source` with the platform name if none exists), and checks for a pre-existing certificate to avoid duplicate issuance, through the same `cg_pre_generate_certificate` filter as every other issuance path.
+Each mapping page lets an admin map a course (or, for WooCommerce, a product) to a certificate template and a trigger (`course_complete` / `quiz_pass` / `both`, where applicable), stored in the shared `wp_cg_lms_course_map` table. All of them share one implementation base in the Pro add-on — `AbstractLmsListener` / `AbstractLmsMapper` — that resolves the enrolled/purchasing WP user to a `wp_cg_students` row (auto-creating one and tagging `import_source` with the platform name if none exists), and checks for a pre-existing certificate to avoid duplicate issuance, through the same `certificate_generator_pre_generate_certificate` filter as every other issuance path.
 
 **Multi-course "track" certificates:** group several courses under one certificate template via `wp_cg_lms_tracks` / `wp_cg_lms_track_courses` (see [`DATABASE.md`](../dev/DATABASE.md)) — the certificate issues once every course in the track is complete, instead of one per course. Available on all four course-based integrations (not WooCommerce, which is order-based).
 
@@ -90,7 +90,7 @@ The public verification result (`/verify/{serial}`) additionally returns `pdf_ur
 
 | Option/flag | Purpose |
 |---|---|
-| `CG_USE_RENEWAL_REMINDERS` (`src/Core/Config.php`) | Enables `CG_Cron_Jobs::send_recipient_renewal_reminders()` (`includes/Cron/jobs.php`) — a daily cron that emails certificate **holders** (not just the admin) at configurable day-offsets before `expires_at` (default 30/7/1 days). **Gated to Pro/Business** — mirrors the Email Templates gate. Distinct from the existing admin-only expiring-certificates digest. |
+| `CG_USE_RENEWAL_REMINDERS` (`src/Core/Config.php`) | Enables `CertificateGenerator_Cron_Jobs::send_recipient_renewal_reminders()` (`includes/Cron/jobs.php`) — a daily cron that emails certificate **holders** (not just the admin) at configurable day-offsets before `expires_at` (default 30/7/1 days). **Gated to Pro/Business** — mirrors the Email Templates gate. Distinct from the existing admin-only expiring-certificates digest. |
 
 `wp_cg_renewal_reminders_sent` (see [`DATABASE.md`](../dev/DATABASE.md)) records which stage has already fired per certificate so a recipient is never reminded twice for the same stage. Only certificates with a `recipient_email` on file can receive one — some SQL-first issuance paths leave that column blank. There is no self-serve "renew" purchase flow in the plugin, so the reminder email links to the existing certificate PDF rather than a renewal page.
 
@@ -101,8 +101,8 @@ The public verification result (`/verify/{serial}`) additionally returns `pdf_ur
 | `certificate_generator_version` | Installed version tracking |
 | `certificate_generator_settings` | Installation mode, max memory usage, etc. |
 | `certificate_generator_api_key` / `certificate_generator_api_key_enabled` | REST API key + enable flag |
-| `cg_keep_data_on_uninstall` | If false, uninstall drops all custom tables and deletes plugin options |
-| `cg_extra_fields_{cert_type_key}` | Per-certificate-type custom field registry (max 15 extra slots), managed by `CG_Field_Schema` (`includes/Core/field-schema.php`) |
+| `certificate_generator_keep_data_on_uninstall` | If false, uninstall drops all custom tables and deletes plugin options |
+| `certificate_generator_extra_fields_{cert_type_key}` | Per-certificate-type custom field registry (max 15 extra slots), managed by `CertificateGenerator_Field_Schema` (`includes/Core/field-schema.php`) |
 
 ## Required CSV columns (Bulk Import)
 

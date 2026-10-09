@@ -71,7 +71,7 @@ function certificate_generator_create_email_log_table() {
 					$upgrade_loaded = true;
 					break;
 				} catch ( Exception $e ) {
-					cg_debug_log( "Certificate Generator: Failed to load upgrade.php from $path for email log table - " . $e->getMessage() );
+					certificate_generator_debug_log( "Certificate Generator: Failed to load upgrade.php from $path for email log table - " . $e->getMessage() );
 					continue;
 				}
 			}
@@ -88,7 +88,7 @@ function certificate_generator_create_email_log_table() {
 			}
 		}
 	} catch ( Exception $e ) {
-		cg_debug_log( 'Certificate Generator: Error during email log table creation - ' . $e->getMessage() );
+		certificate_generator_debug_log( 'Certificate Generator: Error during email log table creation - ' . $e->getMessage() );
 
 		// Final fallback attempt
 		try {
@@ -126,7 +126,7 @@ function certificate_generator_create_email_log_table() {
 				}
 			}
 		} catch ( Exception $fallback_error ) {
-			cg_debug_log( 'Certificate Generator: Fallback email log table creation also failed - ' . $fallback_error->getMessage() );
+			certificate_generator_debug_log( 'Certificate Generator: Fallback email log table creation also failed - ' . $fallback_error->getMessage() );
 		}
 	}
 }
@@ -166,15 +166,15 @@ function certificate_generator_log_email( $certificate_id, $recipient_email, $re
 	// CG_USE_EVENTS: delegate write + side-effects to LogEmailListener.
 	// Log seam: listeners own the row write; legacy path unchanged when flag is off.
 	if ( \CertificateGenerator\Core\Config::flag( 'CG_USE_EVENTS' ) ) {
-		do_action( 'cg_email_sent', $data );
+		do_action( 'certificate_generator_email_sent', $data );
 		return true; // truthy; no live caller consumes the id for a follow-up write
 	}
 
 	$result = $wpdb->insert( $table_name, $data );
 
 	if ( $result && $success ) {
-		delete_transient( 'cg_sent_count_3600' );
-		delete_transient( 'cg_sent_count_60' );
+		delete_transient( 'certificate_generator_sent_count_3600' );
+		delete_transient( 'certificate_generator_sent_count_60' );
 	}
 
 	return $result ? $wpdb->insert_id : false;

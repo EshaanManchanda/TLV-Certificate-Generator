@@ -32,7 +32,7 @@ class EmailStatusService {
 	 */
 	/**
 	 * Object-cache group for per-email badge entries.
-	 * Invalidated by InvalidateStatusCacheListener on cg_email_sent.
+	 * Invalidated by InvalidateStatusCacheListener on certificate_generator_email_sent.
 	 */
 	private const CACHE_GROUP = 'cg_email_status';
 	private const CACHE_TTL   = 300; // 5 minutes

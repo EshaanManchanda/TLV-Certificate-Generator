@@ -1,7 +1,7 @@
 <?php
 /**
  * Confirms the public verify endpoint (registered by both SerialNumberService
- * and the legacy CG_Serial_Number_Generator) doesn't leak anything beyond a
+ * and the legacy CertificateGenerator_Serial_Number_Generator) doesn't leak anything beyond a
  * valid/invalid flag for an unknown serial.
  */
 class RestApiPermissionTest extends WP_UnitTestCase {
@@ -20,7 +20,7 @@ class RestApiPermissionTest extends WP_UnitTestCase {
 	}
 
 	public function test_legacy_verify_endpoint_returns_404_with_no_data_for_unknown_serial(): void {
-		$service = CG_Serial_Number_Generator::get_instance();
+		$service = CertificateGenerator_Serial_Number_Generator::get_instance();
 		$request = new WP_REST_Request( 'GET', '/certificate-generator/v1/verify/DOES-NOT-EXIST' );
 		$request->set_param( 'serial', 'DOES-NOT-EXIST' );
 

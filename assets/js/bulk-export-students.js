@@ -15,7 +15,7 @@
                 url: bulkExportAjax.ajax_url, // AJAX endpoint
                 type: 'POST',
                 data: {
-                    action: 'bulk_export_students', // Action defined in PHP
+                    action: 'certificate_generator_bulk_export_students', // Action defined in PHP
                     security: bulkExportAjax.nonce, // Security nonce
                 },
                 xhrFields: {

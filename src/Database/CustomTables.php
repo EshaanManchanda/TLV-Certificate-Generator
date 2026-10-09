@@ -79,7 +79,7 @@ class CustomTables {
 		$this->create_email_templates_table();
 		$this->create_events_table();
 
-		update_option( 'cg_custom_tables_version', self::SCHEMA_VERSION );
+		update_option( 'certificate_generator_custom_tables_version', self::SCHEMA_VERSION );
 	}
 
 	/**
@@ -113,7 +113,7 @@ class CustomTables {
 	 * newly-introduced columns) on installs that already have every table.
 	 */
 	public function needs_upgrade(): bool {
-		return get_option( 'cg_custom_tables_version' ) !== self::SCHEMA_VERSION || ! $this->all_tables_exist();
+		return get_option( 'certificate_generator_custom_tables_version' ) !== self::SCHEMA_VERSION || ! $this->all_tables_exist();
 	}
 
 	private function create_students_table(): void {

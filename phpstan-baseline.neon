@@ -131,7 +131,7 @@ parameters:
 			path: includes/Email/rate-limiter.php
 
 		-
-			message: "#^Parameter \\#3 \\$unique_id of function cg_certificate_pdf_filename expects string, int given\\.$#"
+			message: "#^Parameter \\#3 \\$unique_id of function certificate_generator_certificate_pdf_filename expects string, int given\\.$#"
 			count: 1
 			path: includes/Services/background-processor.php
 

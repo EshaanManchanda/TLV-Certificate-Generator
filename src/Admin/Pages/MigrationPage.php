@@ -98,9 +98,9 @@ class MigrationPage {
 
 		global $wpdb;
 
-		$migration_completed = get_option( 'cg_cpt_to_sql_migration_completed', false );
-		$migration_stats     = get_option( 'cg_cpt_to_sql_migration_stats', array() );
-		$cpts_cleaned        = get_option( 'cg_cpts_cleaned_up', false );
+		$migration_completed = get_option( 'certificate_generator_cpt_to_sql_migration_completed', false );
+		$migration_stats     = get_option( 'certificate_generator_cpt_to_sql_migration_stats', array() );
+		$cpts_cleaned        = get_option( 'certificate_generator_cpts_cleaned_up', false );
 
 		// Count remaining legacy CPT posts directly from DB (CPTs are no longer registered).
 		$legacy_cpt_types = array( 'students', 'teachers', 'schools', 'certificates' );
@@ -121,7 +121,7 @@ class MigrationPage {
 
 		// Reset the cleaned flag if CPT posts crept back.
 		if ( $cpts_cleaned && $total_remaining_cpts > 0 ) {
-			delete_option( 'cg_cpts_cleaned_up' );
+			delete_option( 'certificate_generator_cpts_cleaned_up' );
 			$cpts_cleaned = false;
 		}
 
@@ -143,9 +143,9 @@ class MigrationPage {
 		?>
 		<div class="wrap cg-migration">
 			<?php
-			cg_ui_page_header( $this->title, 'Database upkeep: bring tables up to date, move legacy post data into the plugin\'s SQL tables, and clean up afterwards. Work through the steps in order.' );
+			certificate_generator_ui_page_header( $this->title, 'Database upkeep: bring tables up to date, move legacy post data into the plugin\'s SQL tables, and clean up afterwards. Work through the steps in order.' );
 			if ( $message ) {
-				cg_ui_notice( $message_type, $message );
+				certificate_generator_ui_notice( $message_type, $message );
 			}
 			?>
 
@@ -156,11 +156,11 @@ class MigrationPage {
 			$target_version = $runner_status->get_target_version();
 			$db_behind      = $runner_status->needs_migration() || $tables->needs_upgrade();
 			?>
-			<?php cg_ui_card_open( 'Step 0: Fix Database (Upgrading from an Older Version)', array( 'icon' => 'database', 'class' => $db_behind ? 'cg-card--warn' : '' ) ); ?>
+			<?php certificate_generator_ui_card_open( 'Step 0: Fix Database (Upgrading from an Older Version)', array( 'icon' => 'database', 'class' => $db_behind ? 'cg-card--warn' : '' ) ); ?>
 				<p>
 					Database version: <strong><?php echo esc_html( $db_version ); ?></strong> —
 					latest known: <strong><?php echo esc_html( $target_version ); ?></strong>
-					<?php echo $db_behind ? cg_ui_badge( 'behind — click below to update', 'warn' ) : cg_ui_badge( 'up to date', 'good' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+					<?php echo $db_behind ? certificate_generator_ui_badge( 'behind — click below to update', 'warn' ) : certificate_generator_ui_badge( 'up to date', 'good' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 				</p>
 				<p class="description">
 					If this site was running an older copy of the plugin, its database tables may be missing columns
@@ -171,17 +171,17 @@ class MigrationPage {
 					<?php wp_nonce_field( 'cg_run_db_fix' ); ?>
 					<button type="submit" name="cg_run_db_fix" class="button button-primary button-hero">Fix Database Now</button>
 				</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Step 1: Table Status -->
-			<?php cg_ui_card_open( 'Step 1: Custom Tables Status' ); ?>
+			<?php certificate_generator_ui_card_open( 'Step 1: Custom Tables Status' ); ?>
 				<div class="cg-table-wrap"><table class="widefat cg-table">
 					<thead><tr><th>Table</th><th>Status</th><th>Records</th></tr></thead>
 					<tbody>
 						<?php foreach ( $table_status as $name => $exists ) : ?>
 							<tr>
 								<td><code><?php echo esc_html( $name ); ?></code></td>
-								<td><?php echo $exists ? cg_ui_badge( 'Exists', 'good' ) : cg_ui_badge( 'Missing', 'bad' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></td>
+								<td><?php echo $exists ? certificate_generator_ui_badge( 'Exists', 'good' ) : certificate_generator_ui_badge( 'Missing', 'bad' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></td>
 								<td><?php echo isset( $sql_counts[ $name ] ) ? number_format( $sql_counts[ $name ] ) : '—'; ?></td>
 							</tr>
 						<?php endforeach; ?>
@@ -191,13 +191,13 @@ class MigrationPage {
 					<?php wp_nonce_field( 'cg_verify_tables' ); ?>
 					<button type="submit" name="cg_verify_tables" class="button">Verify / Create Tables</button>
 				</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Step 2: CPT → SQL Migration -->
-			<?php cg_ui_card_open( 'Step 2: Migrate CPT Data to SQL Tables' ); ?>
+			<?php certificate_generator_ui_card_open( 'Step 2: Migrate CPT Data to SQL Tables' ); ?>
 
 				<?php if ( $migration_completed ) : ?>
-					<?php cg_ui_notice( 'success', 'Migration completed: <strong>' . esc_html( $migration_completed ) . '</strong>', false, true ); ?>
+					<?php certificate_generator_ui_notice( 'success', 'Migration completed: <strong>' . esc_html( $migration_completed ) . '</strong>', false, true ); ?>
 					<div class="cg-table-wrap"><table class="widefat cg-table">
 						<thead><tr><th>Entity</th><th>CPT Records</th><th>SQL Records</th><th>Status</th></tr></thead>
 						<tbody>
@@ -212,11 +212,11 @@ class MigrationPage {
 								$cpt = $cpt_counts[ $cpt_key ] ?? 0;
 								$sql = $sql_counts[ $sql_key ] ?? 0;
 								if ( $cpt === 0 && $sql > 0 && $cpts_cleaned ) {
-									$status = cg_ui_badge( 'Migrated', 'good' );
+									$status = certificate_generator_ui_badge( 'Migrated', 'good' );
 								} elseif ( $cpt === $sql ) {
-									$status = cg_ui_badge( 'Match', 'good' );
+									$status = certificate_generator_ui_badge( 'Match', 'good' );
 								} else {
-									$status = cg_ui_badge( 'Mismatch', 'warn' );
+									$status = certificate_generator_ui_badge( 'Mismatch', 'warn' );
 								}
 								?>
 								<tr>
@@ -229,7 +229,7 @@ class MigrationPage {
 						</tbody>
 					</table></div>
 				<?php else : ?>
-					<?php cg_ui_notice( 'warning', 'Migration has not been run yet.', false, true ); ?>
+					<?php certificate_generator_ui_notice( 'warning', 'Migration has not been run yet.', false, true ); ?>
 				<?php endif; ?>
 
 				<p>
@@ -256,10 +256,10 @@ class MigrationPage {
 				</form>
 				<?php endif; ?>
 				</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Step 2b: Fix Issue Dates (one-time normalization) -->
-			<?php cg_ui_card_open( 'Step 2b: Normalize Issue Dates (One-Time Fix)' ); ?>
+			<?php certificate_generator_ui_card_open( 'Step 2b: Normalize Issue Dates (One-Time Fix)' ); ?>
 				<p>
 					Converts any <code>issue_date</code> values stored in <code>d-m-Y</code> (e.g. <code>23-03-2026</code>)
 					to the correct <code>Y-m-d</code> storage format (<code>2026-03-23</code>).
@@ -273,16 +273,16 @@ class MigrationPage {
 						Fix Issue Dates (d-m-Y → Y-m-d)
 					</button>
 				</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Step 3: Cleanup CPTs (Optional) -->
-			<?php cg_ui_card_open( 'Step 3: Clean Up Legacy CPT Data' ); ?>
+			<?php certificate_generator_ui_card_open( 'Step 3: Clean Up Legacy CPT Data' ); ?>
 
 				<?php if ( $cpts_cleaned && $total_remaining_cpts === 0 ) : ?>
-					<?php cg_ui_notice( 'success', 'All legacy CPT data cleaned up. Plugin uses SQL tables exclusively.', false, true ); ?>
+					<?php certificate_generator_ui_notice( 'success', 'All legacy CPT data cleaned up. Plugin uses SQL tables exclusively.', false, true ); ?>
 				<?php elseif ( $migration_completed || $total_remaining_cpts > 0 ) : ?>
 					<?php if ( $total_remaining_cpts > 0 ) : ?>
-						<?php cg_ui_notice( 'warning', '<strong>' . number_format_i18n( $total_remaining_cpts ) . '</strong> legacy CPT post(s) still in <code>wp_posts</code>.<br>These generate public URLs like <code>/students/name-school/</code> that expose data and return broken pages. Clean up to remove them.', false, true ); ?>
+						<?php certificate_generator_ui_notice( 'warning', '<strong>' . number_format_i18n( $total_remaining_cpts ) . '</strong> legacy CPT post(s) still in <code>wp_posts</code>.<br>These generate public URLs like <code>/students/name-school/</code> that expose data and return broken pages. Clean up to remove them.', false, true ); ?>
 						<div class="cg-table-wrap"><table class="widefat cg-table">
 							<thead><tr><th>Post Type</th><th>Remaining Posts</th><th>Public URL Pattern</th></tr></thead>
 							<tbody>
@@ -298,7 +298,7 @@ class MigrationPage {
 							</tbody>
 						</table></div>
 					<?php else : ?>
-						<?php cg_ui_notice( 'info', 'After verifying all data migrated correctly, click below to remove CPT data.', false, true ); ?>
+						<?php certificate_generator_ui_notice( 'info', 'After verifying all data migrated correctly, click below to remove CPT data.', false, true ); ?>
 					<?php endif; ?>
 					<form method="post" data-cg-busy>
 						<?php wp_nonce_field( 'cg_cleanup_cpts' ); ?>
@@ -310,24 +310,24 @@ class MigrationPage {
 				<?php else : ?>
 					<p class="description">Complete Step 2 first.</p>
 				<?php endif; ?>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Step 4: Public URL Protection -->
-			<?php cg_ui_card_open( 'Step 4: Public URL Protection' ); ?>
+			<?php certificate_generator_ui_card_open( 'Step 4: Public URL Protection' ); ?>
 				<?php if ( $total_remaining_cpts === 0 ) : ?>
-					<?php cg_ui_notice( 'success', 'No legacy CPT posts remain — no public URLs to worry about.', false, true ); ?>
+					<?php certificate_generator_ui_notice( 'success', 'No legacy CPT posts remain — no public URLs to worry about.', false, true ); ?>
 				<?php else : ?>
-					<?php cg_ui_notice( 'info', 'While legacy CPT posts exist, the plugin blocks public access to <code>/students/</code>, <code>/teachers/</code>, and <code>/schools/</code> URLs with a 404 response. Clean up CPT data (Step 3) to remove these URLs permanently.', false, true ); ?>
+					<?php certificate_generator_ui_notice( 'info', 'While legacy CPT posts exist, the plugin blocks public access to <code>/students/</code>, <code>/teachers/</code>, and <code>/schools/</code> URLs with a 404 response. Clean up CPT data (Step 3) to remove these URLs permanently.', false, true ); ?>
 				<?php endif; ?>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Orphan Report -->
 			<?php if ( $total_remaining_cpts > 0 ) : ?>
-			<?php cg_ui_card_open( 'Orphan Report' ); ?>
+			<?php certificate_generator_ui_card_open( 'Orphan Report' ); ?>
 				<p class="description">CPT posts in <code>wp_posts</code> with no matching row in the SQL table (by email for students/teachers, school_name for schools, certificate_type+event_date for templates).</p>
 				<?php $orphans = $this->detect_orphans( $tables ); ?>
 				<?php if ( array_sum( array_column( $orphans, 'cpt_only' ) ) === 0 && array_sum( array_column( $orphans, 'sql_only' ) ) === 0 ) : ?>
-					<?php cg_ui_notice( 'success', 'No orphans detected — all CPT posts have matching SQL rows.', false, true ); ?>
+					<?php certificate_generator_ui_notice( 'success', 'No orphans detected — all CPT posts have matching SQL rows.', false, true ); ?>
 				<?php else : ?>
 					<div class="cg-table-wrap"><table class="widefat cg-table">
 						<thead><tr><th>Entity</th><th>CPT-only (no SQL match)</th><th>SQL-only (no CPT match)</th></tr></thead>
@@ -335,18 +335,18 @@ class MigrationPage {
 							<?php foreach ( $orphans as $entity => $counts ) : ?>
 								<tr>
 									<td><?php echo esc_html( ucfirst( $entity ) ); ?></td>
-									<td><?php echo wp_kses_post( $counts['cpt_only'] > 0 ? cg_ui_badge( number_format_i18n( $counts['cpt_only'] ), 'bad' ) : '0' ); ?></td>
-									<td><?php echo wp_kses_post( $counts['sql_only'] > 0 ? cg_ui_badge( number_format_i18n( $counts['sql_only'] ), 'warn' ) : '0' ); ?></td>
+									<td><?php echo wp_kses_post( $counts['cpt_only'] > 0 ? certificate_generator_ui_badge( number_format_i18n( $counts['cpt_only'] ), 'bad' ) : '0' ); ?></td>
+									<td><?php echo wp_kses_post( $counts['sql_only'] > 0 ? certificate_generator_ui_badge( number_format_i18n( $counts['sql_only'] ), 'warn' ) : '0' ); ?></td>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
 					</table></div>
 					<p class="cg-hint">CPT-only orphans are safe to delete via "Clean Up" above. SQL-only records are expected after cleanup.</p>
 				<?php endif; ?>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 			<?php endif; ?>
 
-			<?php cg_ui_card_open( 'Migration Process' ); ?>
+			<?php certificate_generator_ui_card_open( 'Migration Process' ); ?>
 				<ol>
 					<li><strong>Tables Created:</strong> Custom SQL tables are created automatically on activation.</li>
 					<li><strong>Data Copied:</strong> All CPT data is copied to SQL tables (CPT data preserved).</li>
@@ -354,7 +354,7 @@ class MigrationPage {
 					<li><strong>Clean Up:</strong> Remove legacy CPT posts from <code>wp_posts</code> — eliminates public URLs and orphaned data.</li>
 					<li><strong>URL Protection:</strong> While legacy posts exist, public access is blocked with a 404 response.</li>
 				</ol>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 		</div>
 		<?php
 	}
@@ -368,9 +368,9 @@ class MigrationPage {
 				$wpdb->query( "TRUNCATE TABLE $table" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			}
 		}
-		delete_option( 'cg_cpt_to_sql_migration_completed' );
-		delete_option( 'cg_cpt_to_sql_migration_stats' );
-		delete_option( 'cg_cpt_to_sql_migration_timestamp' );
+		delete_option( 'certificate_generator_cpt_to_sql_migration_completed' );
+		delete_option( 'certificate_generator_cpt_to_sql_migration_stats' );
+		delete_option( 'certificate_generator_cpt_to_sql_migration_timestamp' );
 	}
 
 	/**
@@ -493,6 +493,6 @@ class MigrationPage {
 			$wpdb->query( "DELETE FROM {$wpdb->posts} WHERE ID IN ($id_list)" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		}
 
-		update_option( 'cg_cpts_cleaned_up', true );
+		update_option( 'certificate_generator_cpts_cleaned_up', true );
 	}
 }

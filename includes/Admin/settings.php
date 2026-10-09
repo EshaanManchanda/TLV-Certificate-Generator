@@ -142,7 +142,7 @@ function certificate_generator_settings_init() {
 	);
 }
 
-function cg_encrypt_smtp_password( $plaintext ) {
+function certificate_generator_encrypt_smtp_password( $plaintext ) {
 	if ( empty( $plaintext ) ) {
 		return '';
 	}
@@ -153,7 +153,7 @@ function cg_encrypt_smtp_password( $plaintext ) {
 	return base64_encode( $iv . $cipher );
 }
 
-function cg_decrypt_smtp_password( $stored ) {
+function certificate_generator_decrypt_smtp_password( $stored ) {
 	if ( empty( $stored ) ) {
 		return '';
 	}
@@ -242,7 +242,7 @@ function certificate_generator_sanitize_settings( $input ) {
 				if ( $smtp_field === 'password' ) {
 					$plain = sanitize_text_field( wp_unslash( $input[ $key ] ) );
 					if ( $plain !== '' ) {
-						$output[ $key ] = cg_encrypt_smtp_password( $plain );
+						$output[ $key ] = certificate_generator_encrypt_smtp_password( $plain );
 					}
 					// else: leave existing encrypted value untouched (already in $output from $existing)
 				} else {
@@ -424,7 +424,7 @@ function certificate_generator_smtp_settings_render() {
 	echo '</div>';
 
 	if ( $wp_mail_smtp_active ) {
-		cg_ui_notice(
+		certificate_generator_ui_notice(
 			'success',
 			'<strong>' . esc_html__( 'WP Mail SMTP Active!', 'certificate-generator' ) . '</strong><br>'
 			. esc_html__( 'WP Mail SMTP plugin is active and configured. All emails will be sent through your SMTP settings for better deliverability.', 'certificate-generator' ) . '<br><br>'
@@ -438,7 +438,7 @@ function certificate_generator_smtp_settings_render() {
 			$configure = ( is_plugin_active( 'wp-mail-smtp/wp_mail_smtp.php' ) || is_plugin_active( 'wp-mail-smtp-pro/wp_mail_smtp.php' ) )
 				? ' <a href="' . esc_url( admin_url( 'admin.php?page=wp-mail-smtp' ) ) . '" class="button">' . esc_html__( 'Configure WP Mail SMTP', 'certificate-generator' ) . '</a>'
 				: '';
-			cg_ui_notice(
+			certificate_generator_ui_notice(
 				'error',
 				'<strong>' . esc_html__( 'Email Sending Will FAIL — PHP mail() Disabled', 'certificate-generator' ) . '</strong><br>'
 				. esc_html__( 'Your server has PHP\'s mail() function disabled. Emails cannot be sent until you configure WP Mail SMTP with a real SMTP provider (e.g. Gmail, Mailgun, SendGrid).', 'certificate-generator' ) . '<br><br>'
@@ -447,7 +447,7 @@ function certificate_generator_smtp_settings_render() {
 				true
 			);
 		} else {
-			cg_ui_notice(
+			certificate_generator_ui_notice(
 				'info',
 				'<strong>' . esc_html__( 'Fallback Email System Active', 'certificate-generator' ) . '</strong><br>'
 				. esc_html__( 'Emails will be sent using WordPress default method (PHP mail) with a fallback "noreply@yourdomain.com" sender address, similar to how Forminator works. This works on most shared hosting providers.', 'certificate-generator' ) . '<br>'
@@ -503,7 +503,7 @@ function certificate_generator_smtp_settings_render() {
 		$key   = 'smtp_' . $field;
 		$value = isset( $options[ $key ] ) ? $options[ $key ] : $config['default'];
 		if ( $field === 'password' ) {
-			$value = cg_decrypt_smtp_password( $value );
+			$value = certificate_generator_decrypt_smtp_password( $value );
 		}
 
 		echo '<div class="smtp-field cg-mb">';
@@ -541,7 +541,7 @@ function certificate_generator_smtp_settings_render() {
             btn.prop("disabled", true).text("' . esc_js( __( 'Sending…', 'certificate-generator' ) ) . '");
             result.css("color","").text("");
             $.post(ajaxurl, {
-                action:    "cg_send_smtp_test",
+                action:    "certificate_generator_send_smtp_test",
                 nonce:     "' . esc_html( wp_create_nonce( 'cg_smtp_test_nonce' ) ) . '",
                 recipient: $("#cg_smtp_test_recipient").val()
             }, function(r){
@@ -564,7 +564,7 @@ function certificate_generator_smtp_settings_render() {
 
 // AJAX: send SMTP test email
 add_action(
-	'wp_ajax_cg_send_smtp_test',
+	'wp_ajax_certificate_generator_send_smtp_test',
 	function () {
 		check_ajax_referer( 'cg_smtp_test_nonce', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -588,9 +588,9 @@ add_action(
 
 // AJAX: publish a single scheduled/draft template immediately.
 add_action(
-	'wp_ajax_cg_publish_template_now',
+	'wp_ajax_certificate_generator_publish_template_now',
 	function () {
-		check_ajax_referer( 'cg_publish_template_now', 'nonce' );
+		check_ajax_referer( 'certificate_generator_publish_template_now', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => 'Forbidden' ), 403 );
 		}
@@ -817,12 +817,12 @@ function certificate_generator_sanitize_rate_limits( $input ) {
 }
 
 // AJAX handler: delete all certificate data (SQL tables first, then CPT posts).
-add_action( 'wp_ajax_cg_delete_all_data', 'cg_ajax_delete_all_data' );
-function cg_ajax_delete_all_data(): void {
+add_action( 'wp_ajax_certificate_generator_delete_all_data', 'certificate_generator_ajax_delete_all_data' );
+function certificate_generator_ajax_delete_all_data(): void {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_send_json_error( __( 'Unauthorized', 'certificate-generator' ), 403 );
 	}
-	check_ajax_referer( 'cg_delete_all_data', 'nonce' );
+	check_ajax_referer( 'certificate_generator_delete_all_data', 'nonce' );
 
 	global $wpdb;
 	$deleted = array();
@@ -930,8 +930,8 @@ function certificate_generator_clear_cache() {
 		}
 
 		// ── 2. Delete all files in cg_certificates/ ──────────────────────────
-		$cg_dir = function_exists( 'cg_certificates_dir' )
-			? cg_certificates_dir()
+		$cg_dir = function_exists( 'certificate_generator_certificates_dir' )
+			? certificate_generator_certificates_dir()
 			: wp_upload_dir()['basedir'] . '/cg_certificates';
 
 		if ( is_dir( $cg_dir ) ) {
@@ -975,7 +975,7 @@ function certificate_generator_clear_cache() {
 
 		return true;
 	} catch ( Exception $e ) {
-		cg_debug_log( $e->getMessage() );
+		certificate_generator_debug_log( $e->getMessage() );
 		return false;
 	}
 }
@@ -1012,9 +1012,9 @@ function certificate_generator_settings_page() {
 	<?php
 	// Get and validate current tab
 	$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'general';
-	// The Pro add-on adds its tabs (API, License) here and renders them on cg_settings_tab_{key}.
+	// The Pro add-on adds its tabs (API, License) here and renders them on certificate_generator_settings_tab_{key}.
 	$cg_tabs = apply_filters(
-		'cg_settings_tabs',
+		'certificate_generator_settings_tabs',
 		array(
 			'general'        => __( 'General', 'certificate-generator' ),
 			'templates'      => __( 'Email Templates', 'certificate-generator' ),
@@ -1030,11 +1030,11 @@ function certificate_generator_settings_page() {
 	?>
 	<div class="wrap cg-settings">
 		<?php
-		cg_ui_page_header(
+		certificate_generator_ui_page_header(
 			__( 'Certificate Generator Settings', 'certificate-generator' ),
 			__( 'Email delivery and templates, scheduling, maintenance tools and shortcode text.', 'certificate-generator' )
 		);
-		cg_ui_tabs(
+		certificate_generator_ui_tabs(
 			$cg_tabs,
 			$active_tab,
 			admin_url( 'options-general.php?page=certificate_generator_settings' )
@@ -1050,7 +1050,7 @@ function certificate_generator_settings_page() {
 
 		<?php if ( $active_tab == 'general' ) : ?>
 			<!-- ── GENERAL TAB: Contact Email + Card Styling only ── -->
-			<?php cg_ui_card_open( __( 'General Settings', 'certificate-generator' ), array( 'icon' => 'admin-settings' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'General Settings', 'certificate-generator' ), array( 'icon' => 'admin-settings' ) ); ?>
 			<form action="options.php" method="post">
 				<?php settings_fields( 'certificate_generator_settings' ); ?>
 				<?php certificate_generator_settings_section_callback(); ?>
@@ -1070,18 +1070,18 @@ function certificate_generator_settings_page() {
 
 				<?php submit_button(); ?>
 			</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<!-- Data retention setting — saved independently via AJAX to avoid coupling with options.php -->
-			<?php cg_ui_card_open( __( 'Data Management', 'certificate-generator' ), array( 'icon' => 'database' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Data Management', 'certificate-generator' ), array( 'icon' => 'database' ) ); ?>
 			<p><?php esc_html_e( 'Controls what happens when you delete / uninstall this plugin.', 'certificate-generator' ); ?></p>
 			<table class="form-table" role="presentation">
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Keep Data on Uninstall', 'certificate-generator' ); ?></th>
 					<td>
 						<label>
-							<input type="checkbox" id="cg_keep_data_on_uninstall"
-								<?php checked( get_option( 'cg_keep_data_on_uninstall', '1' ), '1' ); ?>>
+							<input type="checkbox" id="certificate_generator_keep_data_on_uninstall"
+								<?php checked( get_option( 'certificate_generator_keep_data_on_uninstall', '1' ), '1' ); ?>>
 							<?php esc_html_e( 'Keep all students, templates, and email logs when the plugin is deleted', 'certificate-generator' ); ?>
 						</label>
 						<p class="description">
@@ -1101,9 +1101,9 @@ function certificate_generator_settings_page() {
 					CGUI.busy($btn[0], true);
 					$msg.text('');
 					$.post(ajaxurl, {
-						action : 'cg_set_keep_data',
-						keep   : $('#cg_keep_data_on_uninstall').is(':checked') ? '1' : '0',
-						nonce  : <?php echo wp_json_encode( wp_create_nonce( 'cg_set_keep_data' ) ); ?>
+						action : 'certificate_generator_set_keep_data',
+						keep   : $('#certificate_generator_keep_data_on_uninstall').is(':checked') ? '1' : '0',
+						nonce  : <?php echo wp_json_encode( wp_create_nonce( 'certificate_generator_set_keep_data' ) ); ?>
 					}).done(function(r){
 						$msg.text(r.success
 							? '<?php echo esc_js( __( 'Saved.', 'certificate-generator' ) ); ?>'
@@ -1116,15 +1116,15 @@ function certificate_generator_settings_page() {
 			})(jQuery);
 			</script>
 
-			<?php cg_ui_card_close(); ?>
-			<?php cg_ui_card_open( __( 'Features', 'certificate-generator' ), array( 'icon' => 'admin-plugins' ) ); ?>
+			<?php certificate_generator_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_open( __( 'Features', 'certificate-generator' ), array( 'icon' => 'admin-plugins' ) ); ?>
 			<p><?php esc_html_e( 'Turn optional feature areas on or off. A toggle here overrides a matching wp-config.php constant, if one is set. Turning a feature off only stops new activity — existing data is not deleted.', 'certificate-generator' ); ?></p>
 			<?php
-			$cg_feature_flags = cg_feature_flags();
-			$cg_toggle_overrides = get_option( 'cg_feature_toggles', array() );
+			$certificate_generator_feature_flags = certificate_generator_feature_flags();
+			$cg_toggle_overrides = get_option( 'certificate_generator_feature_toggles', array() );
 			?>
 			<table class="form-table" role="presentation">
-				<?php foreach ( $cg_feature_flags as $cg_flag_name => $cg_flag_label ) : ?>
+				<?php foreach ( $certificate_generator_feature_flags as $cg_flag_name => $cg_flag_label ) : ?>
 					<?php
 					$cg_flag_checked   = array_key_exists( $cg_flag_name, $cg_toggle_overrides )
 						? (bool) $cg_toggle_overrides[ $cg_flag_name ]
@@ -1147,7 +1147,7 @@ function certificate_generator_settings_page() {
 			</table>
 			<p><button type="button" id="cg-save-feature-toggles" class="button button-secondary"><?php esc_html_e( 'Save Feature Toggles', 'certificate-generator' ); ?></button>
 			<span class="cg-inline-msg" id="cg-feature-toggles-msg" aria-live="polite"></span></p>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 			<script>
 			(function($){
 				$('#cg-save-feature-toggles').on('click', function(){
@@ -1159,9 +1159,9 @@ function certificate_generator_settings_page() {
 					CGUI.busy($btn[0], true);
 					$msg.text('');
 					$.post(ajaxurl, {
-						action : 'cg_save_feature_toggles',
+						action : 'certificate_generator_save_feature_toggles',
 						flags  : flags,
-						nonce  : <?php echo wp_json_encode( wp_create_nonce( 'cg_save_feature_toggles' ) ); ?>
+						nonce  : <?php echo wp_json_encode( wp_create_nonce( 'certificate_generator_save_feature_toggles' ) ); ?>
 					}).done(function(r){
 						$msg.text(r.success
 							? '<?php echo esc_js( __( 'Saved.', 'certificate-generator' ) ); ?>'
@@ -1191,7 +1191,7 @@ function certificate_generator_settings_page() {
 				</p>
 			</div>
 
-			<?php cg_ui_card_open( __( 'Per-Type Email Templates', 'certificate-generator' ), array( 'icon' => 'email', 'actions_html' => cg_ui_badge( __( 'Priority 1 — Overrides Global', 'certificate-generator' ), 'good' ) ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Per-Type Email Templates', 'certificate-generator' ), array( 'icon' => 'email', 'actions_html' => certificate_generator_ui_badge( __( 'Priority 1 — Overrides Global', 'certificate-generator' ), 'good' ) ) ); ?>
 			<form action="options.php" method="post">
 				<?php settings_fields( 'certificate_generator_settings' ); ?>
 				<?php certificate_generator_email_templates_section_callback(); ?>
@@ -1221,7 +1221,7 @@ function certificate_generator_settings_page() {
 
 				<?php submit_button(); ?>
 			</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 				<?php
 				// ── Handle email delivery settings POST ──────────────────────────────
@@ -1271,26 +1271,26 @@ function certificate_generator_settings_page() {
 
 				// ── Read current values ──────────────────────────────────────────────
 				$cg_ss         = class_exists( '\CertificateGenerator\Services\SettingsService' );
-				$cg_transport  = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_transport' ) : get_option( 'cg_email_transport', 'wp_mail' );
-				$cg_from_name  = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_from_name' ) : get_option( 'cg_email_from_name', get_bloginfo( 'name' ) );
-				$cg_from_email = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_from_email' ) : get_option( 'cg_email_from_email', get_bloginfo( 'admin_email' ) );
-				$cg_subject    = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_subject' ) : get_option( 'cg_email_subject', '' );
-				$cg_body       = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'cg_email_body' ) : get_option( 'cg_email_body', '' );
+				$cg_transport  = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_transport' ) : get_option( 'certificate_generator_email_transport', 'wp_mail' );
+				$cg_from_name  = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_from_name' ) : get_option( 'certificate_generator_email_from_name', get_bloginfo( 'name' ) );
+				$cg_from_email = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_from_email' ) : get_option( 'certificate_generator_email_from_email', get_bloginfo( 'admin_email' ) );
+				$cg_subject    = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_subject' ) : get_option( 'certificate_generator_email_subject', '' );
+				$cg_body       = $cg_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_body' ) : get_option( 'certificate_generator_email_body', '' );
 				$cg_smtp_cfg   = $cg_ss ? \CertificateGenerator\Services\SettingsService::get_smtp_config() : array();
-				$cg_smtp_host  = $cg_smtp_cfg['host'] ?? '';
-				$cg_smtp_port  = $cg_smtp_cfg['port'] ?? '587';
+				$certificate_generator_smtp_host  = $cg_smtp_cfg['host'] ?? '';
+				$certificate_generator_smtp_port  = $cg_smtp_cfg['port'] ?? '587';
 				$cg_smtp_user  = $cg_smtp_cfg['username'] ?? '';
 				$cg_smtp_enc   = $cg_smtp_cfg['encryption'] ?? 'tls';
 				?>
 
 				<?php if ( $cg_email_msg ) : ?>
-				<?php cg_ui_notice( 'success', $cg_email_msg ); ?>
+				<?php certificate_generator_ui_notice( 'success', $cg_email_msg ); ?>
 			<?php endif; ?>
 				<?php foreach ( $cg_email_errors as $cg_err ) : ?>
-				<?php cg_ui_notice( 'error', esc_html( $cg_err ) ); ?>
+				<?php certificate_generator_ui_notice( 'error', esc_html( $cg_err ) ); ?>
 			<?php endforeach; ?>
 
-			<?php cg_ui_card_open( __( 'Email Delivery Configuration', 'certificate-generator' ), array( 'icon' => 'email-alt' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Email Delivery Configuration', 'certificate-generator' ), array( 'icon' => 'email-alt' ) ); ?>
 
 			<form method="post">
 				<?php wp_nonce_field( 'cg_email_settings_save', 'cg_email_settings_nonce' ); ?>
@@ -1298,9 +1298,9 @@ function certificate_generator_settings_page() {
 				<h3><?php esc_html_e( 'Transport', 'certificate-generator' ); ?></h3>
 				<table class="form-table">
 					<tr>
-						<th><label for="cg_email_transport"><?php esc_html_e( 'Mail Transport', 'certificate-generator' ); ?></label></th>
+						<th><label for="certificate_generator_email_transport"><?php esc_html_e( 'Mail Transport', 'certificate-generator' ); ?></label></th>
 						<td>
-							<select id="cg_email_transport" name="cg_email_transport"
+							<select id="certificate_generator_email_transport" name="certificate_generator_email_transport"
 									onchange="
 										document.getElementById('cg-smtp-settings').style.display=this.value==='smtp'?'':'none';
 										document.getElementById('cg-sender-settings').style.display=this.value==='sender'?'':'none';
@@ -1319,12 +1319,12 @@ function certificate_generator_settings_page() {
 				<h3><?php esc_html_e( 'Sender', 'certificate-generator' ); ?></h3>
 				<table class="form-table">
 					<tr>
-						<th><label for="cg_email_from_name"><?php esc_html_e( 'From Name', 'certificate-generator' ); ?></label></th>
-						<td><input type="text" id="cg_email_from_name" name="cg_email_from_name" value="<?php echo esc_attr( $cg_from_name ); ?>" class="regular-text"></td>
+						<th><label for="certificate_generator_email_from_name"><?php esc_html_e( 'From Name', 'certificate-generator' ); ?></label></th>
+						<td><input type="text" id="certificate_generator_email_from_name" name="certificate_generator_email_from_name" value="<?php echo esc_attr( $cg_from_name ); ?>" class="regular-text"></td>
 					</tr>
 					<tr>
-						<th><label for="cg_email_from_email"><?php esc_html_e( 'From Email', 'certificate-generator' ); ?></label></th>
-						<td><input type="email" id="cg_email_from_email" name="cg_email_from_email" value="<?php echo esc_attr( $cg_from_email ); ?>" class="regular-text"></td>
+						<th><label for="certificate_generator_email_from_email"><?php esc_html_e( 'From Email', 'certificate-generator' ); ?></label></th>
+						<td><input type="email" id="certificate_generator_email_from_email" name="certificate_generator_email_from_email" value="<?php echo esc_attr( $cg_from_email ); ?>" class="regular-text"></td>
 					</tr>
 				</table>
 
@@ -1337,12 +1337,12 @@ function certificate_generator_settings_page() {
 				<p class="description cg-mb"><?php esc_html_e( 'Placeholders: {name} {certificate_title} {result_link} {serial_number} {expires_at} {certificate_count} {site_name}. WordPress shortcodes supported.', 'certificate-generator' ); ?></p>
 				<table class="form-table">
 					<tr>
-						<th><label for="cg_email_subject"><?php esc_html_e( 'Subject', 'certificate-generator' ); ?></label></th>
-						<td><input type="text" id="cg_email_subject" name="cg_email_subject" value="<?php echo esc_attr( $cg_subject ); ?>" class="large-text"></td>
+						<th><label for="certificate_generator_email_subject"><?php esc_html_e( 'Subject', 'certificate-generator' ); ?></label></th>
+						<td><input type="text" id="certificate_generator_email_subject" name="certificate_generator_email_subject" value="<?php echo esc_attr( $cg_subject ); ?>" class="large-text"></td>
 					</tr>
 					<tr>
-						<th><label for="cg_email_body"><?php esc_html_e( 'Body (HTML)', 'certificate-generator' ); ?></label></th>
-						<td><textarea id="cg_email_body" name="cg_email_body" rows="8" class="large-text"><?php echo esc_textarea( $cg_body ); ?></textarea></td>
+						<th><label for="certificate_generator_email_body"><?php esc_html_e( 'Body (HTML)', 'certificate-generator' ); ?></label></th>
+						<td><textarea id="certificate_generator_email_body" name="certificate_generator_email_body" rows="8" class="large-text"><?php echo esc_textarea( $cg_body ); ?></textarea></td>
 					</tr>
 				</table>
 
@@ -1350,17 +1350,17 @@ function certificate_generator_settings_page() {
 					<h3><?php esc_html_e( 'SMTP Configuration', 'certificate-generator' ); ?></h3>
 					<table class="form-table">
 						<tr>
-							<th><label for="cg_smtp_host"><?php esc_html_e( 'SMTP Host', 'certificate-generator' ); ?></label></th>
-							<td><input type="text" id="cg_smtp_host" name="cg_smtp_host" value="<?php echo esc_attr( $cg_smtp_host ); ?>" class="regular-text" placeholder="smtp.gmail.com"></td>
+							<th><label for="certificate_generator_smtp_host"><?php esc_html_e( 'SMTP Host', 'certificate-generator' ); ?></label></th>
+							<td><input type="text" id="certificate_generator_smtp_host" name="certificate_generator_smtp_host" value="<?php echo esc_attr( $certificate_generator_smtp_host ); ?>" class="regular-text" placeholder="smtp.gmail.com"></td>
 						</tr>
 						<tr>
-							<th><label for="cg_smtp_port"><?php esc_html_e( 'Port', 'certificate-generator' ); ?></label></th>
-							<td><input type="number" id="cg_smtp_port" name="cg_smtp_port" value="<?php echo esc_attr( $cg_smtp_port ); ?>" class="small-text" min="1" max="65535"></td>
+							<th><label for="certificate_generator_smtp_port"><?php esc_html_e( 'Port', 'certificate-generator' ); ?></label></th>
+							<td><input type="number" id="certificate_generator_smtp_port" name="certificate_generator_smtp_port" value="<?php echo esc_attr( $certificate_generator_smtp_port ); ?>" class="small-text" min="1" max="65535"></td>
 						</tr>
 						<tr>
-							<th><label for="cg_smtp_encryption"><?php esc_html_e( 'Encryption', 'certificate-generator' ); ?></label></th>
+							<th><label for="certificate_generator_smtp_encryption"><?php esc_html_e( 'Encryption', 'certificate-generator' ); ?></label></th>
 							<td>
-								<select id="cg_smtp_encryption" name="cg_smtp_encryption">
+								<select id="certificate_generator_smtp_encryption" name="certificate_generator_smtp_encryption">
 									<option value="tls"  <?php selected( $cg_smtp_enc, 'tls' ); ?>><?php esc_html_e( 'TLS (STARTTLS) — port 587', 'certificate-generator' ); ?></option>
 									<option value="ssl"  <?php selected( $cg_smtp_enc, 'ssl' ); ?>><?php esc_html_e( 'SSL — port 465', 'certificate-generator' ); ?></option>
 									<option value="none" <?php selected( $cg_smtp_enc, 'none' ); ?>><?php esc_html_e( 'None — port 25', 'certificate-generator' ); ?></option>
@@ -1368,15 +1368,15 @@ function certificate_generator_settings_page() {
 							</td>
 						</tr>
 						<tr>
-							<th><label for="cg_smtp_username"><?php esc_html_e( 'Username', 'certificate-generator' ); ?></label></th>
-							<td><input type="text" id="cg_smtp_username" name="cg_smtp_username" value="<?php echo esc_attr( $cg_smtp_user ); ?>" class="regular-text" autocomplete="off"></td>
+							<th><label for="certificate_generator_smtp_username"><?php esc_html_e( 'Username', 'certificate-generator' ); ?></label></th>
+							<td><input type="text" id="certificate_generator_smtp_username" name="certificate_generator_smtp_username" value="<?php echo esc_attr( $cg_smtp_user ); ?>" class="regular-text" autocomplete="off"></td>
 						</tr>
 						<tr>
-							<th><label for="cg_smtp_password"><?php esc_html_e( 'Password', 'certificate-generator' ); ?></label></th>
+							<th><label for="certificate_generator_smtp_password"><?php esc_html_e( 'Password', 'certificate-generator' ); ?></label></th>
 							<td>
-								<input type="password" id="cg_smtp_password" name="cg_smtp_password" value="" class="regular-text" autocomplete="new-password"
+								<input type="password" id="certificate_generator_smtp_password" name="certificate_generator_smtp_password" value="" class="regular-text" autocomplete="new-password"
 										placeholder="<?php esc_attr_e( 'Leave blank to keep current password', 'certificate-generator' ); ?>">
-								<?php if ( $cg_ss && \CertificateGenerator\Services\SettingsService::get( 'cg_smtp_password' ) ) : ?>
+								<?php if ( $cg_ss && \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_smtp_password' ) ) : ?>
 									<p class="description"><?php esc_html_e( 'Password saved. Enter a new one to replace it.', 'certificate-generator' ); ?></p>
 								<?php endif; ?>
 							</td>
@@ -1388,11 +1388,11 @@ function certificate_generator_settings_page() {
 					<h3><?php esc_html_e( 'Sender.net Configuration', 'certificate-generator' ); ?></h3>
 					<table class="form-table">
 						<tr>
-							<th><label for="cg_sender_api_key"><?php esc_html_e( 'API Key', 'certificate-generator' ); ?></label></th>
+							<th><label for="certificate_generator_sender_api_key"><?php esc_html_e( 'API Key', 'certificate-generator' ); ?></label></th>
 							<td>
-								<input type="password" id="cg_sender_api_key" name="cg_sender_api_key" value="" class="regular-text" autocomplete="off"
+								<input type="password" id="certificate_generator_sender_api_key" name="certificate_generator_sender_api_key" value="" class="regular-text" autocomplete="off"
 										placeholder="<?php esc_attr_e( 'Leave blank to keep current key', 'certificate-generator' ); ?>">
-								<?php if ( $cg_ss && \CertificateGenerator\Services\SettingsService::get( 'cg_sender_api_key' ) ) : ?>
+								<?php if ( $cg_ss && \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_sender_api_key' ) ) : ?>
 									<p class="description"><?php esc_html_e( 'API key saved. Enter a new one to replace it.', 'certificate-generator' ); ?></p>
 								<?php endif; ?>
 							</td>
@@ -1404,11 +1404,11 @@ function certificate_generator_settings_page() {
 					<h3><?php esc_html_e( 'Mailchimp Transactional (Mandrill) Configuration', 'certificate-generator' ); ?></h3>
 					<table class="form-table">
 						<tr>
-							<th><label for="cg_mandrill_api_key"><?php esc_html_e( 'API Key', 'certificate-generator' ); ?></label></th>
+							<th><label for="certificate_generator_mandrill_api_key"><?php esc_html_e( 'API Key', 'certificate-generator' ); ?></label></th>
 							<td>
-								<input type="password" id="cg_mandrill_api_key" name="cg_mandrill_api_key" value="" class="regular-text" autocomplete="off"
+								<input type="password" id="certificate_generator_mandrill_api_key" name="certificate_generator_mandrill_api_key" value="" class="regular-text" autocomplete="off"
 										placeholder="<?php esc_attr_e( 'Leave blank to keep current key', 'certificate-generator' ); ?>">
-								<?php if ( $cg_ss && \CertificateGenerator\Services\SettingsService::get( 'cg_mandrill_api_key' ) ) : ?>
+								<?php if ( $cg_ss && \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_mandrill_api_key' ) ) : ?>
 									<p class="description"><?php esc_html_e( 'API key saved. Enter a new one to replace it.', 'certificate-generator' ); ?></p>
 								<?php endif; ?>
 								<p class="description"><?php esc_html_e( 'Requires a Mailchimp Transactional (formerly Mandrill) account — a regular Mailchimp marketing API key will not work here.', 'certificate-generator' ); ?></p>
@@ -1419,9 +1419,9 @@ function certificate_generator_settings_page() {
 
 				<?php submit_button( esc_attr__( 'Save Email Settings', 'certificate-generator' ) ); ?>
 			</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( __( 'Send Test Email', 'certificate-generator' ), array( 'icon' => 'email' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Send Test Email', 'certificate-generator' ), array( 'icon' => 'email' ) ); ?>
 			<form class="cg-row cg-row--end" method="post" data-cg-busy>
 				<?php wp_nonce_field( 'cg_email_test_send', 'cg_email_test_nonce' ); ?>
 				<div>
@@ -1431,7 +1431,7 @@ function certificate_generator_settings_page() {
 				</div>
 				<button type="submit" class="button button-secondary"><?php esc_html_e( 'Send Test', 'certificate-generator' ); ?></button>
 			</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<?php
 			// ── certificate_type → Email Template mapping ───────────────────────
@@ -1503,14 +1503,14 @@ function certificate_generator_settings_page() {
 			$cg_ct_types = $cg_tpl_table ? $wpdb->get_col( "SELECT DISTINCT certificate_type FROM `{$cg_tpl_table}` WHERE certificate_type != '' ORDER BY certificate_type" ) : array(); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			?>
 
-			<?php cg_ui_card_open( __( 'Email Templates by Certificate Type', 'certificate-generator' ), array( 'icon' => 'email-alt2', 'actions_html' => cg_ui_badge( __( 'Priority 0 — Overrides Per-Type', 'certificate-generator' ), 'info' ) ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Email Templates by Certificate Type', 'certificate-generator' ), array( 'icon' => 'email-alt2', 'actions_html' => certificate_generator_ui_badge( __( 'Priority 0 — Overrides Per-Type', 'certificate-generator' ), 'info' ) ) ); ?>
 			<p class="cg-hint"><?php esc_html_e( 'Map a distinct email (subject/body/attachment) to a specific certificate type — e.g. a different email for "Gold Trophy" vs "Participant". A certificate type with no mapping here falls back to the per-type templates above.', 'certificate-generator' ); ?></p>
 
 			<?php foreach ( $cg_et_errors as $cg_et_err ) : ?>
-				<?php cg_ui_notice( 'error', esc_html( $cg_et_err ), false, true ); ?>
+				<?php certificate_generator_ui_notice( 'error', esc_html( $cg_et_err ), false, true ); ?>
 			<?php endforeach; ?>
 			<?php if ( $cg_et_msg ) : ?>
-				<?php cg_ui_notice( 'success', esc_html( $cg_et_msg ), true, true ); ?>
+				<?php certificate_generator_ui_notice( 'success', esc_html( $cg_et_msg ), true, true ); ?>
 			<?php endif; ?>
 
 			<div class="cg-table-wrap">
@@ -1518,7 +1518,7 @@ function certificate_generator_settings_page() {
 				<thead><tr><th><?php esc_html_e( 'Name', 'certificate-generator' ); ?></th><th><?php esc_html_e( 'Certificate Type', 'certificate-generator' ); ?></th><th><?php esc_html_e( 'Subject', 'certificate-generator' ); ?></th><th></th></tr></thead>
 				<tbody>
 					<?php if ( empty( $cg_et_rows ) ) : ?>
-						<?php echo cg_ui_empty_row( 4, __( 'No certificate-type email templates yet. Add one below to give a certificate type its own email.', 'certificate-generator' ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+						<?php echo certificate_generator_ui_empty_row( 4, __( 'No certificate-type email templates yet. Add one below to give a certificate type its own email.', 'certificate-generator' ) ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 					<?php endif; ?>
 					<?php foreach ( $cg_et_rows as $cg_et_row ) : ?>
 						<tr>
@@ -1595,7 +1595,7 @@ function certificate_generator_settings_page() {
 					<?php endif; ?>
 				</form>
 			</div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<?php /* ── Shortcode & Placeholder Reference Panel ── */ ?>
 			<style>
@@ -1617,7 +1617,7 @@ function certificate_generator_settings_page() {
 				.cg-copy-notice { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 18px; border-radius: 4px; font-size: 13px; pointer-events: none; opacity: 0; transition: opacity .2s; z-index: 9999; }
 				.cg-copy-notice.show { opacity: 1; }
 			</style>
-			<?php cg_ui_card_open( __( 'Available Shortcodes & Placeholders', 'certificate-generator' ), array( 'icon' => 'tag', 'class' => 'cg-ref-wrap' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Available Shortcodes & Placeholders', 'certificate-generator' ), array( 'icon' => 'tag', 'class' => 'cg-ref-wrap' ) ); ?>
 				<p class="cg-hint">
 					<?php esc_html_e( 'Click any tag to copy it. Paste directly into Email Subject or Email Body fields above.', 'certificate-generator' ); ?>
 				</p>
@@ -1744,7 +1744,7 @@ function certificate_generator_settings_page() {
 					</div>
 
 				</div><!-- .cg-ref-grid -->
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 			<div class="cg-copy-notice" id="cg-copy-notice"><?php esc_html_e( 'Copied!', 'certificate-generator' ); ?></div>
 			<script>
 			function cgCopyTag(el) {
@@ -1758,34 +1758,34 @@ function certificate_generator_settings_page() {
 			</script>
 
 		<?php elseif ( $active_tab == 'tools' ) : ?>
-			<?php cg_ui_card_open( __( 'Clear Cache & Certificates', 'certificate-generator' ), array( 'icon' => 'trash', 'id' => 'certificate-generator-cache-section' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Clear Cache & Certificates', 'certificate-generator' ), array( 'icon' => 'trash', 'id' => 'certificate-generator-cache-section' ) ); ?>
 				<p><?php esc_html_e( 'Click the button below to clear all cached results and generated certificate files.', 'certificate-generator' ); ?></p>
 				<button type="button" id="clear-cache-btn" class="button button-secondary" data-cg-danger data-cg-confirm-label="<?php esc_attr_e( 'Clear', 'certificate-generator' ); ?>" data-cg-confirm="<?php esc_attr_e( 'Clear all cached results and delete the generated certificate PDF and ZIP files? Student, teacher, school and certificate records are kept.', 'certificate-generator' ); ?>">
 					<?php esc_html_e( 'Clear Cache & Certificates', 'certificate-generator' ); ?>
 				</button>
 				<div id="clear-cache-message" aria-live="polite"></div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( __( 'Email Logs', 'certificate-generator' ), array( 'icon' => 'email-alt' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Email Logs', 'certificate-generator' ), array( 'icon' => 'email-alt' ) ); ?>
 				<p><?php esc_html_e( 'View and manage email delivery logs for certificate notifications.', 'certificate-generator' ); ?></p>
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=certificate-email-logs' ) ); ?>" class="button button-primary">
 					<?php esc_html_e( 'View Email Logs', 'certificate-generator' ); ?>
 				</a>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( __( 'PDF File Integrity Check', 'certificate-generator' ), array( 'icon' => 'media-document' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'PDF File Integrity Check', 'certificate-generator' ), array( 'icon' => 'media-document' ) ); ?>
 				<p><?php esc_html_e( 'Scan the certificates table for rows where the stored PDF path no longer exists on disk.', 'certificate-generator' ); ?></p>
 				<button type="button" id="cg_pdf_check_btn" class="button button-secondary"><?php esc_html_e( 'Run Integrity Check', 'certificate-generator' ); ?></button>
 				<div class="cg-mt-s" id="cg_pdf_check_result" aria-live="polite"></div>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
-			<?php cg_ui_card_open( __( 'Delete All Certificate Data', 'certificate-generator' ), array( 'icon' => 'warning', 'class' => 'cg-card--danger' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Delete All Certificate Data', 'certificate-generator' ), array( 'icon' => 'warning', 'class' => 'cg-card--danger' ) ); ?>
 				<p><?php esc_html_e( 'Permanently deletes all students, teachers, schools, and certificate records from both the SQL tables and CPT posts. This cannot be undone.', 'certificate-generator' ); ?></p>
 				<button type="button" id="cg_delete_all_data_btn" class="button cg-button-danger-solid" data-cg-danger data-cg-confirm-label="<?php esc_attr_e( 'Delete everything', 'certificate-generator' ); ?>" data-cg-confirm="<?php esc_attr_e( 'Permanently delete ALL student, teacher, school and certificate data? This cannot be undone.', 'certificate-generator' ); ?>">
 					<?php esc_html_e( 'Delete All Data', 'certificate-generator' ); ?>
 				</button>
 				<span class="cg-ml" id="cg_delete_all_data_result" aria-live="polite"></span>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<script>
 			(function(){
@@ -1796,8 +1796,8 @@ function certificate_generator_settings_page() {
 					btn.textContent = '<?php echo esc_js( __( 'Deleting…', 'certificate-generator' ) ); ?>';
 					var msg = document.getElementById('cg_delete_all_data_result');
 					var fd = new FormData();
-					fd.append('action', 'cg_delete_all_data');
-					fd.append('nonce', '<?php echo esc_js( wp_create_nonce( 'cg_delete_all_data' ) ); ?>');
+					fd.append('action', 'certificate_generator_delete_all_data');
+					fd.append('nonce', '<?php echo esc_js( wp_create_nonce( 'certificate_generator_delete_all_data' ) ); ?>');
 					fetch(ajaxurl, { method:'POST', body:fd, credentials:'same-origin' })
 						.then(function(r){ return r.json(); })
 						.then(function(r){
@@ -1854,17 +1854,17 @@ function certificate_generator_settings_page() {
 						$cg_st_data[ $cg_st_option_key ]                     = sanitize_text_field( wp_unslash( $_POST[ $cg_st_input_name ] ?? '' ) );
 					}
 				}
-				update_option( 'cg_shortcode_text', $cg_st_data );
+				update_option( 'certificate_generator_shortcode_text', $cg_st_data );
 				$cg_st_msg = __( 'Shortcode text saved.', 'certificate-generator' );
 			}
 
-			$cg_st_saved = get_option( 'cg_shortcode_text', array() );
+			$cg_st_saved = get_option( 'certificate_generator_shortcode_text', array() );
 			?>
-			<?php cg_ui_card_open( __( 'Shortcode Text', 'certificate-generator' ), array( 'icon' => 'shortcode', 'class' => 'cg-narrow' ) ); ?>
-				<p><?php esc_html_e( 'Set sitewide default text for the search shortcodes below. A page can still override any field for itself using a shortcode attribute, e.g. [student_search title="Custom Title"]. Leave a field blank to use the original default shown as its placeholder.', 'certificate-generator' ); ?></p>
+			<?php certificate_generator_ui_card_open( __( 'Shortcode Text', 'certificate-generator' ), array( 'icon' => 'shortcode', 'class' => 'cg-narrow' ) ); ?>
+				<p><?php esc_html_e( 'Set sitewide default text for the search shortcodes below. A page can still override any field for itself using a shortcode attribute, e.g. [certificate_generator_student_search title="Custom Title"]. Leave a field blank to use the original default shown as its placeholder.', 'certificate-generator' ); ?></p>
 
 				<?php if ( $cg_st_msg ) : ?>
-					<?php cg_ui_notice( 'success', esc_html( $cg_st_msg ), true, true ); ?>
+					<?php certificate_generator_ui_notice( 'success', esc_html( $cg_st_msg ), true, true ); ?>
 				<?php endif; ?>
 
 				<form method="post">
@@ -1891,10 +1891,10 @@ function certificate_generator_settings_page() {
 					<?php endforeach; ?>
 					<?php submit_button( __( 'Save Shortcode Text', 'certificate-generator' ), 'primary', 'cg_shortcode_text_save' ); ?>
 				</form>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 		<?php elseif ( $active_tab == 'scheduling' ) : ?>
-			<?php cg_ui_card_open( __( 'Scheduled Templates', 'certificate-generator' ), array( 'icon' => 'calendar-alt' ) ); ?>
+			<?php certificate_generator_ui_card_open( __( 'Scheduled Templates', 'certificate-generator' ), array( 'icon' => 'calendar-alt' ) ); ?>
 				<p><?php esc_html_e( 'Scheduled templates auto-publish hourly via WP-Cron once their Event Date has passed. Draft templates are not auto-published.', 'certificate-generator' ); ?></p>
 
 				<?php
@@ -1913,7 +1913,7 @@ function certificate_generator_settings_page() {
 
 				if ( empty( $_sched_rows ) ) :
 					?>
-					<?php echo cg_ui_empty( __( 'No scheduled or draft templates. Every template is published.', 'certificate-generator' ), admin_url( 'admin.php?page=cg-templates' ), __( 'View Templates', 'certificate-generator' ), 'calendar-alt' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
+					<?php echo certificate_generator_ui_empty( __( 'No scheduled or draft templates. Every template is published.', 'certificate-generator' ), admin_url( 'admin.php?page=cg-templates' ), __( 'View Templates', 'certificate-generator' ), 'calendar-alt' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?>
 				<?php else : ?>
 					<div class="cg-table-wrap">
 					<table class="wp-list-table widefat fixed striped cg-table">
@@ -1942,15 +1942,15 @@ function certificate_generator_settings_page() {
 								</td>
 								<td>
 									<?php if ( $_sched_row['status'] === 'scheduled' ) : ?>
-										<?php echo cg_ui_badge( __( 'Scheduled', 'certificate-generator' ), 'info' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+										<?php echo certificate_generator_ui_badge( __( 'Scheduled', 'certificate-generator' ), 'info' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 									<?php else : ?>
-										<?php echo cg_ui_badge( __( 'Draft', 'certificate-generator' ), 'muted' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+										<?php echo certificate_generator_ui_badge( __( 'Draft', 'certificate-generator' ), 'muted' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 									<?php endif; ?>
 								</td>
 								<td>
 									<button type="button" class="button button-primary cg-publish-now-btn"
 										data-id="<?php echo (int) $_sched_row['id']; ?>"
-										data-nonce="<?php echo esc_attr( wp_create_nonce( 'cg_publish_template_now' ) ); ?>">
+										data-nonce="<?php echo esc_attr( wp_create_nonce( 'certificate_generator_publish_template_now' ) ); ?>">
 										<?php esc_html_e( 'Publish Now', 'certificate-generator' ); ?>
 									</button>
 									&nbsp;
@@ -1964,7 +1964,7 @@ function certificate_generator_settings_page() {
 					</table>
 					</div>
 				<?php endif; ?>
-			<?php cg_ui_card_close(); ?>
+			<?php certificate_generator_ui_card_close(); ?>
 
 			<script>
 			(function($) {
@@ -1974,7 +1974,7 @@ function certificate_generator_settings_page() {
 					var nonce  = $btn.data('nonce');
 					var $row   = $btn.closest('tr');
 					CGUI.busy($btn[0], true);
-					$.post(ajaxurl, { action: 'cg_publish_template_now', template_id: id, nonce: nonce })
+					$.post(ajaxurl, { action: 'certificate_generator_publish_template_now', template_id: id, nonce: nonce })
 						.done(function(resp) {
 							if (resp.success) {
 								$row.fadeOut(400, function(){ $(this).remove(); });
@@ -1992,7 +1992,7 @@ function certificate_generator_settings_page() {
 			</script>
 
 		<?php else : ?>
-			<?php do_action( 'cg_settings_tab_' . $active_tab ); ?>
+			<?php do_action( 'certificate_generator_settings_tab_' . $active_tab ); ?>
 		<?php endif; ?>
 	</div>
 
@@ -2027,8 +2027,8 @@ function certificate_generator_settings_page() {
 				$btn.prop('disabled', true).text('<?php echo esc_js( __( 'Checking…', 'certificate-generator' ) ); ?>');
 				$res.html('');
 				$.post(ajaxurl, {
-					action: 'cg_pdf_integrity_check',
-					nonce: '<?php echo esc_html( wp_create_nonce( 'cg_pdf_integrity_check' ) ); ?>'
+					action: 'certificate_generator_pdf_integrity_check',
+					nonce: '<?php echo esc_html( wp_create_nonce( 'certificate_generator_pdf_integrity_check' ) ); ?>'
 				}, function (r) {
 					$btn.prop('disabled', false).text('<?php echo esc_js( __( 'Run Integrity Check', 'certificate-generator' ) ); ?>');
 					if (r.success) {
@@ -2093,7 +2093,7 @@ function certificate_generator_is_wp_mail_smtp_active() {
 				return true;
 			}
 		} catch ( Exception $e ) {
-			cg_debug_log( 'Certificate Generator: WP Mail SMTP Pro config error — ' . $e->getMessage() );
+			certificate_generator_debug_log( 'Certificate Generator: WP Mail SMTP Pro config error — ' . $e->getMessage() );
 		}
 	}
 
@@ -2102,9 +2102,9 @@ function certificate_generator_is_wp_mail_smtp_active() {
 
 // ── AJAX: PDF integrity check ────────────────────────────────────────────────
 add_action(
-	'wp_ajax_cg_pdf_integrity_check',
+	'wp_ajax_certificate_generator_pdf_integrity_check',
 	function () {
-		check_ajax_referer( 'cg_pdf_integrity_check', 'nonce' );
+		check_ajax_referer( 'certificate_generator_pdf_integrity_check', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Forbidden', 403 );
 		}
@@ -2146,7 +2146,7 @@ add_action(
  * using the saved template row. Shared by Preview Certificate and "Email me a
  * test certificate" so both render the same thing. Null when the template is missing.
  */
-function cg_template_sample_data( int $template_id, string $fallback_type = 'Preview' ): ?array {
+function certificate_generator_template_sample_data( int $template_id, string $fallback_type = 'Preview' ): ?array {
 	global $wpdb;
 
 	// Load the template row so we use its actual certificate_type and event_date.
@@ -2164,7 +2164,7 @@ function cg_template_sample_data( int $template_id, string $fallback_type = 'Pre
 
 	// Resolve the actual field list for this template — explicit per-slot
 	// field_{N}_name mappings when present, else the same positional
-	// CG_Field_Schema fallback real generation uses — so preview sample data
+	// CertificateGenerator_Field_Schema fallback real generation uses — so preview sample data
 	// covers every field the template really renders, not just the old
 	// hardcoded 4-field + CSV-registry set.
 	$tmpl_meta = array();
@@ -2177,8 +2177,8 @@ function cg_template_sample_data( int $template_id, string $fallback_type = 'Pre
 		}
 	}
 	$template_field_count = (int) ( $tmpl_meta['template_field_count'][0] ?? 3 );
-	$base_fields           = function_exists( 'cg_resolve_template_fields' )
-		? cg_resolve_template_fields( $tmpl_meta, $cert_type, $template_field_count )
+	$base_fields           = function_exists( 'certificate_generator_resolve_template_fields' )
+		? certificate_generator_resolve_template_fields( $tmpl_meta, $cert_type, $template_field_count )
 		: array( 'student_name', 'school_name', 'teacher_name', 'issue_date' );
 
 	// Build dummy data for all fields
@@ -2218,7 +2218,7 @@ function cg_template_sample_data( int $template_id, string $fallback_type = 'Pre
 
 // ── AJAX: Preview Certificate (TemplatesPage "Preview Certificate" button) ──
 add_action(
-	'wp_ajax_cg_preview_template',
+	'wp_ajax_certificate_generator_preview_template',
 	function () {
 		check_ajax_referer( 'cg_admin_preview_nonce', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -2230,16 +2230,16 @@ add_action(
 			wp_die( 'Template ID required.' );
 		}
 
-		if ( ! function_exists( 'generate_certificate_pdf_with_data' ) ) {
+		if ( ! function_exists( 'certificate_generator_generate_certificate_pdf_with_data' ) ) {
 			wp_die( 'PDF generation function not loaded.' );
 		}
 
-		$post_data = cg_template_sample_data( $template_id, sanitize_text_field( wp_unslash( $_POST['certificate_type'] ?? 'Preview' ) ) );
+		$post_data = certificate_generator_template_sample_data( $template_id, sanitize_text_field( wp_unslash( $_POST['certificate_type'] ?? 'Preview' ) ) );
 		if ( null === $post_data ) {
 			wp_die( 'Template not found (ID: ' . (int) $template_id . ').' );
 		}
 
-		$file_url = generate_certificate_pdf_with_data( $post_data );
+		$file_url = certificate_generator_generate_certificate_pdf_with_data( $post_data );
 
 		if ( $file_url ) {
 			wp_redirect( $file_url ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- URL of a PDF this plugin just generated in uploads; may be on a CDN host

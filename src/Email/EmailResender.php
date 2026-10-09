@@ -15,8 +15,8 @@ namespace CertificateGenerator\Email;
 class EmailResender {
 
 	public static function register(): void {
-		add_action( 'wp_ajax_cg_resend_email_log', array( self::class, 'ajax_resend_one' ) );
-		add_action( 'wp_ajax_cg_resend_all_failed', array( self::class, 'ajax_resend_all_failed' ) );
+		add_action( 'wp_ajax_certificate_generator_resend_email_log', array( self::class, 'ajax_resend_one' ) );
+		add_action( 'wp_ajax_certificate_generator_resend_all_failed', array( self::class, 'ajax_resend_all_failed' ) );
 	}
 
 	private static function table(): string {

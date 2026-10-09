@@ -11,18 +11,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // ── AJAX: dismiss welcome banner ─────────────────────────────────────────────
 add_action(
-	'wp_ajax_cg_dismiss_welcome',
+	'wp_ajax_certificate_generator_dismiss_welcome',
 	function () {
-		check_ajax_referer( 'cg_dismiss_welcome', 'nonce' );
-		update_option( 'cg_welcome_dismissed', 1 );
+		check_ajax_referer( 'certificate_generator_dismiss_welcome', 'nonce' );
+		update_option( 'certificate_generator_welcome_dismissed', 1 );
 		wp_send_json_success();
 	}
 );
 
 // ── Welcome banner (shows once after activation) ─────────────────────────────
-add_action( 'admin_notices', 'cg_maybe_show_welcome_banner' );
-function cg_maybe_show_welcome_banner() {
-	if ( get_option( 'cg_welcome_dismissed' ) ) {
+add_action( 'admin_notices', 'certificate_generator_maybe_show_welcome_banner' );
+function certificate_generator_maybe_show_welcome_banner() {
+	if ( get_option( 'certificate_generator_welcome_dismissed' ) ) {
 		return;
 	}
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -49,7 +49,7 @@ function cg_maybe_show_welcome_banner() {
 			fetch(ajaxurl, {
 				method: 'POST',
 				headers: {'Content-Type':'application/x-www-form-urlencoded'},
-				body: 'action=cg_dismiss_welcome&nonce=<?php echo esc_js( wp_create_nonce( 'cg_dismiss_welcome' ) ); ?>'
+				body: 'action=certificate_generator_dismiss_welcome&nonce=<?php echo esc_js( wp_create_nonce( 'certificate_generator_dismiss_welcome' ) ); ?>'
 			});
 		});
 	})();
@@ -58,7 +58,7 @@ function cg_maybe_show_welcome_banner() {
 }
 
 // ── Page renderer ─────────────────────────────────────────────────────────────
-function cg_render_documentation_page() {
+function certificate_generator_render_documentation_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ) );
 	}
@@ -80,13 +80,13 @@ function cg_render_documentation_page() {
 
 	$teachers_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}cg_teachers" );
 	$schools_count  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}cg_schools" );
-	$steps          = ! function_exists( 'cg_setup_steps' ) ? array() : cg_setup_steps( $templates_count, $students_count + $teachers_count + $schools_count, $cert_count > 0 );
+	$steps          = ! function_exists( 'certificate_generator_setup_steps' ) ? array() : certificate_generator_setup_steps( $templates_count, $students_count + $teachers_count + $schools_count, $cert_count > 0 );
 
 	$all_done = ! in_array( false, array_column( $steps, 'done' ), true );
 
 	?>
 	<div class="wrap cg-docs-wrap">
-	<?php cg_ui_page_header( 'Certificate Generator — Documentation', 'Set-up checklist, how-to guides, troubleshooting and FAQ.' ); ?>
+	<?php certificate_generator_ui_page_header( 'Certificate Generator — Documentation', 'Set-up checklist, how-to guides, troubleshooting and FAQ.' ); ?>
 
 	<style>
 	.cg-docs-wrap { max-width: 980px; }
@@ -118,7 +118,7 @@ function cg_render_documentation_page() {
 	</style>
 
 	<?php
-	cg_ui_tabs(
+	certificate_generator_ui_tabs(
 		array(
 			'getting-started' => '🚀 Getting Started',
 			'user-guide'      => '📖 User Guide',
@@ -138,9 +138,9 @@ function cg_render_documentation_page() {
 
 		<?php
 		if ( $all_done ) {
-			cg_ui_notice( 'success', '<strong>All setup steps complete — your plugin is ready for production!</strong>', false, true );
+			certificate_generator_ui_notice( 'success', '<strong>All setup steps complete — your plugin is ready for production!</strong>', false, true );
 		} else {
-			cg_ui_notice( 'warning', 'Complete the steps below before sending live certificates.', false, true );
+			certificate_generator_ui_notice( 'warning', 'Complete the steps below before sending live certificates.', false, true );
 		}
 		?>
 
@@ -148,7 +148,7 @@ function cg_render_documentation_page() {
 		<div class="cg-docs-steps">
 		<?php foreach ( $steps as $step ) : ?>
 			<div class="cg-step">
-				<?php echo $step['done'] ? cg_ui_badge( 'Done', 'good' ) : cg_ui_badge( 'To do', 'warn' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
+				<?php echo $step['done'] ? certificate_generator_ui_badge( 'Done', 'good' ) : certificate_generator_ui_badge( 'To do', 'warn' ); // phpcs:ignore WordPress.Security.EscapeOutput ?>
 				<div class="cg-step__label">
 					<strong><?php echo esc_html( $step['label'] ); ?></strong>
 				</div>
@@ -370,16 +370,16 @@ function cg_render_documentation_page() {
 			<div class="cg-section-body">
 				<h4>Available shortcodes</h4>
 				<ul>
-					<li><code>[student_search]</code> — front-end search form letting a student look up and download their own certificate(s) by email.</li>
-					<li><code>[teacher_search]</code> — same lookup flow for teachers.</li>
-					<li><code>[school_search]</code> — same lookup flow for schools (searches by school name and place).</li>
+					<li><code>[certificate_generator_student_search]</code> — front-end search form letting a student look up and download their own certificate(s) by email.</li>
+					<li><code>[certificate_generator_teacher_search]</code> — same lookup flow for teachers.</li>
+					<li><code>[certificate_generator_school_search]</code> — same lookup flow for schools (searches by school name and place).</li>
 					<li><code>[school_bulk_certificate_download]</code> — lets a school download a ZIP of all its students' certificates. <strong>Needs the Pro add-on.</strong></li>
-					<li><code>[cg_verify_certificate]</code> — public certificate-authenticity verification page (also linked from certificate QR codes).</li>
+					<li><code>[certificate_generator_verify_certificate]</code> — public certificate-authenticity verification page (also linked from certificate QR codes).</li>
 				</ul>
 
 				<h4>Customizing search form text</h4>
-				<p>The three search shortcodes (<code>student_search</code>, <code>teacher_search</code>, <code>school_search</code>) support optional attributes to override their title, subtitle, button text, and help text on a specific page:</p>
-				<pre class="cg-pre">[student_search title="Custom Title" subtitle="Custom subtitle" button_text="Find Mine" help_text="Custom help text"]</pre>
+				<p>The three search shortcodes (<code>certificate_generator_student_search</code>, <code>certificate_generator_teacher_search</code>, <code>certificate_generator_school_search</code>) support optional attributes to override their title, subtitle, button text, and help text on a specific page:</p>
+				<pre class="cg-pre">[certificate_generator_student_search title="Custom Title" subtitle="Custom subtitle" button_text="Find Mine" help_text="Custom help text"]</pre>
 				<p>To set a <strong>sitewide default</strong> instead of editing every page's shortcode, go to
 					<a href="<?php echo esc_url( admin_url( 'options-general.php?page=certificate_generator_settings&tab=shortcode_text' ) ); ?>">Settings → Shortcode Text</a>.
 					Fields left blank there fall back to the plugin's built-in defaults, and a shortcode attribute on a specific page always overrides the sitewide setting.

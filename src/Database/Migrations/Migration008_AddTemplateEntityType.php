@@ -8,14 +8,14 @@ namespace CertificateGenerator\Database\Migrations;
  *
  * Backs explicit, entity-scoped field mapping (see TemplatesPage.php's
  * per-slot field_{N}_name dropdown and certificate-search.php's
- * cg_resolve_template_fields()): a template now declares whether it's for
+ * certificate_generator_resolve_template_fields()): a template now declares whether it's for
  * students, teachers, or schools, so the field list it offers matches
  * FieldManager::CORE_FIELDS for that type instead of one flat shared list.
  *
  * Defaults existing rows to 'students' — a value, not a guess about intent —
  * and is non-breaking: templates saved before this migration keep working via
  * the old positional field resolution until explicitly re-saved with field
- * mappings (see cg_resolve_template_fields()'s fallback).
+ * mappings (see certificate_generator_resolve_template_fields()'s fallback).
  */
 class Migration008_AddTemplateEntityType extends Migration {
 

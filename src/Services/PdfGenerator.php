@@ -9,15 +9,15 @@ use CertificateGenerator\Interfaces\PdfGeneratorInterface;
  * PDF generation facade — Phase 1.
  *
  * Phase 1 is a thin coordinator: it delegates to the procedural implementations
- * (_cg_generate_pdf_impl, _cg_generate_pdf_with_data_impl) that live in
+ * (certificate_generator_generate_pdf_impl, certificate_generator_generate_pdf_with_data_impl) that live in
  * includes/Services/certificate-search.php.  Those functions contain the actual
  * FPDF rendering logic, template lookup, QR/serial integration, and file output.
  *
  * Future phases will progressively migrate the body here and remove the delegation.
  *
  * Flag-gated routing (docs/compatibility.md):
- *   CG_USE_NEW_PDF=false (default) — generate_certificate_pdf() runs the impl directly.
- *   CG_USE_NEW_PDF=true            — legacy-shims.php routes generate_certificate_pdf()
+ *   CG_USE_NEW_PDF=false (default) — certificate_generator_generate_certificate_pdf() runs the impl directly.
+ *   CG_USE_NEW_PDF=true            — legacy-shims.php routes certificate_generator_generate_certificate_pdf()
  *                                    through PdfGenerator::make() → this class.
  *
  * DI usage (Phase 6+):
@@ -37,16 +37,16 @@ class PdfGenerator implements PdfGeneratorInterface {
 	 * {@inheritdoc}
 	 */
 	public function create( int $post_id, array $fields = array(), ?array $student_data = null ): string|false {
-		if ( ! function_exists( '_cg_generate_pdf_impl' ) ) {
+		if ( ! function_exists( 'certificate_generator_generate_pdf_impl' ) ) {
 			// certificate-search.php not yet loaded — fall back to the public function.
-			if ( function_exists( 'generate_certificate_pdf' ) ) {
+			if ( function_exists( 'certificate_generator_generate_certificate_pdf' ) ) {
 				/** @psalm-suppress PossiblyUndefinedFunction */
-				return generate_certificate_pdf( $post_id, $fields, $student_data );
+				return certificate_generator_generate_certificate_pdf( $post_id, $fields, $student_data );
 			}
 			return false;
 		}
 		/** @psalm-suppress PossiblyUndefinedFunction */
-		return _cg_generate_pdf_impl( $post_id, $fields, $student_data );
+		return certificate_generator_generate_pdf_impl( $post_id, $fields, $student_data );
 	}
 
 	/**
@@ -55,15 +55,15 @@ class PdfGenerator implements PdfGeneratorInterface {
 	 * {@inheritdoc}
 	 */
 	public function createFromArray( array $post_data ): string|false {
-		if ( ! function_exists( '_cg_generate_pdf_with_data_impl' ) ) {
-			if ( function_exists( 'generate_certificate_pdf_with_data' ) ) {
+		if ( ! function_exists( 'certificate_generator_generate_pdf_with_data_impl' ) ) {
+			if ( function_exists( 'certificate_generator_generate_certificate_pdf_with_data' ) ) {
 				/** @psalm-suppress PossiblyUndefinedFunction */
-				return generate_certificate_pdf_with_data( $post_data );
+				return certificate_generator_generate_certificate_pdf_with_data( $post_data );
 			}
 			return false;
 		}
 		/** @psalm-suppress PossiblyUndefinedFunction */
-		return _cg_generate_pdf_with_data_impl( $post_data );
+		return certificate_generator_generate_pdf_with_data_impl( $post_data );
 	}
 
 	// ── Static convenience (for use from procedural shims and legacy code) ────

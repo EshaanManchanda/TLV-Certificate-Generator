@@ -1,5 +1,5 @@
 // @ts-check
-// §9 Verification (public) — [cg_verify_certificate] logged out.
+// §9 Verification (public) — [certificate_generator_verify_certificate] logged out.
 const { test, expect } = require('./support/fixtures');
 const wp = require('./support/wp');
 
@@ -14,7 +14,7 @@ test.describe('§09 Verification (public)', () => {
 	let verifyUrl;
 
 	test.beforeAll(() => {
-		verifyUrl = wp.ensurePage('Verify', '[cg_verify_certificate]');
+		verifyUrl = wp.ensurePage('Verify', '[certificate_generator_verify_certificate]');
 		wp.seedCertificate({ serial_number: S.ben, student_name: 'E2E Ben Winner', email: 'ben@e2e.test', certificate_type: 'E2E Winner', issued_at: '2026-01-10 00:00:00' });
 		wp.seedCertificate({ serial_number: S.ashaJan, student_name: 'E2E Asha Multi', email: 'asha@e2e.test', certificate_type: 'E2E Participation', issued_at: '2026-01-10 00:00:00' });
 		wp.seedCertificate({ serial_number: S.ashaMar, student_name: 'E2E Asha Multi', email: 'asha@e2e.test', certificate_type: 'E2E Participation', issued_at: '2026-03-15 00:00:00' });
@@ -82,7 +82,7 @@ test.describe('§09 Verification (public)', () => {
 			const { ajaxurl, nonce } = window.cgVerify;
 			const out = [];
 			for (let i = 0; i < 25; i++) {
-				const r = await fetch(ajaxurl, { method: 'POST', body: new URLSearchParams({ action: 'cg_public_verify', nonce, serial_number: serial }) });
+				const r = await fetch(ajaxurl, { method: 'POST', body: new URLSearchParams({ action: 'certificate_generator_public_verify', nonce, serial_number: serial }) });
 				out.push(r.status);
 			}
 			return out;
@@ -98,7 +98,7 @@ test.describe('§09 Verification (public)', () => {
 		await anon.evaluate(async () => {
 			// @ts-ignore
 			const { ajaxurl, nonce } = window.cgVerify;
-			for (let i = 0; i < 21; i++) await fetch(ajaxurl, { method: 'POST', body: new URLSearchParams({ action: 'cg_public_verify', nonce, serial_number: 'x' }) });
+			for (let i = 0; i < 21; i++) await fetch(ajaxurl, { method: 'POST', body: new URLSearchParams({ action: 'certificate_generator_public_verify', nonce, serial_number: 'x' }) });
 		});
 		await anon.fill('#cg-serial-input', S.ben);
 		await anon.click('#cg-verify-btn');

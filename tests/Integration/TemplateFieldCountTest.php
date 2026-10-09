@@ -25,7 +25,7 @@ class TemplateFieldCountTest extends WP_UnitTestCase {
 		// Simulate the real form: every one of the 50 field-row inputs exists in
 		// the DOM and gets submitted, with width/alignment defaulting to
 		// 100/C even for slots beyond the visible field count.
-		$max_fields = class_exists( 'CG_Field_Schema' ) ? \CG_Field_Schema::MAX_FIELDS : 50;
+		$max_fields = class_exists( 'CertificateGenerator_Field_Schema' ) ? \CertificateGenerator_Field_Schema::MAX_FIELDS : 50;
 		for ( $i = 1; $i <= $max_fields; $i++ ) {
 			$_POST["field_{$i}_position_x"] = '105';
 			$_POST["field_{$i}_position_y"] = (string) ( 60 + $i * 25 );

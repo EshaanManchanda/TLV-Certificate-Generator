@@ -18,9 +18,9 @@ const SNAPSHOT = path.join(AUTH_DIR, 'snapshot.json');
 const STATE = path.join(AUTH_DIR, 'state.json');
 
 const SNAPSHOT_OPTIONS = [
-	'cg_plan', 'cg_feature_toggles', 'cg_serial_prefix', 'cg_serial_length', 'cg_serial_suffix',
-	'cg_serial_reset_period', 'cg_serial_include_date', 'wp_mail_smtp', 'cg_email_transport',
-	'cg_keep_data_on_uninstall', 'certificate_generator_settings_email',
+	'cg_plan', 'certificate_generator_feature_toggles', 'certificate_generator_serial_prefix', 'certificate_generator_serial_length', 'certificate_generator_serial_suffix',
+	'certificate_generator_serial_reset_period', 'certificate_generator_serial_include_date', 'wp_mail_smtp', 'certificate_generator_email_transport',
+	'certificate_generator_keep_data_on_uninstall', 'certificate_generator_settings_email',
 ];
 
 function storageState(baseURL, login) {
@@ -56,7 +56,7 @@ module.exports = async (config) => {
 			$o['mail']['mailer'] = 'smtp';
 			$o['smtp'] = array_merge($o['smtp'] ?? [], ['host' => 'localhost', 'port' => ${smtpPort}, 'encryption' => 'none', 'autotls' => false, 'auth' => false]);
 			update_option('wp_mail_smtp', $o);
-			update_option('cg_email_transport', 'wp_mail');
+			update_option('certificate_generator_email_transport', 'wp_mail');
 			echo 1;`);
 	} else {
 		console.warn('[e2e] No Mailpit found — email specs will skip and mail settings are left untouched.');

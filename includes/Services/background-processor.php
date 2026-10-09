@@ -11,9 +11,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Certificate_Background_Processor class
+ * CertificateGenerator_Background_Processor class
  */
-class Certificate_Background_Processor {
+class CertificateGenerator_Background_Processor {
 	/**
 	 * Action hook for background processing
 	 */
@@ -42,7 +42,7 @@ class Certificate_Background_Processor {
 		add_action( self::CRON_HOOK, array( $this, 'process_batch' ), 10, 2 );
 
 		// Register AJAX handlers (admin-only — response contains zip_url to bulk certificate archive)
-		add_action( 'wp_ajax_check_certificate_progress', array( $this, 'check_progress' ) );
+		add_action( 'wp_ajax_certificate_generator_check_certificate_progress', array( $this, 'check_progress' ) );
 	}
 
 	/**
@@ -77,7 +77,7 @@ class Certificate_Background_Processor {
 		);
 
 		// Store job data
-		update_option( 'certificate_job_' . $job_id, $job_data );
+		update_option( 'certificate_generator_job_' . $job_id, $job_data );
 
 		// Schedule the first batch immediately
 		wp_schedule_single_event( time(), self::CRON_HOOK, array( $job_id, $batches[0] ) );
@@ -98,17 +98,17 @@ class Certificate_Background_Processor {
 	 */
 	public function process_batch( $job_id, $batch ) {
 		// Get job data
-		$job_data = get_option( 'certificate_job_' . $job_id );
+		$job_data = get_option( 'certificate_generator_job_' . $job_id );
 
 		if ( ! $job_data ) {
-			cg_debug_log( 'Certificate job not found: ' . $job_id );
+			certificate_generator_debug_log( 'Certificate job not found: ' . $job_id );
 			return;
 		}
 
 		// Update job status to processing if it's the first batch
 		if ( $job_data['status'] === 'pending' ) {
 			$job_data['status'] = 'processing';
-			update_option( 'certificate_job_' . $job_id, $job_data );
+			update_option( 'certificate_generator_job_' . $job_id, $job_data );
 
 			// Invalidate HTML cache but keep certificate data cache
 			$this->invalidate_html_cache( $job_data['email_hash'] );
@@ -120,8 +120,8 @@ class Certificate_Background_Processor {
 		foreach ( $batch as $post_id ) {
 			// Resolve fields dynamically per student (extra fields may vary by cert type)
 			$cert_type_bg = get_post_meta( $post_id, 'certificate_type', true );
-			$fields       = class_exists( 'CG_Field_Schema' )
-				? CG_Field_Schema::get_all_renderable_fields( $cert_type_bg )
+			$fields       = class_exists( 'CertificateGenerator_Field_Schema' )
+				? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type_bg )
 				: array( 'student_name', 'school_name', 'issue_date' );
 			// Check if certificate already exists
 			$existing_file_path = get_post_meta( $post_id, 'certificate_file_path', true );
@@ -160,11 +160,11 @@ class Certificate_Background_Processor {
 						);
 					} else {
 						$job_data['errors'][] = "Certificate file does not exist at path: $file_path";
-						cg_debug_log( "Certificate file does not exist at path: $file_path" );
+						certificate_generator_debug_log( "Certificate file does not exist at path: $file_path" );
 					}
 				} else {
 					$job_data['errors'][] = "Failed to generate certificate for post ID: $post_id";
-					cg_debug_log( "Failed to generate certificate for post ID: $post_id" );
+					certificate_generator_debug_log( "Failed to generate certificate for post ID: $post_id" );
 				}
 			}
 
@@ -183,7 +183,7 @@ class Certificate_Background_Processor {
 		}
 
 		// Update job data
-		update_option( 'certificate_job_' . $job_id, $job_data );
+		update_option( 'certificate_generator_job_' . $job_id, $job_data );
 	}
 
 	/**
@@ -194,9 +194,9 @@ class Certificate_Background_Processor {
 	 * @return string|bool URL of the generated certificate or false on failure
 	 */
 	private function generate_certificate( $post_id, $fields ) {
-		// This is a wrapper for the existing generate_certificate_pdf function
-		if ( function_exists( 'generate_certificate_pdf' ) ) {
-			return generate_certificate_pdf( $post_id, $fields );
+		// This is a wrapper for the existing certificate_generator_generate_certificate_pdf function
+		if ( function_exists( 'certificate_generator_generate_certificate_pdf' ) ) {
+			return certificate_generator_generate_certificate_pdf( $post_id, $fields );
 		}
 		return false;
 	}
@@ -211,18 +211,18 @@ class Certificate_Background_Processor {
 		// Check if ZipArchive class exists
 		if ( ! class_exists( 'ZipArchive' ) ) {
 			$job_data['errors'][] = 'ZipArchive extension is not installed on the server.';
-			cg_debug_log( 'ZipArchive extension is not installed on the server.' );
+			certificate_generator_debug_log( 'ZipArchive extension is not installed on the server.' );
 			return false;
 		}
 
 		// Create a new ZIP file
 		$upload_dir   = wp_upload_dir();
 		$timestamp    = time();
-		$zip_filename = function_exists( 'cg_certificate_zip_filename' )
-			? cg_certificate_zip_filename( $job_data['email'] ?? $job_data['email_hash'], $timestamp )
+		$zip_filename = function_exists( 'certificate_generator_certificate_zip_filename' )
+			? certificate_generator_certificate_zip_filename( $job_data['email'] ?? $job_data['email_hash'], $timestamp )
 			: 'certificates_' . $job_data['email_hash'] . '_' . $timestamp . '.zip';
-		$zip_path     = cg_certificates_dir() . '/' . $zip_filename;
-		$zip_url      = ( function_exists( 'cg_certificates_url' ) ? cg_certificates_url() : $upload_dir['url'] ) . '/' . $zip_filename;
+		$zip_path     = certificate_generator_certificates_dir() . '/' . $zip_filename;
+		$zip_url      = ( function_exists( 'certificate_generator_certificates_url' ) ? certificate_generator_certificates_url() : $upload_dir['url'] ) . '/' . $zip_filename;
 
 		// Clean up old ZIP files for this email
 		$existing_zip_meta_key = 'certificates_zip_' . $job_data['email_hash'];
@@ -230,7 +230,7 @@ class Certificate_Background_Processor {
 
 		if ( $existing_zip_info && isset( $existing_zip_info['path'] ) && file_exists( $existing_zip_info['path'] ) ) {
 			wp_delete_file( $existing_zip_info['path'] );
-			cg_debug_log( "Deleted old ZIP file: {$existing_zip_info['path']}" );
+			certificate_generator_debug_log( "Deleted old ZIP file: {$existing_zip_info['path']}" );
 		}
 
 		// Build SQL-first name + cg_id lookup for each post_id so filenames are correct
@@ -240,12 +240,12 @@ class Certificate_Background_Processor {
 		$post_ids  = array_keys( $job_data['certificates'] );
 		$cert_meta = array();
 		foreach ( $post_ids as $post_id ) {
-			$sql_row = function_exists( 'cg_get_sql_row_for_post_cached' )
-				? cg_get_sql_row_for_post_cached( (int) $post_id, 'students' )
+			$sql_row = function_exists( 'certificate_generator_get_sql_row_for_post_cached' )
+				? certificate_generator_get_sql_row_for_post_cached( (int) $post_id, 'students' )
 				: null;
 			if ( ! $sql_row || empty( $sql_row['student_name'] ) ) {
-				$sql_row = function_exists( 'cg_get_sql_row_for_post_cached' )
-					? cg_get_sql_row_for_post_cached( (int) $post_id, 'teachers' )
+				$sql_row = function_exists( 'certificate_generator_get_sql_row_for_post_cached' )
+					? certificate_generator_get_sql_row_for_post_cached( (int) $post_id, 'teachers' )
 					: null;
 			}
 			$name  = ( $sql_row && ! empty( $sql_row['student_name'] ) ) ? $sql_row['student_name']
@@ -281,8 +281,8 @@ class Certificate_Background_Processor {
 					'type'  => '',
 					'cg_id' => (int) $cert_id,
 				);
-				$clean_name          = function_exists( 'cg_certificate_pdf_filename' )
-					? cg_certificate_pdf_filename( $meta['name'], $meta['type'], $meta['cg_id'] )
+				$clean_name          = function_exists( 'certificate_generator_certificate_pdf_filename' )
+					? certificate_generator_certificate_pdf_filename( $meta['name'], $meta['type'], $meta['cg_id'] )
 					: sanitize_file_name( $meta['name'] . '_' . $meta['type'] . '_' . $meta['cg_id'] . '.pdf' );
 				$certificates_data[] = array(
 					'path'     => $certificate['path'],
@@ -315,7 +315,7 @@ class Certificate_Background_Processor {
 			$job_data['errors'][] = 'No valid certificates could be added to ZIP.';
 		} else {
 			$job_data['errors'][] = 'Failed to create ZIP: no files or ZIP builder unavailable.';
-			cg_debug_log( 'Certificate Generator: ZIP builder unavailable for job ' . ( $job_data['email_hash'] ?? '' ) );
+			certificate_generator_debug_log( 'Certificate Generator: ZIP builder unavailable for job ' . ( $job_data['email_hash'] ?? '' ) );
 		}
 		return false;
 	}
@@ -335,7 +335,7 @@ class Certificate_Background_Processor {
 		}
 
 		$job_id   = sanitize_text_field( wp_unslash( $_POST['job_id'] ) );
-		$job_data = get_option( 'certificate_job_' . $job_id );
+		$job_data = get_option( 'certificate_generator_job_' . $job_id );
 
 		if ( ! $job_data ) {
 			wp_send_json_error( 'Job not found' );
@@ -374,7 +374,7 @@ class Certificate_Background_Processor {
 		$option_names = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT option_name FROM $wpdb->options WHERE option_name LIKE %s ORDER BY option_id DESC LIMIT 1",
-				'certificate_job_cert_job_' . $email_hash . '_%'
+				'certificate_generator_job_cert_job_' . $email_hash . '_%'
 			)
 		);
 
@@ -395,14 +395,14 @@ class Certificate_Background_Processor {
 	 */
 	private function invalidate_html_cache( $email_hash ) {
 		// Get all cache keys for this email
-		$email_cache_keys = get_option( 'certificate_cache_keys_' . $email_hash, array() );
+		$email_cache_keys = get_option( 'certificate_generator_cache_keys_' . $email_hash, array() );
 
 		if ( ! empty( $email_cache_keys ) ) {
 			foreach ( $email_cache_keys as $key => $timestamp ) {
 				// Only delete HTML output cache, keep certificate data cache
 				if ( strpos( $key, 'certificate_data_' ) === false ) {
 					delete_transient( $key );
-					cg_debug_log( "Invalidated cache key: {$key}" );
+					certificate_generator_debug_log( "Invalidated cache key: {$key}" );
 				}
 			}
 		}
@@ -415,19 +415,19 @@ class Certificate_Background_Processor {
 	 */
 	public function invalidate_all_caches( $email_hash ) {
 		// Get all cache keys for this email
-		$email_cache_keys = get_option( 'certificate_cache_keys_' . $email_hash, array() );
+		$email_cache_keys = get_option( 'certificate_generator_cache_keys_' . $email_hash, array() );
 
 		if ( ! empty( $email_cache_keys ) ) {
 			foreach ( $email_cache_keys as $key => $timestamp ) {
 				delete_transient( $key );
-				cg_debug_log( "Invalidated all cache for key: {$key}" );
+				certificate_generator_debug_log( "Invalidated all cache for key: {$key}" );
 			}
 
 			// Clear the cache keys list
-			delete_option( 'certificate_cache_keys_' . $email_hash );
+			delete_option( 'certificate_generator_cache_keys_' . $email_hash );
 		}
 	}
 }
 
 // Initialize the background processor
-$certificate_background_processor = new Certificate_Background_Processor();
+$certificate_generator_background_processor = new CertificateGenerator_Background_Processor();

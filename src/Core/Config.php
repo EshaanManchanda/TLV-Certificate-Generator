@@ -9,7 +9,7 @@ namespace CertificateGenerator\Core;
 class Config {
 
 	public const VERSION           = '7.6.0';
-	public const DB_VERSION_OPTION = 'cg_db_version';
+	public const DB_VERSION_OPTION = 'certificate_generator_db_version';
 	public const DB_TARGET_VERSION = '008';
 
 	public const SERIAL_PREFIX_DEFAULT       = 'CERT';
@@ -46,11 +46,11 @@ class Config {
 	public const QUEUE_RUNTIME_BUDGET = 20; // seconds
 
 	// ── v8 feature flags (default OFF; flip via wp-config define to enable) ──────
-	// CG_USE_NEW_PDF        — route generate_certificate_pdf* through PdfGenerator
+	// CG_USE_NEW_PDF        — route certificate_generator_generate_certificate_pdf* through PdfGenerator
 	// CG_USE_NEW_ZIP        — route cg_build_certificate_zip through ZipService
 	// CG_USE_REPOSITORIES   — route DB reads/writes through Repository layer
 	// CG_USE_DTO            — wrap CertificateData/EmailData value objects
-	// CG_USE_EVENTS         — fire do_action('cg_email_sent') + listeners
+	// CG_USE_EVENTS         — fire do_action('certificate_generator_email_sent') + listeners
 	// The integration flags below are read by the Pro add-on (certificate-generator-pro):
 	// CG_USE_TUTOR_LMS_INTEGRATION — auto-issue certificates on Tutor LMS course/quiz completion
 	// CG_USE_LEARNDASH_INTEGRATION — auto-issue certificates on LearnDash course completion
@@ -59,7 +59,7 @@ class Config {
 	// CG_USE_SENSEI_INTEGRATION    — auto-issue certificates on Sensei LMS course completion
 	// CG_USE_WOOCOMMERCE_INTEGRATION — auto-issue certificates on WooCommerce order completion
 	// CG_USE_BADGES         — generate a companion badge PNG alongside each certificate PDF
-	// CG_USE_RENEWAL_REMINDERS — send recipient-facing expiry reminder emails (see CG_Cron_Jobs)
+	// CG_USE_RENEWAL_REMINDERS — send recipient-facing expiry reminder emails (see CertificateGenerator_Cron_Jobs)
 	// ── debug flags (default OFF; flip via wp-config to enable profiling) ─────────
 	// CG_DEBUG_PDF_TIME     — log PDF generation time to uploads/cg-debug/
 	// CG_DEBUG_QUERY_TIME   — log repository query counts/times
@@ -73,7 +73,7 @@ class Config {
 	 * in wp-config.php or at the top of certificate-generator.php.
 	 *
 	 * The Tools tab's "Features & Integrations" UI can also set a flag via the
-	 * `cg_feature_toggles` option, keyed by the same constant name — when a
+	 * `certificate_generator_feature_toggles` option, keyed by the same constant name — when a
 	 * flag has been explicitly toggled there, that value wins over any
 	 * wp-config constant (only flags the UI actually exposes are ever present
 	 * in that option, so unrelated flags like CG_USE_NEW_PDF are unaffected).
@@ -81,7 +81,7 @@ class Config {
 	 * @param string $name  Flag constant name, e.g. 'CG_USE_NEW_PDF'.
 	 */
 	public static function flag( string $name ): bool {
-		$overrides = get_option( 'cg_feature_toggles', array() );
+		$overrides = get_option( 'certificate_generator_feature_toggles', array() );
 		if ( is_array( $overrides ) && array_key_exists( $name, $overrides ) ) {
 			return (bool) $overrides[ $name ];
 		}
@@ -92,28 +92,28 @@ class Config {
 	 * Queue batch size — prefers runtime define, falls back to class constant.
 	 */
 	public static function queueBatchSize(): int {
-		return defined( 'CG_QUEUE_BATCH_SIZE' ) ? (int) CG_QUEUE_BATCH_SIZE : self::QUEUE_BATCH_SIZE;
+		return defined( 'CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE : self::QUEUE_BATCH_SIZE;
 	}
 
 	/**
 	 * Minutes before a 'sending' row is reclaimed as stale.
 	 */
 	public static function queueStaleMinutes(): int {
-		return defined( 'CG_QUEUE_STALE_MINUTES' ) ? (int) CG_QUEUE_STALE_MINUTES : self::QUEUE_STALE_MINUTES;
+		return defined( 'CERTIFICATE_GENERATOR_QUEUE_STALE_MINUTES' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_STALE_MINUTES : self::QUEUE_STALE_MINUTES;
 	}
 
 	/**
 	 * Maximum send attempts before a queue row is marked 'failed'.
 	 */
 	public static function maxAttempts(): int {
-		return defined( 'CG_QUEUE_MAX_ATTEMPTS' ) ? (int) CG_QUEUE_MAX_ATTEMPTS : self::QUEUE_MAX_ATTEMPTS;
+		return defined( 'CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_MAX_ATTEMPTS : self::QUEUE_MAX_ATTEMPTS;
 	}
 
 	/**
 	 * Max seconds a single batch run may spend before breaking to let cron resume.
 	 */
 	public static function runtimeBudget(): int {
-		return defined( 'CG_QUEUE_RUNTIME_BUDGET' ) ? (int) CG_QUEUE_RUNTIME_BUDGET : self::QUEUE_RUNTIME_BUDGET;
+		return defined( 'CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET' ) ? (int) CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET : self::QUEUE_RUNTIME_BUDGET;
 	}
 
 	public static function get( string $key, $default = null ) {

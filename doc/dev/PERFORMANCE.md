@@ -10,12 +10,12 @@ aspirational numbers.
 
 | Area | Free tier | Pro | Business | What actually enforces it |
 |---|---|---|---|---|
-| Template fields | 50 | 50 | 50 | `CG_Field_Schema::MAX_FIELDS` — `includes/Core/field-schema.php:38`. Arbitrary constant, not a storage limit (`field_config` is JSON, could hold far more). |
-| Certificate generation | 1 request = 1 PDF | same | same | `_cg_generate_pdf_impl()` (`includes/Services/certificate-search.php:1600`) is fully synchronous. |
-| Bulk PDF generation (background) | 10 certs/chunk, chunks scheduled 60s apart | same | same | `Certificate_Background_Processor::BATCH_SIZE = 10` — `includes/Services/background-processor.php:25`, chunked with `array_chunk()` + `wp_schedule_single_event(time() + 60*$i, ...)` (line 87). |
-| Admin ZIP export | 200 certs generated synchronously per "part" | same | same | `CG_ADMIN_EXPORT_ZIP_PART_SIZE = 200` — `includes/Admin/cert-download-admin.php:18`. Browser fires one POST per part for larger exports. |
+| Template fields | 50 | 50 | 50 | `CertificateGenerator_Field_Schema::MAX_FIELDS` — `includes/Core/field-schema.php:38`. Arbitrary constant, not a storage limit (`field_config` is JSON, could hold far more). |
+| Certificate generation | 1 request = 1 PDF | same | same | `certificate_generator_generate_pdf_impl()` (`includes/Services/certificate-search.php:1600`) is fully synchronous. |
+| Bulk PDF generation (background) | 10 certs/chunk, chunks scheduled 60s apart | same | same | `CertificateGenerator_Background_Processor::BATCH_SIZE = 10` — `includes/Services/background-processor.php:25`, chunked with `array_chunk()` + `wp_schedule_single_event(time() + 60*$i, ...)` (line 87). |
+| Admin ZIP export | 200 certs generated synchronously per "part" | same | same | `CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE = 200` — `includes/Admin/cert-download-admin.php:18`. Browser fires one POST per part for larger exports. |
 | Email sending | ~10/min, 80/hour effective | same | same | `includes/Email/rate-limiter.php:18-31` (`emails_per_hour=80`, `emails_per_minute=10`, `batch_delay=480s`) + hardcoded `sleep(2)` per email (`bulk-email-sender.php:139`). Comment states this exists "to prevent hitting Hostinger's email rate limits" (`rate-limiter.php:4`). |
-| Email queue throughput | 50 items/batch, 20s runtime budget per 5-min cron tick | same | same | `CG_QUEUE_BATCH_SIZE = 50`, `CG_QUEUE_RUNTIME_BUDGET = 20`s — `src/Core/Config.php:43`, `bulk-email-sender.php:103-109`. In practice ~5-9 emails/tick actually send once the rate limiter and sleep are applied. |
+| Email queue throughput | 50 items/batch, 20s runtime budget per 5-min cron tick | same | same | `CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE = 50`, `CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET = 20`s — `src/Core/Config.php:43`, `bulk-email-sender.php:103-109`. In practice ~5-9 emails/tick actually send once the rate limiter and sleep are applied. |
 | QR verification | No stated cap | same | same | 2 DB round-trips per scan (`SerialNumberService::verify()`, `src/Services/SerialNumberService.php:38`), no caching — scales with traffic, not data size. |
 
 ## 2. Actual bottlenecks, ranked by what fails first
@@ -65,7 +65,7 @@ implied by the rate-limiter comment) — at which point the request just dies
 with no partial-progress recovery for that part.
 
 **Fix:** route ZIP export through the existing
-`Certificate_Background_Processor` (already used elsewhere in this codebase
+`CertificateGenerator_Background_Processor` (already used elsewhere in this codebase
 for chunked bulk PDF jobs) instead of a bigger synchronous part size. Same
 chunking pattern, no new dependency.
 
@@ -110,7 +110,7 @@ directly instead of going through `Mailer`).
 
 **Biggest lever overall, architectural not algorithmic:** move bulk import
 and bulk PDF generation off "one big synchronous PHP request" onto the
-`Certificate_Background_Processor` chunk-and-cron pattern that already
+`CertificateGenerator_Background_Processor` chunk-and-cron pattern that already
 exists in this codebase for ZIP jobs. That's the difference between
 "times out somewhere past N rows depending on host" and "no practical
 ceiling, just takes longer."

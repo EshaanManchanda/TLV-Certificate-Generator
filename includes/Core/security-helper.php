@@ -100,7 +100,7 @@ class CertificateGenerator_SecurityHelper {
 	public static function check_rate_limit( $action, $limit = 10, $window = 60 ) {
 		$user_id    = get_current_user_id();
 		$ip_address = self::get_client_ip();
-		$key        = 'cg_rl_' . md5( $action . '_' . $user_id . '_' . $ip_address );
+		$key        = 'certificate_generator_rl_' . md5( $action . '_' . $user_id . '_' . $ip_address );
 
 		$current_time = time();
 		$hits         = get_transient( $key );
@@ -152,7 +152,7 @@ class CertificateGenerator_SecurityHelper {
 		 * Sites behind a public proxy such as Cloudflare (without the server restoring the
 		 * visitor IP) can return the real visitor IP here, e.g. from CF-Connecting-IP.
 		 */
-		return (string) apply_filters( 'cg_client_ip', $ip );
+		return (string) apply_filters( 'certificate_generator_client_ip', $ip );
 	}
 
 	/**
@@ -178,7 +178,7 @@ class CertificateGenerator_SecurityHelper {
 			$message
 		);
 
-		cg_debug_log( $log_entry );
+		certificate_generator_debug_log( $log_entry );
 	}
 }
 

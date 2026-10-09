@@ -22,16 +22,17 @@ class Plugin {
 	}
 
 	public function boot(): void {
-		SettingsService::migrate_legacy();
+		// Migrations first: 010 renames stored options, so nothing may read or seed settings before it.
 		if ( class_exists( '\CertificateGenerator\Database\Migrations\MigrationRunner' ) ) {
 			$runner = new MigrationRunner();
 			if ( $runner->needs_migration() ) {
 				$runner->run();
 			}
 		}
-		if ( get_option( 'cg_defaults_seeded' ) !== '2' ) {
+		SettingsService::migrate_legacy();
+		if ( get_option( 'certificate_generator_defaults_seeded' ) !== '2' ) {
 			SettingsService::seed_defaults();
-			update_option( 'cg_defaults_seeded', '2', 'no' );
+			update_option( 'certificate_generator_defaults_seeded', '2', 'no' );
 		}
 		$this->register_services();
 		$this->register_hooks();
@@ -83,9 +84,9 @@ class Plugin {
 			$cache_listener = new \CertificateGenerator\Listeners\InvalidateStatusCacheListener();
 
 			// Priority 10: log first (row must exist before analytics reads counters).
-			add_action( 'cg_email_sent', array( $log_listener, 'handle' ), 10 );
-			add_action( 'cg_email_sent', array( $analytics, 'handle' ), 20 );
-			add_action( 'cg_email_sent', array( $cache_listener, 'handle' ), 30 );
+			add_action( 'certificate_generator_email_sent', array( $log_listener, 'handle' ), 10 );
+			add_action( 'certificate_generator_email_sent', array( $analytics, 'handle' ), 20 );
+			add_action( 'certificate_generator_email_sent', array( $cache_listener, 'handle' ), 30 );
 		}
 
 		// Email Logs: Resend one / Resend all failed.
@@ -95,11 +96,11 @@ class Plugin {
 		\CertificateGenerator\Admin\TestCertificate::register();
 
 		// Fonts page "Download sample PDF". admin-post requests skip admin_menu, so this can't live in FontsPage::register().
-		add_action( 'admin_post_cg_font_sample', array( \CertificateGenerator\Admin\Pages\FontsPage::class, 'stream_sample_pdf' ) );
+		add_action( 'admin_post_certificate_generator_font_sample', array( \CertificateGenerator\Admin\Pages\FontsPage::class, 'stream_sample_pdf' ) );
 
 		if ( Config::flag( 'CG_USE_BADGES' ) ) {
 			$badge_listener = new \CertificateGenerator\Listeners\BadgeGenerationListener();
-			add_action( 'cg_certificate_generated', array( $badge_listener, 'handle' ), 10, 2 );
+			add_action( 'certificate_generator_certificate_generated', array( $badge_listener, 'handle' ), 10, 2 );
 		}
 	}
 
@@ -116,8 +117,8 @@ class Plugin {
 		if ( class_exists( '\CertificateGenerator\Database\Migrations\MigrationRunner' ) ) {
 			$runner = new MigrationRunner();
 			$runner->run();
-		} elseif ( class_exists( '\CG_Migrator' ) ) {
-			\CG_Migrator::run();
+		} elseif ( class_exists( '\CertificateGenerator_Migrator' ) ) {
+			\CertificateGenerator_Migrator::run();
 		}
 
 		// Pre-create centralized certificate storage folder.
@@ -134,8 +135,8 @@ class Plugin {
 			return;
 		}
 
-		if ( class_exists( '\CG_Cron_Jobs' ) ) {
-			\CG_Cron_Jobs::deactivate();
+		if ( class_exists( '\CertificateGenerator_Cron_Jobs' ) ) {
+			\CertificateGenerator_Cron_Jobs::deactivate();
 		}
 
 		flush_rewrite_rules();

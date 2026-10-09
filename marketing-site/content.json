@@ -65,7 +65,7 @@
       "id": "public-search",
       "title": "Self-serve lookup for students, teachers, and schools",
       "pitch": "Recipients find their own certificates — support tickets go down.",
-      "detail": "Drop-in shortcodes ([student_search], [teacher_search], [school_search]) let anyone look up their certificate by email, with an 'Add to LinkedIn' button on results.",
+      "detail": "Drop-in shortcodes ([certificate_generator_student_search], [certificate_generator_teacher_search], [certificate_generator_school_search]) let anyone look up their certificate by email, with an 'Add to LinkedIn' button on results.",
       "screenshot_ref": "search-shortcode-frontend.png"
     },
     {
@@ -135,7 +135,7 @@
     { "file": "bulk-send-queue.png", "capture": "Bulk email send screen with filters and queue progress", "status": "have" },
     { "file": "digital-badge-sample.png", "capture": "A sample PNG badge next to its certificate", "status": "missing" },
     { "file": "analytics-dashboard.png", "capture": "Email logs / analytics charts screen", "status": "have" },
-    { "file": "search-shortcode-frontend.png", "capture": "Front-end [student_search] shortcode on a live page", "status": "have" },
+    { "file": "search-shortcode-frontend.png", "capture": "Front-end [certificate_generator_student_search] shortcode on a live page", "status": "have" },
     { "file": "rest-api-docs.png", "capture": "REST API settings/key page, or a Postman call example", "status": "have" },
     { "file": "custom-font-upload.png", "capture": "Font upload screen in the template editor", "status": "have" }
   ]

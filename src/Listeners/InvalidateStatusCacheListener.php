@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace CertificateGenerator\Listeners;
 
 /**
- * Deletes the per-email badge-status object-cache entry on cg_email_sent,
+ * Deletes the per-email badge-status object-cache entry on certificate_generator_email_sent,
  * ensuring EmailStatusService::getBadgeStatuses() returns fresh data on
  * the next request.
  *

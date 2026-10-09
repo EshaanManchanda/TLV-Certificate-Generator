@@ -106,7 +106,7 @@ class TemplatesPage extends EntityListPage {
 
 	public function register_ajax(): void {
 		parent::register_ajax();
-		add_action( 'wp_ajax_cg_use_bundled_template', array( $this, 'ajax_use_bundled_template' ) );
+		add_action( 'wp_ajax_certificate_generator_use_bundled_template', array( $this, 'ajax_use_bundled_template' ) );
 	}
 
 	public function register(): void {
@@ -341,7 +341,7 @@ class TemplatesPage extends EntityListPage {
 				);
 
 				// ── Field positioning → extra_fields JSON ────────────────
-				$max_fields   = class_exists( 'CG_Field_Schema' ) ? \CG_Field_Schema::MAX_FIELDS : 15;
+				$max_fields   = class_exists( 'CertificateGenerator_Field_Schema' ) ? \CertificateGenerator_Field_Schema::MAX_FIELDS : 15;
 				$field_count  = max( 2, min( $max_fields, absint( $_POST['template_field_count'] ?? 3 ) ) );
 				$extra_fields = array();
 				// Preserve non-field keys already stored in extra_fields
@@ -419,19 +419,19 @@ class TemplatesPage extends EntityListPage {
 		?>
 		<div class="wrap">
 			<?php
-			cg_ui_page_header(
+			certificate_generator_ui_page_header(
 				$id ? __( 'Edit Template', 'certificate-generator' ) : __( 'Add New Template', 'certificate-generator' ),
 				__( 'Pick a background, then place each field on the canvas. Once published, recipients whose certificate type (and event date, if set) match get this design.', 'certificate-generator' ),
 				'<a href="' . esc_url( $list_url ) . '" class="button">' . esc_html__( '← Back to Templates', 'certificate-generator' ) . '</a>'
 			);
 			if ( ! empty( $_GET['duplicated'] ) ) {
-				cg_ui_notice( 'success', esc_html__( 'Template duplicated. Update the name and settings, then save.', 'certificate-generator' ) );
+				certificate_generator_ui_notice( 'success', esc_html__( 'Template duplicated. Update the name and settings, then save.', 'certificate-generator' ) );
 			}
 			foreach ( $errors as $e ) {
-				cg_ui_notice( 'error', esc_html( $e ), false );
+				certificate_generator_ui_notice( 'error', esc_html( $e ), false );
 			}
 			if ( $message ) {
-				cg_ui_notice( 'success', esc_html( $message ) );
+				certificate_generator_ui_notice( 'success', esc_html( $message ) );
 			}
 			?>
 
@@ -650,7 +650,7 @@ class TemplatesPage extends EntityListPage {
 
 				<?php
 				// ── Field Positioning ─────────────────────────────────────
-				$max_fields_ui     = class_exists( '\CG_Field_Schema' ) ? \CG_Field_Schema::MAX_FIELDS : 15;
+				$max_fields_ui     = class_exists( '\CertificateGenerator_Field_Schema' ) ? \CertificateGenerator_Field_Schema::MAX_FIELDS : 15;
 				$extra_fields_data = array();
 				if ( ! empty( $row['extra_fields'] ) ) {
 					$decoded = json_decode( $row['extra_fields'], true );
@@ -661,13 +661,13 @@ class TemplatesPage extends EntityListPage {
 				$field_count_val = max( 2, min( $max_fields_ui, (int) ( $extra_fields_data['template_field_count'] ?? 3 ) ) );
 
 				$cert_type_val  = $row['certificate_type'] ?? '';
-				$all_renderable = ( class_exists( '\CG_Field_Schema' ) && $cert_type_val )
-					? \CG_Field_Schema::get_all_renderable_fields( $cert_type_val )
+				$all_renderable = ( class_exists( '\CertificateGenerator_Field_Schema' ) && $cert_type_val )
+					? \CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type_val )
 					: array();
 				$canvas_labels  = array();
 				for ( $j = 1; $j <= $max_fields_ui; $j++ ) {
 					$canvas_labels[] = isset( $all_renderable[ $j - 1 ] )
-						? \CG_Field_Schema::get_display_label( $all_renderable[ $j - 1 ] )
+						? \CertificateGenerator_Field_Schema::get_display_label( $all_renderable[ $j - 1 ] )
 						: "Field {$j}";
 				}
 				$template_url_val = $row['template_url'] ?? '';
@@ -686,7 +686,7 @@ class TemplatesPage extends EntityListPage {
 						function ( $k ) {
 							return array(
 								'key'   => $k,
-								'label' => \CG_Field_Schema::get_display_label( $k ),
+								'label' => \CertificateGenerator_Field_Schema::get_display_label( $k ),
 							);
 						},
 						$etype_keys
@@ -1448,7 +1448,7 @@ class TemplatesPage extends EntityListPage {
 					if (!id) { return; }
 					var $status = $('#cg_gallery_status').text('Loading…');
 					$.post(ajaxurl, {
-						action:      'cg_use_bundled_template',
+						action:      'certificate_generator_use_bundled_template',
 						nonce:       '<?php echo esc_js( wp_create_nonce( 'cg_bundled_template' ) ); ?>',
 						template_id: id
 					}).done(function (resp) {
@@ -1490,7 +1490,7 @@ class TemplatesPage extends EntityListPage {
 					$btn.prop('disabled', true);
 					$status.text('Generating…');
 					var data = $('#cg-template-form').serializeArray();
-					data.push({ name: 'action',      value: 'cg_preview_template' });
+					data.push({ name: 'action',      value: 'certificate_generator_preview_template' });
 					data.push({ name: 'nonce',       value: '<?php echo esc_html( wp_create_nonce( 'cg_admin_preview_nonce' ) ); ?>' });
 					data.push({ name: 'template_id', value: '<?php echo (int) $id; ?>' });
 					var $form = $('<form method="POST" target="_blank" action="' + ajaxurl + '">');
@@ -1509,8 +1509,8 @@ class TemplatesPage extends EntityListPage {
 					CGUI.busy(btn, true);
 					$status.text('<?php echo esc_js( __( 'Sending…', 'certificate-generator' ) ); ?>');
 					$.post(ajaxurl, {
-						action: 'cg_send_test_certificate',
-						nonce: '<?php echo esc_js( wp_create_nonce( 'cg_send_test_certificate' ) ); ?>',
+						action: 'certificate_generator_send_test_certificate',
+						nonce: '<?php echo esc_js( wp_create_nonce( 'certificate_generator_send_test_certificate' ) ); ?>',
 						template_id: '<?php echo (int) $id; ?>'
 					}).done(function (response) {
 						$status.text((response.data && response.data.message) || '');

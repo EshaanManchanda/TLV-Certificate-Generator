@@ -11,9 +11,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // ── Template override ────────────────────────────────────────────────────────
 
-add_filter( 'single_template', 'cg_student_single_template' );
+add_filter( 'single_template', 'certificate_generator_student_single_template' );
 
-function cg_student_single_template( $template ) {
+function certificate_generator_student_single_template( $template ) {
 	if ( is_singular( 'students' ) ) {
 		$plugin_template = CERTIFICATE_GENERATOR_PATH . 'templates/single-students.php';
 		if ( file_exists( $plugin_template ) ) {
@@ -25,9 +25,9 @@ function cg_student_single_template( $template ) {
 
 // ── PDF download handler ─────────────────────────────────────────────────────
 
-add_action( 'template_redirect', 'cg_handle_cert_download' );
+add_action( 'template_redirect', 'certificate_generator_handle_cert_download' );
 
-function cg_handle_cert_download() {
+function certificate_generator_handle_cert_download() {
 	if ( empty( $_GET['cg_download_cert'] ) ) {
 		return;
 	}
@@ -47,7 +47,7 @@ function cg_handle_cert_download() {
 		wp_die( esc_html__( 'Invalid request.', 'certificate-generator' ), '', array( 'response' => 400 ) );
 	}
 
-	if ( ! function_exists( 'generate_certificate_pdf_with_data' ) ) {
+	if ( ! function_exists( 'certificate_generator_generate_certificate_pdf_with_data' ) ) {
 		wp_die(
 			esc_html__( 'Certificate generation is not available.', 'certificate-generator' ),
 			'',
@@ -73,8 +73,8 @@ function cg_handle_cert_download() {
 	);
 
 	// Merge extra fields so they are rendered on the PDF
-	if ( class_exists( 'CG_Field_Schema' ) ) {
-		foreach ( CG_Field_Schema::get_extra_fields( $certificate_type ) as $slug ) {
+	if ( class_exists( 'CertificateGenerator_Field_Schema' ) ) {
+		foreach ( CertificateGenerator_Field_Schema::get_extra_fields( $certificate_type ) as $slug ) {
 			$value = get_post_meta( $post_id, $slug, true );
 			if ( $value !== '' && $value !== false ) {
 				$post_data[ $slug ] = $value;
@@ -82,7 +82,7 @@ function cg_handle_cert_download() {
 		}
 	}
 
-	$pdf_url = generate_certificate_pdf_with_data( $post_data );
+	$pdf_url = certificate_generator_generate_certificate_pdf_with_data( $post_data );
 
 	if ( $pdf_url ) {
 		nocache_headers();

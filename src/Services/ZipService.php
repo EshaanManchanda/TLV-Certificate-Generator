@@ -8,7 +8,7 @@ use CertificateGenerator\Interfaces\ZipServiceInterface;
 /**
  * ZIP archive facade — Phase 2.
  *
- * Phase 2: thin coordinator delegating to _cg_create_zip_impl() which lives in
+ * Phase 2: thin coordinator delegating to certificate_generator_create_zip_impl() which lives in
  * includes/Email/functions.php (formerly certificate_generator_create_zip_for_email).
  *
  * Flag-gated (docs/compatibility.md):
@@ -25,7 +25,7 @@ class ZipService implements ZipServiceInterface {
 	 * {@inheritdoc}
 	 */
 	public function create( array $certificates_data, string $recipient = '', array $args = array() ): array|false {
-		if ( ! function_exists( '_cg_create_zip_impl' ) ) {
+		if ( ! function_exists( 'certificate_generator_create_zip_impl' ) ) {
 			if ( function_exists( 'certificate_generator_create_zip_for_email' ) ) {
 				/** @psalm-suppress PossiblyUndefinedFunction */
 				return certificate_generator_create_zip_for_email( $certificates_data, $recipient, $args );
@@ -33,7 +33,7 @@ class ZipService implements ZipServiceInterface {
 			return false;
 		}
 		/** @psalm-suppress PossiblyUndefinedFunction */
-		return _cg_create_zip_impl( $certificates_data, $recipient, $args );
+		return certificate_generator_create_zip_impl( $certificates_data, $recipient, $args );
 	}
 
 	// ── Static convenience (for procedural shims and inline callers) ──────────
@@ -43,7 +43,7 @@ class ZipService implements ZipServiceInterface {
 	 *
 	 * @param array  $certificates_data
 	 * @param string $recipient
-	 * @param array  $args      See _cg_create_zip_impl() ('private' => true for admin ZIPs).
+	 * @param array  $args      See certificate_generator_create_zip_impl() ('private' => true for admin ZIPs).
 	 * @return array|false
 	 */
 	public static function make( array $certificates_data, string $recipient = '', array $args = array() ): array|false {

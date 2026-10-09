@@ -3,47 +3,47 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CG_Cron_Jobs {
+class CertificateGenerator_Cron_Jobs {
 	public static function init() {
-		add_action( 'cg_cleanup_qr_codes', array( __CLASS__, 'cleanup_qr_codes' ) );
-		add_action( 'cg_cleanup_old_zips', array( __CLASS__, 'cleanup_old_zips' ) );
-		add_action( 'cg_check_expiring_certificates', array( __CLASS__, 'check_expiring_certificates' ) );
-		add_action( 'cg_cleanup_old_certificates', array( __CLASS__, 'cleanup_old_certificates' ) );
-		add_action( 'cg_publish_scheduled_templates', array( __CLASS__, 'publish_scheduled_templates' ) );
-		add_action( 'cg_send_renewal_reminders', array( __CLASS__, 'send_recipient_renewal_reminders' ) );
+		add_action( 'certificate_generator_cleanup_qr_codes', array( __CLASS__, 'cleanup_qr_codes' ) );
+		add_action( 'certificate_generator_cleanup_old_zips', array( __CLASS__, 'cleanup_old_zips' ) );
+		add_action( 'certificate_generator_check_expiring_certificates', array( __CLASS__, 'check_expiring_certificates' ) );
+		add_action( 'certificate_generator_cleanup_old_certificates', array( __CLASS__, 'cleanup_old_certificates' ) );
+		add_action( 'certificate_generator_publish_scheduled_templates', array( __CLASS__, 'publish_scheduled_templates' ) );
+		add_action( 'certificate_generator_send_renewal_reminders', array( __CLASS__, 'send_recipient_renewal_reminders' ) );
 
-		if ( ! wp_next_scheduled( 'cg_cleanup_qr_codes' ) ) {
-			wp_schedule_event( time(), 'daily', 'cg_cleanup_qr_codes' );
+		if ( ! wp_next_scheduled( 'certificate_generator_cleanup_qr_codes' ) ) {
+			wp_schedule_event( time(), 'daily', 'certificate_generator_cleanup_qr_codes' );
 		}
 
-		if ( ! wp_next_scheduled( 'cg_cleanup_old_zips' ) ) {
-			wp_schedule_event( time(), 'daily', 'cg_cleanup_old_zips' );
+		if ( ! wp_next_scheduled( 'certificate_generator_cleanup_old_zips' ) ) {
+			wp_schedule_event( time(), 'daily', 'certificate_generator_cleanup_old_zips' );
 		}
 
-		if ( ! wp_next_scheduled( 'cg_check_expiring_certificates' ) ) {
-			wp_schedule_event( time(), 'daily', 'cg_check_expiring_certificates' );
+		if ( ! wp_next_scheduled( 'certificate_generator_check_expiring_certificates' ) ) {
+			wp_schedule_event( time(), 'daily', 'certificate_generator_check_expiring_certificates' );
 		}
 
-		if ( ! wp_next_scheduled( 'cg_cleanup_old_certificates' ) ) {
-			wp_schedule_event( time(), 'weekly', 'cg_cleanup_old_certificates' );
+		if ( ! wp_next_scheduled( 'certificate_generator_cleanup_old_certificates' ) ) {
+			wp_schedule_event( time(), 'weekly', 'certificate_generator_cleanup_old_certificates' );
 		}
 
-		if ( ! wp_next_scheduled( 'cg_publish_scheduled_templates' ) ) {
-			wp_schedule_event( time(), 'hourly', 'cg_publish_scheduled_templates' );
+		if ( ! wp_next_scheduled( 'certificate_generator_publish_scheduled_templates' ) ) {
+			wp_schedule_event( time(), 'hourly', 'certificate_generator_publish_scheduled_templates' );
 		}
 
-		if ( ! wp_next_scheduled( 'cg_send_renewal_reminders' ) ) {
-			wp_schedule_event( time(), 'daily', 'cg_send_renewal_reminders' );
+		if ( ! wp_next_scheduled( 'certificate_generator_send_renewal_reminders' ) ) {
+			wp_schedule_event( time(), 'daily', 'certificate_generator_send_renewal_reminders' );
 		}
 	}
 
 	public static function deactivate() {
-		wp_clear_scheduled_hook( 'cg_cleanup_qr_codes' );
-		wp_clear_scheduled_hook( 'cg_cleanup_old_zips' );
-		wp_clear_scheduled_hook( 'cg_check_expiring_certificates' );
-		wp_clear_scheduled_hook( 'cg_cleanup_old_certificates' );
-		wp_clear_scheduled_hook( 'cg_publish_scheduled_templates' );
-		wp_clear_scheduled_hook( 'cg_send_renewal_reminders' );
+		wp_clear_scheduled_hook( 'certificate_generator_cleanup_qr_codes' );
+		wp_clear_scheduled_hook( 'certificate_generator_cleanup_old_zips' );
+		wp_clear_scheduled_hook( 'certificate_generator_check_expiring_certificates' );
+		wp_clear_scheduled_hook( 'certificate_generator_cleanup_old_certificates' );
+		wp_clear_scheduled_hook( 'certificate_generator_publish_scheduled_templates' );
+		wp_clear_scheduled_hook( 'certificate_generator_send_renewal_reminders' );
 	}
 
 	/**
@@ -73,13 +73,13 @@ class CG_Cron_Jobs {
 		$wpdb->query(
 			$wpdb->prepare(
 				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value < %d",
-				$wpdb->esc_like( 'cg_dljob_lock_' ) . '%',
+				$wpdb->esc_like( 'certificate_generator_dljob_lock_' ) . '%',
 				time() - HOUR_IN_SECONDS
 			)
 		);
 
 		if ( $deleted > 0 && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "[CG Cron] ZIP/temp cleanup removed $deleted file(s)" );
+			certificate_generator_debug_log( "[CG Cron] ZIP/temp cleanup removed $deleted file(s)" );
 		}
 	}
 
@@ -108,7 +108,7 @@ class CG_Cron_Jobs {
 		}
 
 		if ( $deleted > 0 && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "[CG Cron] Cleaned up $deleted old QR code files" );
+			certificate_generator_debug_log( "[CG Cron] Cleaned up $deleted old QR code files" );
 		}
 	}
 
@@ -134,8 +134,8 @@ class CG_Cron_Jobs {
 			return;
 		}
 
-		$notification_email = get_option( 'cg_expiration_notification_email', get_option( 'admin_email' ) );
-		$send_notifications = get_option( 'cg_send_expiration_notifications', false );
+		$notification_email = get_option( 'certificate_generator_expiration_notification_email', get_option( 'admin_email' ) );
+		$send_notifications = get_option( 'certificate_generator_send_expiration_notifications', false );
 
 		if ( ! $send_notifications ) {
 			return;
@@ -154,7 +154,7 @@ class CG_Cron_Jobs {
 		wp_mail( $notification_email, $subject, $message );
 
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( '[CG Cron] Sent expiration notification for ' . count( $expiring_soon ) . ' certificates' );
+			certificate_generator_debug_log( '[CG Cron] Sent expiration notification for ' . count( $expiring_soon ) . ' certificates' );
 		}
 	}
 
@@ -162,7 +162,7 @@ class CG_Cron_Jobs {
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'certificate_generator';
 
-		$archive_after_years = (int) get_option( 'cg_archive_after_years', 5 );
+		$archive_after_years = (int) get_option( 'certificate_generator_archive_after_years', 5 );
 		if ( $archive_after_years <= 0 ) {
 			return;
 		}
@@ -202,7 +202,7 @@ class CG_Cron_Jobs {
 		}
 
 		if ( $archived > 0 && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "[CG Cron] Archived $archived old expired certificates" );
+			certificate_generator_debug_log( "[CG Cron] Archived $archived old expired certificates" );
 		}
 	}
 
@@ -236,7 +236,7 @@ class CG_Cron_Jobs {
 		);
 
 		if ( $updated && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "[CG Cron] Auto-published $updated scheduled certificate template(s)" );
+			certificate_generator_debug_log( "[CG Cron] Auto-published $updated scheduled certificate template(s)" );
 		}
 	}
 
@@ -267,7 +267,7 @@ class CG_Cron_Jobs {
 			return;
 		}
 
-		$offsets = get_option( 'cg_renewal_reminder_offsets', array( 30, 7, 1 ) );
+		$offsets = get_option( 'certificate_generator_renewal_reminder_offsets', array( 30, 7, 1 ) );
 		if ( ! is_array( $offsets ) || empty( $offsets ) ) {
 			$offsets = array( 30, 7, 1 );
 		}
@@ -321,7 +321,7 @@ class CG_Cron_Jobs {
 		}
 
 		if ( $sent_count > 0 && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			cg_debug_log( "[CG Cron] Sent $sent_count recipient renewal reminder(s)" );
+			certificate_generator_debug_log( "[CG Cron] Sent $sent_count recipient renewal reminder(s)" );
 		}
 	}
 }

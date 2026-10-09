@@ -9,10 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-add_action( 'plugins_loaded', 'cg_migrate_send_email_column', 20 );
+add_action( 'plugins_loaded', 'certificate_generator_migrate_send_email_column', 20 );
 
-function cg_migrate_send_email_column() {
-	if ( get_option( 'cg_migration_send_email_column_done' ) ) {
+function certificate_generator_migrate_send_email_column() {
+	if ( get_option( 'certificate_generator_migration_send_email_column_done' ) ) {
 		return;
 	}
 
@@ -41,5 +41,5 @@ function cg_migrate_send_email_column() {
 		$wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN send_email TINYINT(1) NOT NULL DEFAULT 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	}
 
-	update_option( 'cg_migration_send_email_column_done', true );
+	update_option( 'certificate_generator_migration_send_email_column_done', true );
 }

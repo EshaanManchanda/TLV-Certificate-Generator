@@ -9,10 +9,10 @@ namespace CertificateGenerator\Services;
  * no new dependency, no Ghostscript/Imagick delegate requirement that many
  * shared WP hosts disable).
  *
- * Field positions are built via the same cg_build_field_positions() used by
+ * Field positions are built via the same certificate_generator_build_field_positions() used by
  * both PDF-generation code paths in certificate-search.php, so a field's
  * placement can't drift between the PDF and PNG output. Template/font/QR
- * resolution here mirrors _cg_generate_pdf_impl()'s setup — that boilerplate
+ * resolution here mirrors certificate_generator_generate_pdf_impl()'s setup — that boilerplate
  * (reading tmpl_meta, picking a template) is stable, low-risk WP data access,
  * unlike the position math, so it's duplicated rather than forcing a riskier
  * refactor of the production PDF path just for this.
@@ -69,7 +69,7 @@ class PngGenerator {
 			return null;
 		}
 
-		$certificate_template = \cg_select_certificate_template( $certificate_type, $issue_date_iso, ! $use_table_data );
+		$certificate_template = \certificate_generator_select_certificate_template( $certificate_type, $issue_date_iso, ! $use_table_data );
 		if ( ! $certificate_template ) {
 			return null;
 		}
@@ -110,7 +110,7 @@ class PngGenerator {
 		$width_px  = (int) round( $page_w_mm * $px_per_mm );
 		$height_px = (int) round( $page_h_mm * $px_per_mm );
 
-		$bg_path = \cg_template_url_to_path( $template_url );
+		$bg_path = \certificate_generator_template_url_to_path( $template_url );
 		$canvas  = self::load_image( $bg_path );
 		if ( ! $canvas ) {
 			return null;
@@ -119,16 +119,16 @@ class PngGenerator {
 
 		$photo_url = $use_table_data ? (string) ( $student_data['photo_url'] ?? '' ) : '';
 
-		// Resolve the field list ourselves — mirrors _cg_generate_pdf_impl(), which
+		// Resolve the field list ourselves — mirrors certificate_generator_generate_pdf_impl(), which
 		// also ignores its caller-supplied $fields — so entity-aware per-slot
 		// mapping applies to PNG output the same as PDF, not just whatever list
 		// the one caller (bulk-download.php) happened to build independently.
 		$template_field_count = (int) ( $tmpl_meta['template_field_count'][0] ?? 3 );
-		$fields               = \cg_resolve_template_fields( $tmpl_meta, $certificate_type, $template_field_count );
+		$fields               = \certificate_generator_resolve_template_fields( $tmpl_meta, $certificate_type, $template_field_count );
 
-		$field_positions = \cg_build_field_positions( $fields, $tmpl_meta, $is_sql_table, $photo_url );
+		$field_positions = \certificate_generator_build_field_positions( $fields, $tmpl_meta, $is_sql_table, $photo_url );
 
-		// Mirror _cg_generate_pdf_impl()'s $post_data build: per-field text values from
+		// Mirror certificate_generator_generate_pdf_impl()'s $post_data build: per-field text values from
 		// the SQL row or post meta, with issue_date reformatted to dd-mm-yyyy.
 		$post_data = array();
 		foreach ( $fields as $field_name ) {
@@ -163,7 +163,7 @@ class PngGenerator {
 
 			if ( in_array( $position['type'] ?? 'text', array( 'image', 'photo' ), true ) ) {
 				if ( ! empty( $position['image_url'] ) ) {
-					$overlay = self::load_image( \cg_template_url_to_path( $position['image_url'] ) );
+					$overlay = self::load_image( \certificate_generator_template_url_to_path( $position['image_url'] ) );
 					if ( $overlay ) {
 						$w_px = (float) $position['width'] * $px_per_mm;
 						// Explicit height when set (matches the PDF path); else keep the
@@ -200,8 +200,8 @@ class PngGenerator {
 		}
 
 		// QR code — reuse the same PNG the PDF path draws, no separate QR system.
-		if ( class_exists( 'CG_QR_Code_Generator' ) && ( $tmpl_meta['qr_enabled'][0] ?? '' ) === '1' ) {
-			$qr_generator = \CG_QR_Code_Generator::get_instance();
+		if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) && ( $tmpl_meta['qr_enabled'][0] ?? '' ) === '1' ) {
+			$qr_generator = \CertificateGenerator_QR_Code_Generator::get_instance();
 			$serial       = self::resolve_display_serial( $post_id, $student_data, $use_table_data );
 			$qr_data      = $qr_generator->generate_qr_data( array_merge( is_array( $student_data ) ? $student_data : array(), array( 'certificate_type' => $certificate_type ) ), $serial );
 			$qr_size_px   = (int) round( max( 10, min( 50, (float) ( $tmpl_meta['qr_size'][0] ?? 15 ) ) ) * $px_per_mm );

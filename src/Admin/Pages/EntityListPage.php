@@ -27,7 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   date_col       'issue_date'|'event_date',
  *   bulk_fields    [col => text|type|type_free|date|status|event|entity_type],
  *   has_email, can_generate, can_empty, is_templates  bool,
- *   gen_fields     string[]|null           — fields passed to generate_certificate_pdf (null = CG_Field_Schema).
+ *   gen_fields     string[]|null           — fields passed to certificate_generator_generate_certificate_pdf (null = CertificateGenerator_Field_Schema).
  */
 abstract class EntityListPage {
 
@@ -57,7 +57,7 @@ abstract class EntityListPage {
 	/** AJAX handlers; called on admin_init during admin-ajax.php, where admin_menu never fires. */
 	public function register_ajax(): void {
 		if ( ! empty( $this->config()['has_email'] ) ) {
-			add_action( 'wp_ajax_cg_' . $this->config()['singular'] . '_send_email', array( $this, 'send_email_ajax' ) );
+			add_action( 'wp_ajax_certificate_generator_' . $this->config()['singular'] . '_send_email', array( $this, 'send_email_ajax' ) );
 		}
 	}
 
@@ -193,7 +193,7 @@ abstract class EntityListPage {
 
 	/**
 	 * Row e has a template of the given status(es) matching certificate_type + issue_date
-	 * — same rule as cg_select_certificate_template(): an undated template matches any date.
+	 * — same rule as certificate_generator_select_certificate_template(): an undated template matches any date.
 	 */
 	private function template_match_sql( string $statuses ): string {
 		$tpl = CustomTables::instance()->get_table( 'certificate_templates' );
@@ -378,8 +378,8 @@ abstract class EntityListPage {
 				$set    = implode( ', ', array_map( static fn( $col ) => "`$col` = %s", array_keys( $data ) ) );
 				$values = array_values( $data );
 				$n      = $this->for_ids( $ids, static fn( $in ) => $wpdb->query( $wpdb->prepare( "UPDATE $table SET $set WHERE id IN ($in)", ...$values ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL
-				if ( function_exists( 'cg_flush_filter_caches' ) ) {
-					cg_flush_filter_caches();
+				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
+					certificate_generator_flush_filter_caches();
 				}
 				return array( "$n $label updated via bulk edit.", 'success' );
 
@@ -441,7 +441,7 @@ abstract class EntityListPage {
 	}
 
 	private function bulk_generate( array $ids ): array {
-		if ( ! function_exists( 'generate_certificate_pdf' ) || ! function_exists( 'cg_resolve_entity_template' ) ) {
+		if ( ! function_exists( 'certificate_generator_generate_certificate_pdf' ) || ! function_exists( 'certificate_generator_resolve_entity_template' ) ) {
 			return array( 'Certificate generator functions are unavailable.', 'error' );
 		}
 		$c       = $this->config();
@@ -453,7 +453,7 @@ abstract class EntityListPage {
 		$failed  = 0;
 		$missing = array();
 		foreach ( $this->rows_by_ids( $ids ) as $row ) {
-			if ( ! cg_resolve_entity_template( $row ) ) {
+			if ( ! certificate_generator_resolve_entity_template( $row ) ) {
 				$missing[ $row['certificate_type'] . ( $row['issue_date'] ? ' (' . $row['issue_date'] . ')' : '' ) ] = true;
 				++$failed;
 				continue;
@@ -461,10 +461,10 @@ abstract class EntityListPage {
 			if ( ! isset( $row['place'] ) && isset( $row['city'] ) ) {
 				$row['place'] = $row['city'];
 			}
-			$fields = $c['gen_fields'] ?? ( class_exists( 'CG_Field_Schema' )
-				? \CG_Field_Schema::get_all_renderable_fields( $row['certificate_type'] )
+			$fields = $c['gen_fields'] ?? ( class_exists( 'CertificateGenerator_Field_Schema' )
+				? \CertificateGenerator_Field_Schema::get_all_renderable_fields( $row['certificate_type'] )
 				: array( $c['name_col'], 'school_name', 'issue_date' ) );
-			if ( generate_certificate_pdf( (int) ( $row['wp_post_id'] ?? 0 ), $fields, $row ) ) {
+			if ( certificate_generator_generate_certificate_pdf( (int) ( $row['wp_post_id'] ?? 0 ), $fields, $row ) ) {
 				++$ok;
 			} else {
 				++$failed;
@@ -582,8 +582,8 @@ abstract class EntityListPage {
 			ob_end_clean();
 		}
 		if ( ! empty( $this->config()['is_templates'] ) ) {
-			if ( function_exists( 'cg_output_templates_csv' ) ) {
-				cg_output_templates_csv( $rows );
+			if ( function_exists( 'certificate_generator_output_templates_csv' ) ) {
+				certificate_generator_output_templates_csv( $rows );
 			}
 			return;
 		}
@@ -711,9 +711,9 @@ abstract class EntityListPage {
 		?>
 		<div class="wrap cg-list">
 			<?php
-			cg_ui_page_header( $c['title'], $c['lead'] ?? '', $actions );
+			certificate_generator_ui_page_header( $c['title'], $c['lead'] ?? '', $actions );
 			if ( $message ) {
-				cg_ui_notice( $notice ?: 'success', esc_html( $message ) );
+				certificate_generator_ui_notice( $notice ?: 'success', esc_html( $message ) );
 			}
 			?>
 
@@ -759,11 +759,11 @@ abstract class EntityListPage {
 						<?php
 						$colspan = count( $c['columns'] ) + count( $this->extra_columns() ) + 2;
 						if ( $active ) {
-							echo cg_ui_empty_row( $colspan, "No {$c['plural']} match these filters.", $this->list_url(), 'Clear filters' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
+							echo certificate_generator_ui_empty_row( $colspan, "No {$c['plural']} match these filters.", $this->list_url(), 'Clear filters' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
 						} elseif ( $import_url ) {
-							echo cg_ui_empty_row( $colspan, "No {$c['plural']} yet. Import a CSV or add one by hand.", $import_url, 'Import CSV' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
+							echo certificate_generator_ui_empty_row( $colspan, "No {$c['plural']} yet. Import a CSV or add one by hand.", $import_url, 'Import CSV' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
 						} else {
-							echo cg_ui_empty_row( $colspan, "No {$c['plural']} yet.", $edit_url, 'Add one' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
+							echo certificate_generator_ui_empty_row( $colspan, "No {$c['plural']} yet.", $edit_url, 'Add one' ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside
 						}
 						?>
 					<?php else : ?>
@@ -1015,7 +1015,7 @@ abstract class EntityListPage {
 		return $val === '' ? '—' : esc_html( $val );
 	}
 
-	/** Which template this recipient's certificate will use — mirrors cg_select_certificate_template(). */
+	/** Which template this recipient's certificate will use — mirrors certificate_generator_select_certificate_template(). */
 	private function template_badge( array $row ): string {
 		$type  = strtolower( trim( (string) $row['certificate_type'] ) );
 		$date  = substr( (string) ( $row['issue_date'] ?? '' ), 0, 10 );
@@ -1042,7 +1042,7 @@ abstract class EntityListPage {
 			'draft'     => array( 'Draft', 'warn' ),
 			'none'      => array( 'None', 'bad', 'No template with this certificate type and event date' ),
 		);
-		return cg_ui_badge( ...$badges[ $state ] );
+		return certificate_generator_ui_badge( ...$badges[ $state ] );
 	}
 
 	/** Recipients whose certificate this template will render (same match rule as generation). */
@@ -1059,20 +1059,20 @@ abstract class EntityListPage {
 
 	private function email_badge( array $row, array $statuses ): string {
 		if ( empty( $row['email'] ) ) {
-			return cg_ui_badge( 'No Email' );
+			return certificate_generator_ui_badge( 'No Email' );
 		}
 		$badge = $statuses[ $row['email'] ] ?? array( 'status' => 'NotSent', 'last_error' => '' );
 		switch ( $badge['status'] ) {
 			case 'Sent':
-				return cg_ui_badge( 'Sent', 'good', '', 'cg-email-badge cg-email-sent' );
+				return certificate_generator_ui_badge( 'Sent', 'good', '', 'cg-email-badge cg-email-sent' );
 			case 'Failed':
-				return cg_ui_badge( 'Failed', 'bad', (string) ( $badge['last_error'] ?? '' ), 'cg-email-badge cg-email-failed' );
+				return certificate_generator_ui_badge( 'Failed', 'bad', (string) ( $badge['last_error'] ?? '' ), 'cg-email-badge cg-email-failed' );
 			case 'Sending':
-				return cg_ui_badge( 'Sending', 'info', '', 'cg-email-badge cg-email-sending' );
+				return certificate_generator_ui_badge( 'Sending', 'info', '', 'cg-email-badge cg-email-sending' );
 			case 'Queued':
-				return cg_ui_badge( 'Queued', 'info', '', 'cg-email-badge cg-email-queued' );
+				return certificate_generator_ui_badge( 'Queued', 'info', '', 'cg-email-badge cg-email-queued' );
 		}
-		return cg_ui_badge( 'Pending', 'warn', '', 'cg-email-badge cg-email-pending' );
+		return certificate_generator_ui_badge( 'Pending', 'warn', '', 'cg-email-badge cg-email-pending' );
 	}
 
 	protected function row_actions( array $row, string $edit_url ): string {
@@ -1177,13 +1177,13 @@ abstract class EntityListPage {
 				btn.addEventListener('click', function () {
 					var id = btn.getAttribute('data-id');
 					CGUI.busy(btn, true);
-					var data = new URLSearchParams({ action: 'cg_<?php echo esc_js( $c['singular'] ); ?>_send_email', nonce: nonce, id: id });
+					var data = new URLSearchParams({ action: 'certificate_generator_<?php echo esc_js( $c['singular'] ); ?>_send_email', nonce: nonce, id: id });
 					fetch('<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>', { method: 'POST', body: data })
 						.then(function (r) { return r.json(); })
 						.then(function (resp) {
 							if (resp.success) {
 								var cell = form.querySelector('.cg-email-status-cell[data-row="' + id + '"]');
-								if (cell) { cell.innerHTML = <?php echo wp_json_encode( cg_ui_badge( 'Sent', 'good', '', 'cg-email-badge cg-email-sent' ) ); ?>; }
+								if (cell) { cell.innerHTML = <?php echo wp_json_encode( certificate_generator_ui_badge( 'Sent', 'good', '', 'cg-email-badge cg-email-sent' ) ); ?>; }
 								CGUI.busy(btn, false);
 								btn.textContent = 'Sent ✓';
 								btn.disabled = true;

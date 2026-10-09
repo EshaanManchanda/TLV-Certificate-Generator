@@ -112,7 +112,7 @@
             };
             $.each(lists, (type, selector) => {
                 $.post(certFilterAjax.ajaxurl, {
-                    action: 'cert_get_filter_options',
+                    action: 'certificate_generator_get_filter_options',
                     nonce: certFilterAjax.nonce,
                     option_type: type
                 }, (response) => {
@@ -144,7 +144,7 @@
 
         fetchPage(offset, limit) {
             return $.post(certFilterAjax.ajaxurl, {
-                action: 'cert_preview_recipients',
+                action: 'certificate_generator_preview_recipients',
                 nonce: certFilterAjax.nonce,
                 filters: this.filters,
                 limit: limit,
@@ -426,7 +426,7 @@
             $button.prop('disabled', true).text(labels.starting || 'Starting…');
 
             $.post(certFilterAjax.ajaxurl, {
-                action: 'cert_send_to_filtered',
+                action: 'certificate_generator_send_to_filtered',
                 nonce: certFilterAjax.nonce,
                 filters: this.filters
             }).done(function(response) {
@@ -513,7 +513,7 @@
         };
 
         const refresh = () => {
-            $.post(certFilterAjax.ajaxurl, { action: 'cert_get_queue_progress', nonce: certFilterAjax.nonce }, (r) => {
+            $.post(certFilterAjax.ajaxurl, { action: 'certificate_generator_get_queue_progress', nonce: certFilterAjax.nonce }, (r) => {
                 if (r && r.success) render(r.data);
             });
         };
@@ -525,8 +525,8 @@
             }).fail(refresh);
         };
 
-        $('#pause-queue').on('click', () => action('cert_pause_queue'));
-        $('#resume-queue').on('click', () => action('cert_resume_queue'));
+        $('#pause-queue').on('click', () => action('certificate_generator_pause_queue'));
+        $('#resume-queue').on('click', () => action('certificate_generator_resume_queue'));
         $('#refresh-status').on('click', refresh);
         $('#clear-queue').on('click', function() {
             CGUI.confirm({
@@ -534,7 +534,7 @@
                 message: 'Remove all emails that are still waiting to be sent? Emails already sent are not affected.',
                 confirmLabel: 'Clear queue',
                 danger: true
-            }).then(function(ok) { if (ok) action('cert_clear_queue'); });
+            }).then(function(ok) { if (ok) action('certificate_generator_clear_queue'); });
         });
 
         window.cgBulkSendQueueRefresh = refresh;

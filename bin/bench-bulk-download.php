@@ -28,7 +28,7 @@ $usage_before = (int) get_option( CG_License_Manager::OPTION_USAGE, 0 );
 set_transient( 'cg_usage_report_lock', 1, HOUR_IN_SECONDS ); // no license-server call mid-benchmark
 
 $renders = 0;
-add_action( 'cg_certificate_generated', function () use ( &$renders ) {
+add_action( 'certificate_generator_certificate_generated', function () use ( &$renders ) {
 	++$renders;
 }, 1 );
 
@@ -67,7 +67,7 @@ $filters = array(
 
 $zips = array();
 
-/** Mirrors cg_handle_admin_cert_zip_download() for every part: render, then zip. */
+/** Mirrors certificate_generator_handle_admin_cert_zip_download() for every part: render, then zip. */
 $run = function () use ( $filters, $wpdb, &$zips ) {
 	$m = array();
 
@@ -75,10 +75,10 @@ $run = function () use ( $filters, $wpdb, &$zips ) {
 	$q0   = $wpdb->num_queries;
 	$t0   = microtime( true );
 	$rows = array();
-	$size = CG_ADMIN_EXPORT_ZIP_PART_SIZE;
-	$tot  = cg_admin_cert_count( $filters );
+	$size = CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE;
+	$tot  = certificate_generator_admin_cert_count( $filters );
 	for ( $off = 0; $off < $tot; $off += $size ) {
-		$rows = array_merge( $rows, cg_admin_cert_query( $filters, $size, $off ) );
+		$rows = array_merge( $rows, certificate_generator_admin_cert_query( $filters, $size, $off ) );
 	}
 	$m['lookup_s']  = microtime( true ) - $t0;
 	$m['lookup_q']  = $wpdb->num_queries - $q0;
@@ -88,7 +88,7 @@ $run = function () use ( $filters, $wpdb, &$zips ) {
 	$paths = array();
 	$up    = wp_upload_dir();
 	foreach ( $rows as $row ) {
-		$url = generate_certificate_pdf( (int) ( $row['wp_post_id'] ?? $row['id'] ), array(), $row );
+		$url = certificate_generator_generate_certificate_pdf( (int) ( $row['wp_post_id'] ?? $row['id'] ), array(), $row );
 		if ( $url ) {
 			$paths[ (int) $row['id'] ] = str_replace( $up['baseurl'], $up['basedir'], $url );
 		}
@@ -107,7 +107,7 @@ $run = function () use ( $filters, $wpdb, &$zips ) {
 		if ( $res ) {
 			$zip_mb  += filesize( $res['zip_path'] ) / 1048576;
 			$entries += $res['certificate_count'];
-			if ( function_exists( 'cg_admin_cert_manifest_csv' ) ) {
+			if ( function_exists( 'certificate_generator_admin_cert_manifest_csv' ) ) {
 				$zips[] = $res['zip_path']; // kept for reuse, as the admin flow now does
 			} else {
 				wp_delete_file( $res['zip_path'] ); // the old admin handler deleted it after sending
@@ -125,7 +125,7 @@ $run = function () use ( $filters, $wpdb, &$zips ) {
 function cg_bench_zip_part( array $rows, array $paths, int $part ) {
 	$up   = wp_upload_dir();
 	$tmp  = $up['basedir'] . '/temp_cg_bench_' . $part . '_' . wp_generate_password( 6, false );
-	$copy = ! function_exists( 'cg_admin_cert_manifest_csv' ); // pre-optimisation handler copied every PDF
+	$copy = ! function_exists( 'certificate_generator_admin_cert_manifest_csv' ); // pre-optimisation handler copied every PDF
 	if ( $copy ) {
 		wp_mkdir_p( $tmp );
 	}
@@ -135,7 +135,7 @@ function cg_bench_zip_part( array $rows, array $paths, int $part ) {
 		if ( empty( $paths[ (int) $row['id'] ] ) ) {
 			continue;
 		}
-		$name = cg_certificate_pdf_filename( $row['student_name'], $row['certificate_type'], (string) $row['id'] );
+		$name = certificate_generator_certificate_pdf_filename( $row['student_name'], $row['certificate_type'], (string) $row['id'] );
 		$src  = $paths[ (int) $row['id'] ];
 		if ( $copy ) {
 			copy( $src, $tmp . '/' . $name );
@@ -158,14 +158,14 @@ function cg_bench_zip_part( array $rows, array $paths, int $part ) {
 		@rmdir( $tmp );
 		return $res;
 	}
-	$files[] = array( 'content' => cg_admin_cert_manifest_csv( $csv ), 'filename' => 'manifest.csv' );
+	$files[] = array( 'content' => certificate_generator_admin_cert_manifest_csv( $csv ), 'filename' => 'manifest.csv' );
 	return certificate_generator_create_zip_for_email( $files, 'bench_part' . $part, array( 'private' => true ) );
 }
 
 // ── Cold: no PDF on disk for any benchmark row ───────────────────────────────
 $ids = $wpdb->get_col( "SELECT id FROM {$stu_table} WHERE email LIKE '%@cg-bench.invalid'" );
 foreach ( $ids as $id ) {
-	@unlink( cg_certificates_dir() . "/certificate_students_row_{$id}.pdf" );
+	@unlink( certificate_generator_certificates_dir() . "/certificate_students_row_{$id}.pdf" );
 }
 $results = array();
 $r0             = $renders;
@@ -184,7 +184,7 @@ foreach ( array_unique( $zips ) as $zip ) {
 	wp_delete_file( $zip );
 }
 foreach ( $ids as $id ) {
-	@unlink( cg_certificates_dir() . "/certificate_students_row_{$id}.pdf" );
+	@unlink( certificate_generator_certificates_dir() . "/certificate_students_row_{$id}.pdf" );
 }
 $wpdb->query( "DELETE FROM {$stu_table} WHERE email LIKE '%@cg-bench.invalid'" );
 $wpdb->query( "DELETE FROM {$wpdb->prefix}certificate_generator WHERE serial_number LIKE 'BENCH-%'" );
@@ -192,7 +192,7 @@ $wpdb->query( 'DELETE FROM ' . $tables->get_table( 'certificates' ) . " WHERE se
 update_option( CG_License_Manager::OPTION_USAGE, $usage_before );
 
 // ── Report ───────────────────────────────────────────────────────────────────
-WP_CLI::log( sprintf( 'N=%d  template=#%d %s  part_size=%d', $n, $template['id'], $template['certificate_type'], CG_ADMIN_EXPORT_ZIP_PART_SIZE ) );
+WP_CLI::log( sprintf( 'N=%d  template=#%d %s  part_size=%d', $n, $template['id'], $template['certificate_type'], CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE ) );
 foreach ( $results as $phase => $m ) {
 	WP_CLI::log(
 		sprintf(

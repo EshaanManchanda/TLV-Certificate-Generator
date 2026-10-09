@@ -9,8 +9,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once CERTIFICATE_GENERATOR_PATH . 'lib/fpdf/fpdf.php';
 
 // Handle individual certificate download
-add_action( 'init', 'handle_individual_certificate_download' );
-function handle_individual_certificate_download() {
+add_action( 'init', 'certificate_generator_handle_individual_certificate_download' );
+function certificate_generator_handle_individual_certificate_download() {
 	if ( ! isset( $_GET['action'] ) || $_GET['action'] !== 'download_certificate' || ! isset( $_GET['student_id'] ) ) {
 		return;
 	}
@@ -40,13 +40,13 @@ function handle_individual_certificate_download() {
 	$post_id      = (int) ( $student['wp_post_id'] ?? $student['id'] ?? 0 );
 	$student_name = $student['student_name'];
 	$cert_type_dl = $student['certificate_type'];
-	$fields       = class_exists( 'CG_Field_Schema' )
-		? CG_Field_Schema::get_all_renderable_fields( $cert_type_dl )
+	$fields       = class_exists( 'CertificateGenerator_Field_Schema' )
+		? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type_dl )
 		: array( 'student_name', 'school_name', 'issue_date' );
 
-	// Pass the SQL row as student data — same as scs_student_search_shortcode() —
+	// Pass the SQL row as student data — same as certificate_generator_student_search_shortcode() —
 	// so rendering reads straight from the row instead of post meta.
-	$file_url = generate_certificate_pdf( $post_id, $fields, $student );
+	$file_url = certificate_generator_generate_certificate_pdf( $post_id, $fields, $student );
 
 	if ( ! $file_url ) {
 		wp_die( 'Failed to generate certificate. Please contact the administrator.' );
@@ -59,8 +59,8 @@ function handle_individual_certificate_download() {
 		wp_die( 'Certificate file not found. Please contact the administrator.' );
 	}
 
-	$filename = function_exists( 'cg_certificate_pdf_filename' )
-		? cg_certificate_pdf_filename( $student_name, $cert_type_dl, (string) $student['id'] )
+	$filename = function_exists( 'certificate_generator_certificate_pdf_filename' )
+		? certificate_generator_certificate_pdf_filename( $student_name, $cert_type_dl, (string) $student['id'] )
 		: sanitize_file_name( $student_name . '_' . $student['id'] . '_certificate.pdf' );
 
 	header( 'Content-Type: application/pdf' );
@@ -74,9 +74,9 @@ function handle_individual_certificate_download() {
 }
 
 // Handle individual certificate PNG download — same auth/nonce/lookup pattern
-// as handle_individual_certificate_download(), generated on-demand (not persisted).
-add_action( 'init', 'handle_individual_certificate_png_download' );
-function handle_individual_certificate_png_download() {
+// as certificate_generator_handle_individual_certificate_download(), generated on-demand (not persisted).
+add_action( 'init', 'certificate_generator_handle_individual_certificate_png_download' );
+function certificate_generator_handle_individual_certificate_png_download() {
 	if ( ! isset( $_GET['action'] ) || $_GET['action'] !== 'download_certificate_png' || ! isset( $_GET['student_id'] ) ) {
 		return;
 	}
@@ -104,8 +104,8 @@ function handle_individual_certificate_png_download() {
 	$post_id      = (int) ( $student['wp_post_id'] ?? $student['id'] ?? 0 );
 	$student_name = $student['student_name'];
 	$cert_type_dl = $student['certificate_type'];
-	$fields       = class_exists( 'CG_Field_Schema' )
-		? CG_Field_Schema::get_all_renderable_fields( $cert_type_dl )
+	$fields       = class_exists( 'CertificateGenerator_Field_Schema' )
+		? CertificateGenerator_Field_Schema::get_all_renderable_fields( $cert_type_dl )
 		: array( 'student_name', 'school_name', 'issue_date' );
 
 	$file_url = \CertificateGenerator\Services\PngGenerator::generate( $post_id, $fields, $student );

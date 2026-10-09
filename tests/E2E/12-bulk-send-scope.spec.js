@@ -31,7 +31,7 @@ test.describe.serial('§12 Bulk Send scope and email template', () => {
 		savedOpt = wp.getOption(OPT);
 		wp.setOption(OPT, { ...(savedOpt || {}), students_email_subject: 'Per-type subject: {certificate_title}', students_email_attach_certificate: '1' });
 
-		wp.wpEval("delete_transient('cg_unique_cert_types'); echo 1;");
+		wp.wpEval("delete_transient('certificate_generator_unique_cert_types'); echo 1;");
 		wp.resetRateLimit();
 		await mail.clearE2E();
 	});

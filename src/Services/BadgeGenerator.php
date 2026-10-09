@@ -19,7 +19,7 @@ class BadgeGenerator {
 			return null; // GD extension not available
 		}
 
-		$template_path = cg_template_url_to_path( $badge_template_url );
+		$template_path = certificate_generator_template_url_to_path( $badge_template_url );
 		if ( ! file_exists( $template_path ) ) {
 			return null;
 		}

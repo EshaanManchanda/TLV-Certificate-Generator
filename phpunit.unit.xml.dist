@@ -7,6 +7,7 @@
     <testsuites>
         <testsuite name="unit">
             <directory suffix="Test.php">./tests/Unit</directory>
+            <directory suffix="Test.php">./tests/Compliance</directory>
         </testsuite>
     </testsuites>
 </phpunit>

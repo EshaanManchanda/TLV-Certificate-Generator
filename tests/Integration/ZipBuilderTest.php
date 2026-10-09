@@ -1,6 +1,6 @@
 <?php
 /**
- * _cg_create_zip_impl(): stored (not re-deflated) PDFs, in-memory entries, path safety,
+ * certificate_generator_create_zip_impl(): stored (not re-deflated) PDFs, in-memory entries, path safety,
  * duplicate names, private admin ZIPs, and the legacy wrapper / ZipService pass-through.
  */
 class ZipBuilderTest extends WP_UnitTestCase {
@@ -15,14 +15,14 @@ class ZipBuilderTest extends WP_UnitTestCase {
 	}
 
 	private function pdf( string $name, string $body = '' ): string {
-		$path = cg_certificates_dir() . '/' . $name;
+		$path = certificate_generator_certificates_dir() . '/' . $name;
 		file_put_contents( $path, $body ?: str_repeat( '%PDF-1.3 ' . $name, 200 ) );
 		$this->cleanup[] = $path;
 		return $path;
 	}
 
 	private function zip( array $data, string $label, array $args = array() ): array {
-		$res = _cg_create_zip_impl( $data, $label, $args );
+		$res = certificate_generator_create_zip_impl( $data, $label, $args );
 		$this->assertIsArray( $res );
 		$this->cleanup[] = $res['zip_path'];
 		return $res;
@@ -90,7 +90,7 @@ class ZipBuilderTest extends WP_UnitTestCase {
 		$res = $this->zip(
 			array(
 				array( 'path' => ABSPATH . 'wp-config.php', 'filename' => 'config.pdf' ),
-				array( 'path' => cg_certificates_dir() . '/../../../wp-config.php', 'filename' => 'config2.pdf' ),
+				array( 'path' => certificate_generator_certificates_dir() . '/../../../wp-config.php', 'filename' => 'config2.pdf' ),
 				array( 'path' => $this->pdf( 'zb-ok.pdf' ), 'filename' => 'ok.pdf' ),
 			),
 			'zb-outside@example.test'
@@ -102,7 +102,7 @@ class ZipBuilderTest extends WP_UnitTestCase {
 	public function test_missing_file_is_reported_not_fatal(): void {
 		$res = $this->zip(
 			array(
-				array( 'path' => cg_certificates_dir() . '/zb-does-not-exist.pdf', 'filename' => 'gone.pdf' ),
+				array( 'path' => certificate_generator_certificates_dir() . '/zb-does-not-exist.pdf', 'filename' => 'gone.pdf' ),
 				array( 'path' => $this->pdf( 'zb-here.pdf' ), 'filename' => 'here.pdf' ),
 			),
 			'zb-missing@example.test'
@@ -129,7 +129,7 @@ class ZipBuilderTest extends WP_UnitTestCase {
 		$data  = array( array( 'path' => $this->pdf( 'zb-priv.pdf' ), 'filename' => 'priv.pdf' ) );
 		$first = $this->zip( $data, 'admin_students_2026-10-03', array( 'private' => true ) );
 
-		$dir = wp_normalize_path( cg_certificates_dir() . '/private' );
+		$dir = wp_normalize_path( certificate_generator_certificates_dir() . '/private' );
 		$this->assertSame( $dir, wp_normalize_path( dirname( $first['zip_path'] ) ) );
 		$this->assertFileExists( $dir . '/.htaccess' );
 		$this->assertFileExists( $dir . '/index.php' );

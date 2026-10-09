@@ -20,13 +20,13 @@ class SmtpTransport implements TransportInterface {
 		// Fallback when SettingsService is unavailable.
 		return new self(
 			array(
-				'host'       => (string) get_option( 'cg_smtp_host', '' ),
-				'port'       => (int) get_option( 'cg_smtp_port', 587 ),
-				'username'   => (string) get_option( 'cg_smtp_username', '' ),
-				'password'   => (string) get_option( 'cg_smtp_password', '' ),
-				'encryption' => (string) get_option( 'cg_smtp_encryption', 'tls' ),
-				'from_email' => (string) get_option( 'cg_email_from_email', get_bloginfo( 'admin_email' ) ),
-				'from_name'  => (string) get_option( 'cg_email_from_name', get_bloginfo( 'name' ) ),
+				'host'       => (string) get_option( 'certificate_generator_smtp_host', '' ),
+				'port'       => (int) get_option( 'certificate_generator_smtp_port', 587 ),
+				'username'   => (string) get_option( 'certificate_generator_smtp_username', '' ),
+				'password'   => (string) get_option( 'certificate_generator_smtp_password', '' ),
+				'encryption' => (string) get_option( 'certificate_generator_smtp_encryption', 'tls' ),
+				'from_email' => (string) get_option( 'certificate_generator_email_from_email', get_bloginfo( 'admin_email' ) ),
+				'from_name'  => (string) get_option( 'certificate_generator_email_from_name', get_bloginfo( 'name' ) ),
 			)
 		);
 	}

@@ -154,7 +154,7 @@ class StudentsPage extends EntityListPage {
 					'event_id'         => absint( $_POST['event_id'] ?? 0 ) ?: null,
 					'certificate_type' => \sanitize_text_field( wp_unslash( $_POST['certificate_type'] ?? '' ) ),
 					'issue_date'       => \sanitize_text_field( wp_unslash( $_POST['issue_date'] ?? '' ) ) ?: null,
-					'year'             => function_exists( 'cg_year_from_issue_date' ) ? cg_year_from_issue_date( \sanitize_text_field( wp_unslash( $_POST['issue_date'] ?? '' ) ) ?: null ) : null,
+					'year'             => function_exists( 'certificate_generator_year_from_issue_date' ) ? certificate_generator_year_from_issue_date( \sanitize_text_field( wp_unslash( $_POST['issue_date'] ?? '' ) ) ?: null ) : null,
 					'enrollment_date'  => \sanitize_text_field( wp_unslash( $_POST['enrollment_date'] ?? '' ) ) ?: null,
 					'graduation_date'  => \sanitize_text_field( wp_unslash( $_POST['graduation_date'] ?? '' ) ) ?: null,
 					'status'           => in_array( $_POST['status'] ?? '', array( 'active', 'graduated', 'transferred', 'dropped' ), true ) ? \sanitize_key( $_POST['status'] ) : 'active',
@@ -184,14 +184,14 @@ class StudentsPage extends EntityListPage {
 					}
 				}
 
-				if ( function_exists( 'cg_flush_filter_caches' ) ) {
-					cg_flush_filter_caches();
+				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
+					certificate_generator_flush_filter_caches();
 				}
 
 				// Phase 6: sync to WP Dynamic Tags if a wp_post_id is linked
 				$wp_post_id = (int) ( $row['wp_post_id'] ?? 0 );
-				if ( $wp_post_id > 0 && function_exists( 'cg_sync_to_dynamic_tags' ) ) {
-					cg_sync_to_dynamic_tags( $wp_post_id );
+				if ( $wp_post_id > 0 && function_exists( 'certificate_generator_sync_to_dynamic_tags' ) ) {
+					certificate_generator_sync_to_dynamic_tags( $wp_post_id );
 				}
 			}
 		}
