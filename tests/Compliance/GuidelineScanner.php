@@ -38,9 +38,20 @@ final class GuidelineScanner {
 		// Plus local-only folders that are never committed.
 		$ignored = array_merge( $ignored, array( '.git', '.local', 'node_modules', 'dist', 'test-results', 'playwright-report', '.playwright-mcp', 'playwright' ) );
 
+		// The release ZIP is built from git, so scan what git tracks (plus new, non-ignored files);
+		// fall back to the whole tree when git isn't available.
+		$tracked = null;
+		$out     = @shell_exec( 'git -C ' . escapeshellarg( $this->root ) . ' ls-files --cached --others --exclude-standard 2>' . ( '\\' === DIRECTORY_SEPARATOR ? 'NUL' : '/dev/null' ) );
+		if ( is_string( $out ) && '' !== trim( $out ) ) {
+			$tracked = array_flip( array_map( 'trim', explode( "\n", trim( $out ) ) ) );
+		}
+
 		$it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $this->root, FilesystemIterator::SKIP_DOTS ) );
 		foreach ( $it as $file ) {
 			$rel = ltrim( substr( str_replace( '\\', '/', $file->getPathname() ), strlen( $this->root ) ), '/' );
+			if ( null !== $tracked && ! isset( $tracked[ $rel ] ) && ! str_starts_with( $rel, 'vendor/' ) ) {
+				continue; // not in git => not in the ZIP (vendor/ is installed by the build)
+			}
 			foreach ( $ignored as $ig ) {
 				if ( $rel === $ig || str_starts_with( $rel, $ig . '/' ) ) {
 					continue 2;
@@ -214,6 +225,20 @@ final class GuidelineScanner {
 			}
 		}
 		return $v;
+	}
+
+	/** Every local asset the plugin enqueues or registers is part of the shipped files. */
+	public function enqueued_assets_ship(): array {
+		$v = array();
+		foreach ( $this->own_php() as $file ) {
+			preg_match_all( "#(?:plugin_dir_url\(\s*__FILE__\s*\)|CERTIFICATE_GENERATOR_URL)\s*\.\s*'([^']+\.(?:js|css))'#", $this->files[ $file ], $m );
+			foreach ( $m[1] as $asset ) {
+				if ( ! isset( $this->files[ $asset ] ) ) {
+					$v[] = "$file: enqueues $asset, which is not in the shipped files";
+				}
+			}
+		}
+		return array_values( array_unique( $v ) );
 	}
 
 	// ── G4 ────────────────────────────────────────────────────────────────────

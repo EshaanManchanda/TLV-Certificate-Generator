@@ -3,7 +3,7 @@ test-results/
 playwright-report/
 .playwright-mcp/
 tests/E2E/fixtures/
-vendor/
+/vendor/
 dist/
 composer.phar
 Certificate-Generator-V7.5.zip
