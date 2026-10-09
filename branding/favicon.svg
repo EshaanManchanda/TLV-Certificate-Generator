@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Certificate Generator</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b86d6"/>
+      <stop offset="1" stop-color="#123a73"/>
+    </linearGradient>
+  </defs>
+  <!-- Simplified for 16-32 px: certificate + big seal, no fine lines -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <rect x="14" y="10" width="32" height="40" rx="4" fill="#ffffff"/>
+  <rect x="20" y="18" width="20" height="5" rx="2.5" fill="#1d5aa5"/>
+  <circle cx="44" cy="44" r="14" fill="#f5b829"/>
+  <path d="M37.5 44 L42 48.5 L50.5 39.5" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

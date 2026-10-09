@@ -1,5 +1,5 @@
-=== Certificate Generator ===
-Contributors: eshaanmanchanda
+=== Certificate Generator – Bulk PDF Certificates, Email & QR Verification ===
+Contributors: eshaan7127
 Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1

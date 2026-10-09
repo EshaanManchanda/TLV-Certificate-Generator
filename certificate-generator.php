@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       Certificate Generator
+ * Plugin Name:       Certificate Generator – Bulk PDF Certificates, Email & QR Verification
  * Plugin URI:        https://techlovev.in/plugins/certificate-generator
  * Description:       A comprehensive plugin for managing, generating, and bulk-sending certificates for students and teachers.
  * Version:           7.6.0
