@@ -1,0 +1,291 @@
+parameters:
+	ignoreErrors:
+		-
+			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, int given\\.$#"
+			count: 1
+			path: includes/Admin/bulk-email.php
+
+		-
+			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, int\\<1, max\\> given\\.$#"
+			count: 1
+			path: includes/Admin/bulk-email.php
+
+		-
+			message: "#^If condition is always false\\.$#"
+			count: 1
+			path: includes/Admin/columns.php
+
+		-
+			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, int\\<1, max\\> given\\.$#"
+			count: 1
+			path: includes/Admin/columns.php
+
+		-
+			message: "#^Undefined variable\\: \\$wpdb$#"
+			count: 3
+			path: includes/Admin/columns.php
+
+		-
+			message: "#^Unreachable statement \\- code above always terminates\\.$#"
+			count: 19
+			path: includes/Admin/columns.php
+
+		-
+			message: "#^Variable \\$template_url in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: includes/Admin/columns.php
+
+		-
+			message: "#^Constant SECURE_AUTH_KEY not found\\.$#"
+			count: 2
+			path: includes/Admin/settings.php
+
+		-
+			message: "#^Method CertificateGenerator_FontManager\\:\\:monitor_memory_usage\\(\\) is unused\\.$#"
+			count: 1
+			path: includes/Core/font-manager.php
+
+		-
+			message: "#^Property CertificateGenerator_FontManager\\:\\:\\$essential_fonts_loaded is never read, only written\\.$#"
+			count: 1
+			path: includes/Core/font-manager.php
+
+		-
+			message: "#^Call to function is_wp_error\\(\\) with WP_Term will always evaluate to false\\.$#"
+			count: 1
+			path: includes/Core/post-types.php
+
+		-
+			message: "#^Parameter \\#3 \\$callback of function add_meta_box expects callable\\(\\)\\: mixed, 'render_certificates…' given\\.$#"
+			count: 1
+			path: includes/Core/post-types.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between 'schools'\\|'teachers' and 'students' will always evaluate to false\\.$#"
+			count: 1
+			path: includes/Core/post-types.php
+
+		-
+			message: "#^is_wp_error\\(WP_Term\\) will always evaluate to false\\.$#"
+			count: 1
+			path: includes/Core/post-types.php
+
+		-
+			message: "#^Property CertificateGenerator_CompatibilityChecker\\:\\:\\$recommendations is never read, only written\\.$#"
+			count: 1
+			path: includes/Core/server-compatibility.php
+
+		-
+			message: "#^PHPDoc tag @param references unknown parameter\\: \\$post_id$#"
+			count: 1
+			path: includes/Email/functions.php
+
+		-
+			message: "#^PHPDoc tag @param references unknown parameter\\: \\$post_ids$#"
+			count: 1
+			path: includes/Email/functions.php
+
+		-
+			message: "#^Parameter \\#1 \\$text of function esc_html expects string, float given\\.$#"
+			count: 1
+			path: includes/Email/functions.php
+
+		-
+			message: "#^Parameter \\#2 \\$needle of function strpos expects string, int\\<1, max\\> given\\.$#"
+			count: 2
+			path: includes/Email/functions.php
+
+		-
+			message: "#^Right side of && is always true\\.$#"
+			count: 2
+			path: includes/Email/functions.php
+
+		-
+			message: "#^Variable \\$certificate_path in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 2
+			path: includes/Email/functions.php
+
+		-
+			message: "#^Variable \\$html_message in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: includes/Email/functions.php
+
+		-
+			message: "#^is_wp_error\\(WP_Error\\) will always evaluate to true\\.$#"
+			count: 1
+			path: includes/Email/functions.php
+
+		-
+			message: "#^Comparison operation \"\\>\" between \\(array\\|float\\|int\\) and 0 results in an error\\.$#"
+			count: 1
+			path: includes/Email/log.php
+
+		-
+			message: "#^Function certificate_generator_log_email\\(\\) should return int\\|false but returns true\\.$#"
+			count: 1
+			path: includes/Email/log.php
+
+		-
+			message: "#^Parameter \\#2 \\$to of function human_time_diff expects int, float given\\.$#"
+			count: 1
+			path: includes/Email/rate-limiter.php
+
+		-
+			message: "#^Parameter \\#3 \\$unique_id of function cg_certificate_pdf_filename expects string, int given\\.$#"
+			count: 1
+			path: includes/Services/background-processor.php
+
+		-
+			message: "#^Action callback returns array but should not return anything\\.$#"
+			count: 1
+			path: includes/Services/bulk-email-sender.php
+
+		-
+			message: "#^Comparison operation \"\\>\" between \\(array\\|float\\|int\\) and 0 results in an error\\.$#"
+			count: 1
+			path: includes/Services/bulk-email-sender.php
+
+		-
+			message: "#^Ternary operator condition is always true\\.$#"
+			count: 1
+			path: includes/Services/bulk-import.php
+
+		-
+			message: "#^Argument of an invalid type object supplied for foreach, only iterables are supported\\.$#"
+			count: 2
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^If condition is always true\\.$#"
+			count: 6
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Offset 'fields' on array\\{post_id\\: int, fields\\: array\\{school_name\\: mixed, place\\: mixed, issue_date\\: mixed, certificate_type\\: mixed\\}\\} in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Offset 'post_id' on array\\{post_id\\: int, fields\\: array\\{school_name\\: mixed, place\\: mixed, issue_date\\: mixed, certificate_type\\: mixed\\}\\} in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Parameter \\#2 \\$force_send of function certificate_generator_auto_send_email expects bool, string given\\.$#"
+			count: 2
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Right side of && is always true\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between int\\<1, max\\> and 0 will always evaluate to false\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Undefined variable\\: \\$certificates_to_generate$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Undefined variable\\: \\$hex_color$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$certificates_to_generate in empty\\(\\) is never defined\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$error_count in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$hex_color in isset\\(\\) is never defined\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$output in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 2
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$pdf_result in empty\\(\\) always exists and is not falsy\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$school_name_query in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Variable \\$total_certificates_found in isset\\(\\) always exists and is not nullable\\.$#"
+			count: 1
+			path: includes/Services/certificate-search.php
+
+		-
+			message: "#^Access to an undefined property object\\:\\:\\$serial_number\\.$#"
+			count: 1
+			path: includes/Services/serial-generator.php
+
+		-
+			message: "#^Access to an undefined property object\\:\\:\\$student_name\\.$#"
+			count: 1
+			path: includes/Services/serial-generator.php
+
+		-
+			message: "#^Call to function is_wp_error\\(\\) with int\\<0, max\\> will always evaluate to false\\.$#"
+			count: 1
+			path: src/Admin/Pages/TemplatesPage.php
+
+		-
+			message: "#^is_wp_error\\(int\\<0, max\\>\\) will always evaluate to false\\.$#"
+			count: 1
+			path: src/Admin/Pages/TemplatesPage.php
+
+		-
+			message: "#^Parameter \\#3 \\$autoload of function update_option expects bool\\|null, string given\\.$#"
+			count: 1
+			path: src/Core/Plugin.php
+
+		-
+			message: "#^Method CertificateGenerator\\\\Database\\\\CptToSqlMigration\\:\\:migrate_templates\\(\\) is unused\\.$#"
+			count: 1
+			path: src/Database/CptToSqlMigration.php
+
+		-
+			message: "#^Method CertificateGenerator\\\\Services\\\\BadgeGenerator\\:\\:load_image\\(\\) never returns resource so it can be removed from the return type\\.$#"
+			count: 1
+			path: src/Services/BadgeGenerator.php
+
+		-
+			message: "#^Argument of an invalid type object supplied for foreach, only iterables are supported\\.$#"
+			count: 1
+			path: src/Services/PngGenerator.php
+
+		-
+			message: "#^Comparison operation \"\\<\" between 3 and 3 is always false\\.$#"
+			count: 1
+			path: src/Services/PngGenerator.php
+
+		-
+			message: "#^Method CertificateGenerator\\\\Services\\\\PngGenerator\\:\\:load_image\\(\\) never returns resource so it can be removed from the return type\\.$#"
+			count: 1
+			path: src/Services/PngGenerator.php
+
+		-
+			message: "#^Constant SECURE_AUTH_KEY not found\\.$#"
+			count: 2
+			path: src/Services/SettingsService.php
+
+		-
+			message: "#^Parameter \\#4 \\$autoload of function add_option expects bool\\|null, string given\\.$#"
+			count: 1
+			path: src/Services/SettingsService.php

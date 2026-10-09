@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<ruleset name="Certificate Generator">
+    <description>Coding standard for the Certificate Generator plugin.</description>
+
+    <file>src</file>
+    <file>includes</file>
+
+    <exclude-pattern>vendor/*</exclude-pattern>
+    <exclude-pattern>tests/*</exclude-pattern>
+
+    <arg value="sp"/>
+    <arg name="colors"/>
+    <arg name="extensions" value="php"/>
+
+    <rule ref="WordPress-Extra">
+        <!-- File-per-class PSR-4 naming isn't followed by the legacy includes/ tree. -->
+        <exclude name="WordPress.Files.FileName"/>
+    </rule>
+
+    <config name="testVersion" value="8.2-"/>
+</ruleset>

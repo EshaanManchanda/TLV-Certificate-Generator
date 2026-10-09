@@ -1,0 +1,8 @@
+certificate_type,template_url,template_orientation,font_size,font_color,font_style,field_1_position_x,field_1_position_y,field_1_visible,field_2_position_x,field_2_position_y,field_2_visible,field_3_position_x,field_3_position_y,field_3_visible
+participants,"url of media file, upload in wordpress ",portrait,15,,Arial,110,90,1,110,112,1,130,255,1
+top_performers,http://story-writing.local/wp-content/uploads/2025/01/top-performers.png,portrait,15,,Arial,110,90,1,110,112,1,130,255,1
+position_3,http://story-writing.local/wp-content/uploads/2025/01/position-3.png,portrait,15,,Arial,110,90,1,110,112,1,130,255,1
+position_2,http://story-writing.local/wp-content/uploads/2025/01/position-2.png,portrait,15,,Arial,110,90,1,110,112,1,130,255,1
+position_1,http://story-writing.local/wp-content/uploads/2025/01/position-1.png,portrait,15,,Arial,110,90,1,110,112,1,130,255,1
+teacher,http://story-writing.local/wp-content/uploads/2025/01/teacher.png,portrait,15,,Arial,110,90,1,110,112,1,130,255,1
+school,http://story-writing.local/wp-content/uploads/2025/01/school.png,portrait,15,,Arial,105,95,1,135,235,1,,,0

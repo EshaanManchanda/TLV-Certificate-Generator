@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    bootstrap="tests/bootstrap.php"
+    colors="true"
+    beStrictAboutTestsThatDoNotTestAnything="false"
+>
+    <testsuites>
+        <testsuite name="integration">
+            <directory suffix="Test.php">./tests/Integration</directory>
+        </testsuite>
+        <testsuite name="functional">
+            <directory suffix="Test.php">./tests/Functional</directory>
+        </testsuite>
+        <testsuite name="regression">
+            <directory suffix="Test.php">./tests/Regression</directory>
+        </testsuite>
+        <testsuite name="security">
+            <directory suffix="Test.php">./tests/Security</directory>
+        </testsuite>
+        <testsuite name="performance">
+            <directory suffix="Test.php">./tests/Performance</directory>
+        </testsuite>
+    </testsuites>
+    <groups>
+        <exclude>
+            <group>performance</group>
+        </exclude>
+    </groups>
+    <php>
+        <const name="WP_PHPUNIT__DEFAULT_THEME" value="twentytwentyfive" />
+    </php>
+</phpunit>

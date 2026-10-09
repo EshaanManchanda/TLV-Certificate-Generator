@@ -1,0 +1,22 @@
+node_modules/
+test-results/
+playwright-report/
+.playwright-mcp/
+tests/E2E/fixtures/
+vendor/
+dist/
+composer.phar
+Certificate-Generator-V7.5.zip
+.phpunit.result.cache
+.claude/
+/Certificate-Generator.zip
+/certificates_export*.csv
+playwright/.auth/
+
+# Raw screen recordings for reels (large, never shipped)
+/videos/
+# Local working files (scratch plans, test exports) and Playwright HTML report
+.local/
+# Private notes (market research, backlog) — kept out of the public repo
+/doc/research/
+/doc/internal/

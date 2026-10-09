@@ -1,0 +1,8 @@
+tFPDF (tfpdf.php, font/unifont/ttfonts.php)
+Version 1.33, based on FPDF 1.85.
+Authors: Ian Back <ianb@bpm1.com>, Tycho Veltmeijer <tfpdf@tychoveltmeijer.nl> (v1.30+)
+Source: https://github.com/Setasign/tFPDF
+
+Licensed under the GNU Lesser General Public License (LGPL), as declared in
+the header comment of each file. See https://www.gnu.org/licenses/lgpl-3.0.html
+for the full license text.

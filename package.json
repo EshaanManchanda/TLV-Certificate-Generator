@@ -1,0 +1,14 @@
+{
+  "name": "certificate-generator-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright E2E suite for the Certificate Generator WordPress plugin",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@wordpress/env": "^10.5.0",
+    "pdfjs-dist": "^6.3.289"
+  }
+}

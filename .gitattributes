@@ -1,0 +1,33 @@
+# Paths excluded from `git archive` (used by bin/build-zip.ps1 to build the
+# production plugin zip). composer.json/composer.lock are intentionally NOT
+# listed here — the build script needs them in the export to run
+# `composer install --no-dev`.
+
+/tests                  export-ignore
+/doc                    export-ignore
+/.github                export-ignore
+/.claude                export-ignore
+/.gitattributes         export-ignore
+/.gitignore             export-ignore
+/.wp-env.json           export-ignore
+/bin                    export-ignore
+/node_modules           export-ignore
+/vendor                 export-ignore
+/phpcs.xml              export-ignore
+/phpstan.neon           export-ignore
+/phpstan-baseline.neon  export-ignore
+/phpunit.xml.dist       export-ignore
+/phpunit.unit.xml.dist  export-ignore
+/playwright.config.js   export-ignore
+/package.json           export-ignore
+/package-lock.json      export-ignore
+/.phpunit.result.cache  export-ignore
+/marketing-site          export-ignore
+/playwright              export-ignore
+/composer.phar           export-ignore
+/.playwright-mcp         export-ignore
+/videos                  export-ignore
+/README.md               export-ignore
+/SECURITY.md             export-ignore
+/src/Admin/Pages/TestCenterPage.php      export-ignore
+/.wordpress-org           export-ignore

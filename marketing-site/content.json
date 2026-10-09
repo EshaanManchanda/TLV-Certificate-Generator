@@ -1,0 +1,142 @@
+{
+  "meta": {
+    "purpose": "Content source for the public marketing page: features, why-choose-us, and competitor comparison for Certificate Generator.",
+    "plugin_version": "7.5",
+    "last_updated": "2026-09-19"
+  },
+  "hero": {
+    "headline": "Certificates, badges, and verification — without leaving WordPress",
+    "subheadline": "Design once, issue automatically from your LMS or WooCommerce store, and let anyone verify authenticity in one click. No external PDF service, no per-certificate fees.",
+    "primary_cta": "Get Certificate Generator",
+    "secondary_cta": "See it in action",
+    "screenshot_ref": "hero-dashboard.png"
+  },
+  "features": [
+    {
+      "id": "templates",
+      "title": "Drag-and-drop certificate designer",
+      "pitch": "Upload any background image and position every field exactly where you want it — no CSS, no design tool, no exporting from Canva.",
+      "detail": "Place Name, Type, School, Date, plus up to 15 custom fields per certificate type. Live canvas preview with zoom and grid snapping shows exactly what recipients will get.",
+      "screenshot_ref": "template-editor-field-mapping.png"
+    },
+    {
+      "id": "pdf-engine",
+      "title": "Instant, self-contained PDF generation",
+      "pitch": "Certificates render in-house via a bundled PDF engine — nothing to install, nothing calling out to a third-party API.",
+      "detail": "No TCPDF or mPDF setup, no server dependency headaches, no rate-limited external rendering service.",
+      "screenshot_ref": "pdf-sample-output.png"
+    },
+    {
+      "id": "qr-verification",
+      "title": "Built-in QR code verification",
+      "pitch": "Every certificate is fraud-checkable the moment it's issued — automatically, with zero configuration.",
+      "detail": "Each PDF embeds a QR code linking to a public verification page. Anyone can confirm authenticity by serial number or email, no login required.",
+      "screenshot_ref": "verification-page.png"
+    },
+    {
+      "id": "auto-issuance",
+      "title": "Automatic issuance from your LMS or store",
+      "pitch": "Stop generating certificates by hand. Completion triggers the certificate.",
+      "detail": "Works with Tutor LMS, LearnDash, LifterLMS, Sensei, and WooCommerce order completion — including multi-course 'track' certificates that require several courses finished first.",
+      "screenshot_ref": "lms-integration-settings.png"
+    },
+    {
+      "id": "bulk-tools",
+      "title": "Bulk import, bulk send, bulk everything",
+      "pitch": "Onboard a thousand students in one CSV upload, then email their certificates in a single click.",
+      "detail": "Filter sends by school, certificate type, or import source. A background queue handles delivery with automatic ZIP bundling, configurable rate limits, and retry with backoff — so a big send never times out or floods your SMTP provider.",
+      "screenshot_ref": "bulk-send-queue.png"
+    },
+    {
+      "id": "badges",
+      "title": "Shareable digital badges",
+      "pitch": "Give recipients a LinkedIn-ready badge image alongside their certificate.",
+      "detail": "Optional companion PNG badge generated per certificate, plus image-type fields for signatures and seals.",
+      "screenshot_ref": "digital-badge-sample.png"
+    },
+    {
+      "id": "analytics",
+      "title": "Delivery analytics that actually help",
+      "pitch": "Know who got their certificate, who didn't, and why — without digging through server logs.",
+      "detail": "Per-send delivery status, dashboard charts, breakdowns by certificate type and school, and expiration reports.",
+      "screenshot_ref": "analytics-dashboard.png"
+    },
+    {
+      "id": "public-search",
+      "title": "Self-serve lookup for students, teachers, and schools",
+      "pitch": "Recipients find their own certificates — support tickets go down.",
+      "detail": "Drop-in shortcodes ([student_search], [teacher_search], [school_search]) let anyone look up their certificate by email, with an 'Add to LinkedIn' button on results.",
+      "screenshot_ref": "search-shortcode-frontend.png"
+    },
+    {
+      "id": "rest-api",
+      "title": "REST API for custom integrations",
+      "pitch": "Issue certificates from any system that can make an HTTP call.",
+      "detail": "certificate-generator/v1 namespace: issue certificates, validate an API key, look up by email, and a public no-auth serial verification endpoint.",
+      "screenshot_ref": "rest-api-docs.png"
+    },
+    {
+      "id": "custom-fonts",
+      "title": "Custom font upload",
+      "pitch": "Match your organization's brand exactly, down to the typeface.",
+      "detail": "Upload a .ttf and it renders correctly via a dedicated font engine — selectable on any template.",
+      "screenshot_ref": "custom-font-upload.png"
+    }
+  ],
+  "why_choose_us": [
+    {
+      "title": "Nothing runs outside your site",
+      "detail": "PDF rendering, QR generation, and font embedding all happen on your own WordPress install. No per-certificate API fees, no third-party service that can go down or change its pricing."
+    },
+    {
+      "title": "Verification is public and free, always",
+      "detail": "Anyone can verify a certificate's authenticity without an account, a paid plan, or contacting support — on every plan, including Free."
+    },
+    {
+      "title": "Built for scale from the first CSV",
+      "detail": "Bulk import and bulk send use a background queue with retry logic, so sending to thousands of recipients doesn't mean a stuck browser tab or a bounced SMTP connection."
+    },
+    {
+      "title": "Automation, not busywork",
+      "detail": "Connects directly to the LMS or store you already run. A finished course or a completed order issues the certificate — nobody has to remember to do it manually."
+    },
+    {
+      "title": "Transparent, usage-based pricing",
+      "detail": "Free tier covers real usage (100 certs/month, 250 records per entity). Pro is $3.5/month ($35/year) for unlimited bulk operations and the REST API — not a quote-only enterprise wall."
+    }
+  ],
+  "comparison": {
+    "note": "Certificate Generator vs. typical WordPress certificate plugins (category comparison, not a specific named competitor).",
+    "columns": ["Capability", "Certificate Generator", "Typical certificate plugins"],
+    "rows": [
+      ["PDF rendering", "Bundled engine, no external dependency", "Often requires TCPDF/mPDF or a paid API"],
+      ["QR verification page", "Included on every plan, public, no login", "Usually a paid add-on or missing entirely"],
+      ["LMS auto-issuance", "Tutor LMS, LearnDash, LifterLMS, Sensei, WooCommerce", "Usually locked to one LMS or not supported"],
+      ["Bulk send with retry/backoff queue", "Included", "Rare — most send synchronously and can time out"],
+      ["Multi-course 'track' certificates", "Included", "Not commonly available"],
+      ["Digital badges", "Included", "Usually a separate plugin"],
+      ["Custom font upload", "Business plan", "Rare, often unsupported"],
+      ["REST API", "Pro/Business", "Usually absent"],
+      ["Free tier verification limit", "Unlimited, always free", "Often gated behind a paid tier"],
+      ["Pricing model", "$3.5/mo ($35/yr) Pro, transparent tiers", "Often $50-150/yr flat or quote-only"]
+    ]
+  },
+  "plans_summary": [
+    { "name": "Free", "price": "$0", "highlight": "100 certs/month, 250 records/entity, 6 templates — full verification and LMS auto-issuance included" },
+    { "name": "Pro", "price": "$3.5/mo ($35/yr)", "highlight": "1,000 certs/month, unlimited bulk, ZIP download, REST API, renewal reminders" },
+    { "name": "Business", "price": "Custom — contact us", "highlight": "Unlimited certs, custom fonts, unlimited API calls, multisite" }
+  ],
+  "screenshots_needed": [
+    { "file": "hero-dashboard.png", "capture": "Admin dashboard overview with certificate stats visible", "status": "have" },
+    { "file": "template-editor-field-mapping.png", "capture": "Drag-drop template editor with fields positioned on a certificate background", "status": "have" },
+    { "file": "pdf-sample-output.png", "capture": "A generated certificate PDF opened full-page", "status": "have" },
+    { "file": "verification-page.png", "capture": "Public /verify-certificate/ page showing a successful lookup result", "status": "have" },
+    { "file": "lms-integration-settings.png", "capture": "LMS/WooCommerce auto-issuance settings screen", "status": "have" },
+    { "file": "bulk-send-queue.png", "capture": "Bulk email send screen with filters and queue progress", "status": "have" },
+    { "file": "digital-badge-sample.png", "capture": "A sample PNG badge next to its certificate", "status": "missing" },
+    { "file": "analytics-dashboard.png", "capture": "Email logs / analytics charts screen", "status": "have" },
+    { "file": "search-shortcode-frontend.png", "capture": "Front-end [student_search] shortcode on a live page", "status": "have" },
+    { "file": "rest-api-docs.png", "capture": "REST API settings/key page, or a Postman call example", "status": "have" },
+    { "file": "custom-font-upload.png", "capture": "Font upload screen in the template editor", "status": "have" }
+  ]
+}

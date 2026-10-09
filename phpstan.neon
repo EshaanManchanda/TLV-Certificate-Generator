@@ -1,0 +1,21 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+        - includes
+    excludePaths:
+        - vendor/*
+    bootstrapFiles:
+        - tests/bootstrap-unit.php
+        - tests/phpstan-bootstrap.php
+    # Bundled PDF libraries: loaded at runtime with require_once, not autoloaded.
+    scanFiles:
+        - includes/Core/debug-log.php
+        - certificate-generator.php
+        - lib/fpdf/fpdf.php
+        - lib/tfpdf/tfpdf.php
+        - lib/tfpdf/font/unifont/ttfonts.php

@@ -1,0 +1,48 @@
+.cg-draggable-element {
+    position: absolute;
+    cursor: move;
+    z-index: 1000;
+    border: 2px dashed #2271b1;
+    background: rgba(34, 113, 177, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: border-color 0.2s, background 0.2s;
+}
+.cg-draggable-element:hover {
+    border-color: #d63638;
+    background: rgba(214, 54, 56, 0.15);
+}
+.cg-draggable-element.cg-dragging {
+    border-color: #d63638;
+    background: rgba(214, 54, 56, 0.2);
+    opacity: 0.8;
+}
+.cg-draggable-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #2271b1;
+    text-align: center;
+    pointer-events: none;
+}
+.cg-draggable-size {
+    font-size: 9px;
+    color: #646970;
+    text-align: center;
+    pointer-events: none;
+}
+.cg-qr-element {
+    border-radius: 4px;
+}
+.cg-serial-element {
+    border: 1px solid #2271b1;
+    background: rgba(34, 113, 177, 0.05);
+    padding: 4px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+}
+#cg-certificate-preview {
+    position: relative;
+    overflow: hidden;
+}

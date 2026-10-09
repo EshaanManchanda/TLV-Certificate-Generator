@@ -1,0 +1,24 @@
+Bundled fonts and their licenses
+================================
+
+The *.php / *.z pairs in this folder are FPDF font definitions: the metrics
+plus a subset (Windows-1252 characters) of the original font program.
+
+FPDF core fonts (courier*, helvetica*, times*, symbol, zapfdingbats)
+  Metrics only. Part of FPDF; see ../license.txt.
+
+Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+  arimo       Arimo Regular      (c) Google Inc.  - Arial-compatible metrics
+  tinos*      Tinos (4 styles)   (c) Google Inc.  - Times New Roman-compatible metrics
+
+SIL Open Font License 1.1 (https://openfontlicense.org)
+  gelasio     Gelasio Regular    (c) The Gelasio Project Authors
+  notosansb   Noto Sans Bold     (c) The Noto Project Authors
+  comicneue   Comic Neue Regular (c) The Comic Neue Project Authors
+  ebgaramond  EB Garamond        (c) The EB Garamond Project Authors
+  greatvibes  Great Vibes        (c) TypeSETit, LLC
+  unifont/archivoblack-regular, unifont/italianno-regular (metrics)
+  lato, lobster, opensans, pacifico, poppins (metrics only, font not embedded)
+
+All of these fonts are free to use, embed and redistribute. Their source files
+are at https://github.com/google/fonts.
