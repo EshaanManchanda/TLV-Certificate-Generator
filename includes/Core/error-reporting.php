@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 add_action( 'admin_notices', 'certificate_generator_show_activation_notices' );
 
 function certificate_generator_show_activation_notices() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		return;
 	}
 
@@ -180,7 +180,7 @@ function certificate_generator_add_compatibility_page() {
 		'tools.php',
 		'Certificate Generator - Compatibility Check',
 		'Cert Gen Compatibility',
-		'manage_options',
+		'certificate_generator_manage_settings',
 		'cert-gen-compatibility-check',
 		'certificate_generator_compatibility_page'
 	);
@@ -190,7 +190,7 @@ function certificate_generator_add_compatibility_page() {
  * Compatibility check page
  */
 function certificate_generator_compatibility_page() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_die( 'Unauthorized' );
 	}
 
@@ -302,7 +302,7 @@ function certificate_generator_compatibility_page() {
 add_action( 'admin_init', 'certificate_generator_handle_admin_actions' );
 
 function certificate_generator_handle_admin_actions() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		return;
 	}
 
@@ -362,12 +362,14 @@ function certificate_generator_handle_admin_actions() {
 add_action( 'admin_notices', 'certificate_generator_show_custom_messages' );
 
 function certificate_generator_show_custom_messages() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		return;
 	}
 
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	if ( isset( $_GET['message'] ) ) {
 		switch ( $_GET['message'] ) {
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 			case 'errors_cleared':
 				echo '<div class="notice notice-success is-dismissible"><p>✅ Activation errors have been cleared.</p></div>';
 				break;

@@ -29,5 +29,5 @@ These docs are for this repository and are not shipped in the plugin ZIP. Inside
 ## Also here
 
 - [CHANGELOG.md](CHANGELOG.md) — version history (`readme.txt` points here).
-- `samples/` — sample import CSVs: `students.csv`, `teacher.csv`, `school.csv`, `certificates.csv`.
+- Sample import CSVs ship with the plugin in [`../assets/samples/`](../assets/samples/): `students.csv`, `teachers.csv`, `schools.csv`, `templates.csv` — see [Sample files](guide/documentation.md#sample-files).
 - [../SECURITY.md](../SECURITY.md) — reporting a vulnerability, verifying a release ZIP.

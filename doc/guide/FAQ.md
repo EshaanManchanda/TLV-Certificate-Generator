@@ -28,20 +28,39 @@ The queue retries up to 3 times with exponential backoff. After 3 failures the i
 items from the queue management section.
 
 **How long are email logs kept?**
-90 days. A weekly cron job automatically deletes older entries. Change this by editing the
-`certificate_generator_cleanup_email_logs()` call in `includes/Email/log.php`.
+90 days by default. A weekly cron job deletes older email logs, sent queue rows and "verified"
+entries in certificate history. Change the period with the `certificate_generator_log_retention_days`
+option (e.g. `wp option update certificate_generator_log_retention_days 180`).
 
 ## Templates & certificates
 
 **How do I change the certificate PDF design?**
 Edit the template in **Certificate Generator → Templates**. Upload a new background image and
-reposition the text fields. Future PDFs use the updated design — previously generated PDFs are
-not changed.
+reposition the text fields. Certificates issued from now on use the new design. Certificates
+already issued keep the layout they were issued with (a snapshot), so re-downloading them gives
+the same certificate. To apply a corrected template to an issued certificate, open its history
+(**Revoke Certificate** page, or click its serial on the Students/Teachers list) and use
+**Reissue**: it keeps the serial and verification code, and the verify page shows "Corrected on …".
 
 **Can students verify their certificate online?**
-Yes. Every certificate has a QR code linking to `/verify-certificate/`. Visitors can also search
-by serial number or email on the results page (`/result/`). This works on every plan — see
-[Licensing](#licensing--pricing) below.
+Yes. Every certificate has a QR code with an unguessable 12-character verification code; it
+opens the verification page and shows the full result. Typing a serial number alone also works,
+but shows the name masked (serials run in sequence, so they could be stepped through to collect
+names). This works on every plan — see [Licensing](#licensing--pricing) below.
+
+**Which languages can certificates print?**
+Any. Names and text in Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada,
+Malayalam, Odia, Urdu and Arabic print with joined letters, as do Ł, Cyrillic or curly quotes.
+Certificates with that kind of text switch automatically to a Unicode PDF engine (mPDF) with
+bundled fonts; Latin text keeps the template's font. A PNG download of a certificate in an
+Indian script or Arabic gives the PDF instead, because PNG drawing can't join those letters.
+
+**What does the import check do?**
+**Bulk Import → Upload and check** reads the whole file first and saves nothing. It shows how
+each column maps (you can change it), required columns still missing, how many rows are new,
+update a record, merge or will be skipped, names too long for their template field, and the
+first rows as they'll be saved. Dates like 03/04/2026 must have their order chosen. Then
+**Import** saves exactly what the check counted.
 
 ## Data & backups
 
@@ -85,7 +104,8 @@ each is off until you map at least one course/product. See
 guide.
 
 **Can students add their certificate to LinkedIn?**
-Yes — the public verification result page includes a "LinkedIn — Add to Profile" button.
+Yes — a full verification result (opened from the QR code) includes a "LinkedIn — Add to
+Profile" button.
 
 **Can I add a digital badge alongside the PDF certificate?**
 Yes — set a badge image on a certificate template and a companion PNG badge is generated for

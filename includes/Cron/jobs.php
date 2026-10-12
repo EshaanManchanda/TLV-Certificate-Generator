@@ -11,6 +11,15 @@ class CertificateGenerator_Cron_Jobs {
 		add_action( 'certificate_generator_cleanup_old_certificates', array( __CLASS__, 'cleanup_old_certificates' ) );
 		add_action( 'certificate_generator_publish_scheduled_templates', array( __CLASS__, 'publish_scheduled_templates' ) );
 		add_action( 'certificate_generator_send_renewal_reminders', array( __CLASS__, 'send_recipient_renewal_reminders' ) );
+		if ( function_exists( 'certificate_generator_ensure_verify_page' ) ) {
+			// Rides the daily QR cleanup rather than a cron event of its own: re-creates a deleted verify page.
+			add_action(
+				'certificate_generator_cleanup_qr_codes',
+				static function (): void {
+					certificate_generator_ensure_verify_page();
+				}
+			);
+		}
 
 		if ( ! wp_next_scheduled( 'certificate_generator_cleanup_qr_codes' ) ) {
 			wp_schedule_event( time(), 'daily', 'certificate_generator_cleanup_qr_codes' );
@@ -56,6 +65,7 @@ class CertificateGenerator_Cron_Jobs {
 		$rules = array(
 			$dir . 'certificates_*.zip'                                   => 7 * DAY_IN_SECONDS,
 			$dir . 'private/certificates_*.zip'                           => DAY_IN_SECONDS,
+			$dir . 'private/import-*.csv'                                 => 2 * HOUR_IN_SECONDS, // CSVs kept between import check and import
 			$dir . '*.tmp'                                                => HOUR_IN_SECONDS,
 			wp_upload_dir()['basedir'] . '/cg-qr-codes/*.tmp'             => HOUR_IN_SECONDS,
 		);

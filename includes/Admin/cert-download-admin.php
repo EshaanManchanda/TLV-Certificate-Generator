@@ -36,7 +36,7 @@ function certificate_generator_handle_admin_cert_zip_download(): void {
 
 	check_admin_referer( 'cg_admin_cert_zip', '_wpnonce_cg_zip' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 	}
 
@@ -185,7 +185,7 @@ function certificate_generator_admin_cert_manifest_header(): array {
 function certificate_generator_admin_cert_manifest_csv( array $lines ): string {
 	$fh = fopen( 'php://temp', 'r+' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 	foreach ( $lines as $line ) {
-		fputcsv( $fh, $line );
+		certificate_generator_fputcsv( $fh, $line );
 	}
 	rewind( $fh );
 	$csv = (string) stream_get_contents( $fh );
@@ -223,7 +223,7 @@ function certificate_generator_admin_cert_stream_zip( string $zip_path, string $
 /** Capability + nonce for every job request. */
 function certificate_generator_cert_dl_guard(): void {
 	check_ajax_referer( 'certificate_generator_cert_dl_job', 'nonce' );
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ), 403 );
 	}
 }
@@ -420,7 +420,7 @@ function certificate_generator_ajax_cert_dl_zip(): void {
 function certificate_generator_handle_cert_dl_file(): void {
 	$job_id = sanitize_text_field( wp_unslash( $_GET['job_id'] ?? '' ) );
 	check_admin_referer( 'cg_cert_dl_file_' . $job_id );
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 	}
 
@@ -448,11 +448,12 @@ function certificate_generator_handle_admin_individual_cert_download(): void {
 	$entity = certificate_generator_admin_cert_read_filters( 'GET' )['entity'];
 	check_admin_referer( 'cg_admin_dl_cert_' . $entity . '_' . $sql_id );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 	}
 
-	if ( ! $sql_id || ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
+	if ( ! $sql_id || ! class_exists( '\CertificateGenerator\Database\CustomTables' )
+		|| ( function_exists( 'certificate_generator_record_in_scope' ) && ! certificate_generator_record_in_scope( $entity, $sql_id ) ) ) {
 		wp_die( esc_html__( 'Invalid recipient ID.', 'certificate-generator' ) );
 	}
 
@@ -667,10 +668,11 @@ function certificate_generator_admin_cert_rows_by_ids( string $entity, array $id
 	if ( ! $ids || ! isset( certificate_generator_admin_cert_entities()[ $entity ] ) ) {
 		return array();
 	}
-	$table = \CertificateGenerator\Database\CustomTables::instance()->get_table( $entity );
-	$in    = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($in)", ...$ids ), ARRAY_A );
+	$table              = \CertificateGenerator\Database\CustomTables::instance()->get_table( $entity );
+	$in                 = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+	[ $scope, $sparams ] = function_exists( 'certificate_generator_school_scope_sql' ) ? certificate_generator_school_scope_sql() : array( '', array() );
+	// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders -- %d per id; $scope from certificate_generator_school_scope_sql()
+	$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($in)" . ( '' !== $scope ? " AND $scope" : '' ), ...array_merge( $ids, $sparams ) ), ARRAY_A );
 	return array_column( array_map( 'certificate_generator_admin_cert_flatten_row', $rows ?: array() ), null, 'id' );
 }
 
@@ -762,13 +764,17 @@ function certificate_generator_admin_cert_zip_download_name( array $filters, int
 // ── Page renderer ─────────────────────────────────────────────────────────────
 
 function certificate_generator_render_admin_cert_download_page(): void {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ) );
 	}
 
 	$part_size  = CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE;
 	$years      = function_exists( 'certificate_generator_get_unique_years' ) ? certificate_generator_get_unique_years() : array();
 	$schools    = function_exists( 'certificate_generator_get_unique_schools' ) ? certificate_generator_get_unique_schools() : array();
+	$own_school = function_exists( 'certificate_generator_user_school' ) ? certificate_generator_user_school() : null;
+	if ( null !== $own_school ) {
+		$schools = '' !== $own_school ? array( $own_school ) : array(); // the cached list is site-wide
+	}
 	$cert_types = function_exists( 'certificate_generator_get_unique_certificate_types' ) ? certificate_generator_get_unique_certificate_types() : array();
 	$events     = function_exists( 'certificate_generator_get_unique_events' ) ? certificate_generator_get_unique_events() : array();
 	$entities   = certificate_generator_admin_cert_entities();

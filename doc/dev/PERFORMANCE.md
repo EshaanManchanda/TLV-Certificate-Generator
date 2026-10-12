@@ -3,8 +3,8 @@
 [← Back to README](../../README.md) · Full guide: [`documentation.md`](../guide/documentation.md) · [Free vs Pro](../guide/PLAN-COMPARISON.md)
 
 What this plugin can actually handle today, where it breaks first, and what
-would move each ceiling. Based on the current codebase (v7.5), not
-aspirational numbers.
+would move each ceiling. Written for v7.5 and updated for 7.8.0 where things changed; measured
+numbers live in [`LIMITS.md`](../guide/LIMITS.md#benchmarks).
 
 ## 1. Current capacity per entity
 
@@ -16,28 +16,18 @@ aspirational numbers.
 | Admin ZIP export | 200 certs generated synchronously per "part" | same | same | `CERTIFICATE_GENERATOR_ADMIN_EXPORT_ZIP_PART_SIZE = 200` — `includes/Admin/cert-download-admin.php:18`. Browser fires one POST per part for larger exports. |
 | Email sending | ~10/min, 80/hour effective | same | same | `includes/Email/rate-limiter.php:18-31` (`emails_per_hour=80`, `emails_per_minute=10`, `batch_delay=480s`) + hardcoded `sleep(2)` per email (`bulk-email-sender.php:139`). Comment states this exists "to prevent hitting Hostinger's email rate limits" (`rate-limiter.php:4`). |
 | Email queue throughput | 50 items/batch, 20s runtime budget per 5-min cron tick | same | same | `CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE = 50`, `CERTIFICATE_GENERATOR_QUEUE_RUNTIME_BUDGET = 20`s — `src/Core/Config.php:43`, `bulk-email-sender.php:103-109`. In practice ~5-9 emails/tick actually send once the rate limiter and sleep are applied. |
-| QR verification | No stated cap | same | same | 2 DB round-trips per scan (`SerialNumberService::verify()`, `src/Services/SerialNumberService.php:38`), no caching — scales with traffic, not data size. |
+| QR verification | No stated cap | same | same | 1–2 indexed lookups per scan (`SerialNumberService::verify()`: by verification code, falling back to the second certificate table), plus one history insert for visitors; rate-limited per IP. No caching — scales with traffic, not data size. |
+| Non-Latin certificates | ~115 ms each vs ~45 ms Latin | same | same | Rendered by mPDF (`src/Services/MpdfCanvas.php`). mPDF leaves ~2 MB of circular references per certificate, reclaimed by PHP's cycle collector (at most ~24 MB pending; measured flat over 40 certificates). |
 
 ## 2. Actual bottlenecks, ranked by what fails first
 
-### 1. Bulk import is O(n) database round-trips, not O(1)
-`includes/Services/bulk-import.php` streams the CSV row-by-row (`fopen`/`fgetcsv`,
-no chunking, no AJAX batching). Every row does: one `SELECT ... LIMIT 1` for
-the school lookup, then one `INSERT`/`UPDATE` upsert — **2+ queries per row**,
-all in a single PHP request with no `set_time_limit()` override in this file.
-
-This is the limit that bites first — well before the 500-row *license*
-cap does. A 5,000-row CSV on a slow host will hit PHP's default execution
-timeout long before it hits any intentional cap.
-
-**Why it's built this way:** simplicity — each row is validated and upserted
-independently, so partial failures don't corrupt the whole batch. That's a
-reasonable tradeoff at 500 rows; it stops being one past a few thousand.
-
-**Fix that doesn't change behavior:** batch the upserts into multi-row
-`INSERT ... ON DUPLICATE KEY UPDATE` statements (e.g. 100 rows per query)
-instead of one query per row. Cuts query count by ~100x with no change to
-what gets imported or how conflicts resolve.
+### 1. Bulk import — resolved (7.6.0, 7.8.0)
+Was: 2+ queries per row in one request. Now `CertificateGenerator_Import_Writer` writes 500 rows
+per transaction (one preload query, one multi-row `INSERT`, updates), schools are cached per run,
+and the import stops before the time limit and continues from the stop row. 10,000 rows import in
+~2 s. Since 7.8.0 the three importers share `certificate_generator_import_run()`, whose dry run is
+the check step (0.7 s for 10,000 rows). What's left: a re-import of an unchanged file still
+issues one `UPDATE` per matched row (~10,000 queries, ~5 s).
 
 ### 2. Font lookups and TTF validation re-run on every single PDF
 `CertificateGenerator_FontManager::get_custom_fonts()`
@@ -69,11 +59,11 @@ with no partial-progress recovery for that part.
 for chunked bulk PDF jobs) instead of a bigger synchronous part size. Same
 chunking pattern, no new dependency.
 
-### 4. QR verification: 2 round-trips, zero caching
-`SerialNumberService::verify()` does a `wpdb->get_row` lookup by serial, then
-a second query for `pdf_url`. Fine at low volume; if a verification page
-gets shared publicly and scanned at volume, this is 2x the DB load it needs
-to be.
+### 4. QR verification: no caching
+`SerialNumberService::verify()` looks the code (or serial) up in the legacy table and falls back
+to `wp_cg_certificates`; the second `pdf_url` query is gone (7.7.0 no longer returns a PDF URL).
+Visitor lookups also insert a `verified` history row. Fine at normal volume; a widely shared
+verify link scanned at volume would benefit from a short cache.
 
 **Fix:** single JOIN query instead of two lookups, plus a short-lived
 (1-5 min) object-cache/transient keyed by serial number — verification
@@ -119,7 +109,7 @@ ceiling, just takes longer."
 
 | Fix | Effort | Payoff | Touches |
 |---|---|---|---|
-| Batch bulk-import upserts | Small | Large (10-100x fewer queries) | `includes/Services/bulk-import.php` |
+| ~~Batch bulk-import upserts~~ | Done in 7.6.0 | 10,000 rows: 35 s → 2 s | `includes/Services/bulk-import.php` |
 | Cache font/embeddability lookups | Small | Medium-large for bulk jobs | `includes/Core/font-manager.php` |
 | Chunk ZIP export via background processor | Medium | Removes a timeout failure mode | `includes/Admin/cert-download-admin.php`, `includes/Services/background-processor.php` |
 | Single-query QR verification + short cache | Small | Small unless verification traffic is high | `src/Services/SerialNumberService.php` |

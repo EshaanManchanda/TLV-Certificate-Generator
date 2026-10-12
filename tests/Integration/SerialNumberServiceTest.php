@@ -50,6 +50,9 @@ class SerialNumberServiceTest extends WP_UnitTestCase {
 
 		$this->assertTrue( $result['valid'] );
 		$this->assertFalse( $result['expired'] );
+		// Public endpoint + sequential serials: never hand out the PDF or internal ids.
+		$this->assertArrayNotHasKey( 'pdf_url', $result['data'] );
+		$this->assertArrayNotHasKey( 'id', $result['data'] );
 	}
 
 	public function test_verify_returns_expired_when_expires_at_is_past(): void {

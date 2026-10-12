@@ -2,7 +2,7 @@
 
 [← Back to README](../../README.md) · Full guide: [`documentation.md`](documentation.md) · [Free vs Pro](PLAN-COMPARISON.md)
 
-Every hard limit, default and tested capacity in Certificate Generator 7.5.1, taken from the code. "Filter" / "constant" means you can change it.
+Every hard limit, default and tested capacity in Certificate Generator 7.8.0, taken from the code. "Filter" / "constant" means you can change it.
 
 ## Plan limits
 
@@ -16,6 +16,8 @@ None. Since 7.6 no plan caps certificates, emails, import/export rows or templat
 | Fields per template | 50 | `CertificateGenerator_Field_Schema::MAX_FIELDS`; minimum 2 |
 | Certificate-related file upload | 10 MB | `security-helper.php`; WordPress/PHP upload limits apply first |
 | Template image decode cache (per request) | 64 MB | Oldest image dropped first beyond this |
+| Render time per certificate | ~45 ms (Latin, FPDF) / ~115 ms (non-Latin, mPDF) | Measured on Local, JPEG template, 30 certificates each, warm cache |
+| Render time per certificate | ~45 ms (Latin, FPDF) / ~115 ms (non-Latin, mPDF) | Measured on Local, JPEG template, 30 certificates each, warm cache |
 
 ## Bulk download (admin → Download Certificates)
 
@@ -42,9 +44,11 @@ No hard maximum: the job runs in steps, so the ceiling is disk space and time, n
 | Limit | Value | Change with |
 |---|---|---|
 | Rows written per transaction | 500 | `CertificateGenerator_Import_Writer::CHUNK` |
-| Stops before PHP timeout | 10 s before `max_execution_time` | `certificate_generator_import_deadline` filter; re-upload the same file to continue |
-| Issues shown on screen | First 100 | Full list downloads as CSV |
-| Tested capacity | 10,000 rows | 2.2 s fresh, 4.6 s re-import — see [Benchmarks](#benchmarks) |
+| Stops before PHP timeout | 10 s before `max_execution_time` | `certificate_generator_import_deadline` filter; the page continues automatically from the stop row |
+| Check step | Whole file, no time limit, no writes | Same pipeline as the import (dry run) |
+| Uploaded file kept between check and import | 2 hours | Daily cron (`certificate_generator_cleanup_old_zips`) |
+| Issues shown on screen | First 100 (first 20 on the check) | Full list downloads as CSV |
+| Tested capacity | 10,000 rows | Check 0.7 s, import 2.1 s, re-import 4.8 s, 27 MB peak — see [Benchmarks](#benchmarks) |
 
 ## Email
 
@@ -107,6 +111,10 @@ In the admin page the cold run is split into 20-second steps, so no single reque
 | 10,000 | 35.18 s · 20,047 queries | **2.20 s · 146 queries** | 25.28 s · 20,025 queries | **4.63 s · 10,106 queries** |
 
 Peak memory: 22 MB before, 24–26 MB after.
+
+7.8.0 (shared import pipeline with the check step), 10,000 rows: check 0.74 s · 42 queries, import 2.11 s · 149 queries, re-import 4.76 s · 10,108 queries, 27 MB peak.
+
+7.8.0 (shared import pipeline with the check step), 10,000 rows: check 0.74 s · 42 queries, import 2.11 s · 149 queries, re-import 4.76 s · 10,108 queries, 27 MB peak.
 
 Real-file check: the reported 1,000-row CSV (one shared email) saved **366** rows before, with no warning. It now saves **898**, and lists the 102 genuine duplicates by line number.
 

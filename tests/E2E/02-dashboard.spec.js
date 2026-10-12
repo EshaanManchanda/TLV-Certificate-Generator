@@ -4,13 +4,16 @@ const { test, expect, adminUrl } = require('./support/fixtures');
 const wp = require('./support/wp');
 
 test.describe('§02 Dashboard', () => {
-	test('Getting Started reflects real state (template / test certificate / record / issued)', async ({ page }) => {
+	test('Getting Started reflects real state (verify page / template / test certificate / record / issued / verified)', async ({ page }) => {
 		const [s] = wp.sql(`SELECT
 			(SELECT COUNT(*) FROM {p}cg_certificate_templates) AS t,
 			(SELECT COUNT(*) FROM {p}cg_students) + (SELECT COUNT(*) FROM {p}cg_teachers) + (SELECT COUNT(*) FROM {p}cg_schools) AS r,
-			(SELECT COUNT(*) FROM {p}cg_certificates) AS c`);
+			(SELECT COUNT(*) FROM {p}certificate_generator) AS c,
+			(SELECT COUNT(*) FROM {p}cg_certificate_events WHERE event_type = 'verified') AS v`);
 		const testSent = !!wp.getOption('certificate_generator_test_certificate_sent');
-		const done = [s.t > 0, testSent, s.r > 0, s.c > 0];
+		const verifyPage = String(wp.wpEval("echo certificate_generator_is_verify_page((int) get_option('certificate_generator_verify_page_id')) ? 1 : 0;")) === '1';
+		wp.wpEval("delete_user_meta(get_user_by('login', 'e2e-admin')->ID, 'certificate_generator_checklist_hidden'); echo 1;");
+		const done = [verifyPage, s.t > 0, testSent, s.r > 0, s.c > 0, s.v > 0];
 		const doneCount = done.filter(Boolean).length;
 
 		await page.goto(adminUrl('cg-dashboard'));

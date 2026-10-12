@@ -14,7 +14,7 @@ class CertificateGenerator_Admin_Settings {
 			'cg-dashboard',
 			'Serial Number Settings',
 			'Serial Numbers',
-			'manage_options',
+			'certificate_generator_manage_settings',
 			'cg-serial-settings',
 			array( $this, 'render_serial_settings_page' )
 		);
@@ -29,7 +29,7 @@ class CertificateGenerator_Admin_Settings {
 	}
 
 	public function render_serial_settings_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			return;
 		}
 		?>
@@ -147,7 +147,7 @@ class CertificateGenerator_Admin_Settings {
 	}
 
 	public function save_serial_settings() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Unauthorized' );
 		}
 

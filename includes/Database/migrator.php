@@ -126,7 +126,7 @@ add_action(
 	'wp_ajax_certificate_generator_run_email_backfill',
 	function () {
 		check_ajax_referer( 'certificate_generator_run_email_backfill', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_send_json_error( array( 'message' => 'Insufficient permissions' ), 403 );
 		}
 		global $wpdb;

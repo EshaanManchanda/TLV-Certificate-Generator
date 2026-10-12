@@ -4,7 +4,7 @@ Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 7.6.0
+Stable tag: 7.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,12 +14,16 @@ Design certificate templates, import students from CSV, and issue, email and ver
 
 Certificate Generator turns a WordPress site into a complete certificate system for schools, training providers and course creators.
 
-* **Templates**: upload your design (PNG/JPG, e.g. from Canva), place fields by drag and drop, pick from 27 built-in fonts.
-* **Records**: add students, teachers and schools one by one, or import thousands from CSV. Export any time.
+* **Templates**: upload your design (PNG/JPG, e.g. from Canva), place fields by drag and drop, pick from 27 built-in fonts per field, and add custom text with {field} tags.
+* **Any language**: names in Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu and Arabic print with properly joined letters.
+* **Records**: add students, teachers and schools one by one, or import thousands from CSV. The import shows how each column maps and what will change before anything is saved. Export any time.
 * **Issue in bulk**: generate PDFs (and shareable PNGs) for everyone at once and download them as ZIP files.
 * **Email**: send each recipient their certificate, with your own templates, a background queue and hourly rate limits.
-* **Verification**: every certificate gets a serial number and a QR code that opens a public verification page, plus an "Add to LinkedIn" button.
+* **Verification**: every certificate gets a serial number and an unguessable verification code. Its QR code opens a public verification page with an "Add to LinkedIn" button.
+* **History, revoke and reissue**: see everything that happened to a certificate, revoke or reinstate it, and reissue a corrected one with the same serial and code.
 * **Search shortcodes**: let students, teachers and schools find and download their own certificates.
+* **My Certificates**: recipients open their own certificates with an emailed link, share them on LinkedIn, X or WhatsApp, and choose whether their name shows when someone verifies.
+* **Privacy tools**: WordPress's Export and Erase Personal Data include the plugin's records.
 * **Analytics, email logs and renewal reminders.**
 
 There are no caps on certificates, emails, imports or templates, and nothing in this plugin is locked.
@@ -35,6 +39,7 @@ Development happens in the open on GitHub: https://github.com/EshaanManchanda/TL
 = Shortcodes =
 
 * `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]`: look up and download certificates.
+* `[certificate_generator_my_certificates]`: a recipient's own certificates, opened with an emailed sign-in link.
 * `[certificate_generator_verify_certificate]`: public verification page.
 
 == Installation ==
@@ -51,7 +56,11 @@ No. Certificates, emails, CSV rows and templates are unlimited.
 
 = Which characters can certificates print? =
 
-The built-in fonts print Western European text (Windows-1252: accents, €). For other scripts, upload a Unicode font with the Pro add-on.
+Any language. Names in Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu and Arabic print with joined letters, as do names like Łukasz, Иван or O’Brien. The plugin switches those certificates to a Unicode PDF engine (mPDF) and bundled fonts on its own; Latin text keeps the template's font. PNG downloads of certificates with Indian or Arabic script give the PDF instead, because PNG drawing can't join those letters.
+
+= Can I export or erase a person's data? =
+
+Yes. Tools → Export Personal Data and Tools → Erase Personal Data include the plugin's student and teacher records, certificates and email logs. Erasing anonymises the person's certificates instead of deleting them, so a printed certificate still verifies, with the name shown as [erased].
 
 = Does the plugin send data anywhere? =
 
@@ -72,6 +81,11 @@ The **Feedback** page links to Google Forms; nothing is sent unless you open the
 
 QR codes are generated on your server. Fonts and the analytics chart library (Chart.js) are bundled with the plugin.
 
+== Credits ==
+
+* [mPDF](https://github.com/mpdf/mpdf) (GPL-2.0) renders certificates with non-Latin text.
+* Fonts in `assets/fonts/unicode`: GNU FreeFont FreeSerif (GPL-2.0-or-later with font exception), Lohit Telugu and Lohit Kannada (SIL Open Font License 1.1), Noto Sans Oriya (SIL Open Font License 1.1). Licence texts are next to the fonts.
+
 == Screenshots ==
 
 1. Template editor with drag-and-drop field placement.
@@ -80,6 +94,25 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 4. Public verification page.
 
 == Changelog ==
+
+= 7.8.0 =
+* New: reissue a certificate to correct it. It keeps its serial number and verification code, gets a new revision, and the verify page shows "Corrected on …". The reason is recorded in the certificate's history.
+* New: issued certificates keep a snapshot of their template layout and data, so editing a template later no longer changes certificates already issued.
+* New: each template field can have its own font, size, colour and UPPERCASE setting.
+* New: custom-text fields that mix your own words with {field} tags, e.g. "Awarded to {name} for {event}".
+* New: names in Indian scripts, Urdu/Arabic and any other non-Western-European text print correctly (joined conjuncts, connected Arabic). Before, they printed as "????".
+* Fix: PNG downloads of templates using Helvetica, Times or Courier showed no text.
+* New: bulk import checks the file before saving anything. It shows how each column maps (and lets you change it), how many rows are new, update a record, merge or will be skipped, the first rows as they'll be saved, and names too long for their template field.
+* New: import reads semicolon- and tab-separated files and Excel's Windows encoding, recognises common header names ("Name", "Email Address", "School", …), and asks for the date order when dates like 03/04/2026 could mean either. You can choose to leave existing records unchanged.
+* New: "Download a sample CSV" on each import tab, and Preview Certificate can use a real student's data and QR code.
+
+= 7.7.0 =
+* Security: each certificate now has an unguessable 12-character verification code, and new QR codes link to it. Checking a bare serial number still confirms the certificate but hides most of the name, because serial numbers run in sequence and could be stepped through to collect names. To show full details for serial-only checks again, set the option certificate_generator_verify_serial_full_details to 1. Existing certificates get their codes automatically on update.
+* New: per-certificate history (issued, name corrected, revoked, reinstated, verified). Open it from the Revoke page or by clicking a serial number on the Students or Teachers list.
+* Fix: revoking or reinstating a certificate now updates both certificate tables, and certificates recorded only in the newer table now verify.
+* Fix: sent emails are now cleared from the email queue on the same schedule as email logs (90 days by default).
+* Fix: "Delete data on uninstall" now removes every plugin table.
+* New hooks: certificate_generator_certificate_revoked and certificate_generator_certificate_reinstated.
 
 = 7.6.0 =
 * Release as a free plugin with no usage limits. Pro features moved to a separate add-on.
@@ -92,6 +125,12 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
+
+= 7.8.0 =
+Adds certificate reissue, per-field fonts and custom-text fields. Issued certificates now keep their layout when a template is edited later.
+
+= 7.7.0 =
+Certificates get unguessable verification codes, and new QR codes use them. A bare serial number now shows a masked name, so older printed QR codes still verify but show a masked name. Codes for existing certificates are added automatically.
 
 = 7.6.0 =
 Shortcodes are renamed (e.g. [student_search] is now [certificate_generator_student_search]); your pages, settings and serial numbers are updated automatically. LMS and WooCommerce auto-issue now need the Pro add-on.

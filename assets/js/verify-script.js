@@ -9,6 +9,11 @@ jQuery(document).ready(function ($) {
             'stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
     }
 
+    // Server values (names, messages) are data, never markup.
+    function esc(s) {
+        return $('<div>').text(s == null ? '' : String(s)).html();
+    }
+
     // Smart privacy display: skip the row entirely for an empty/unset value,
     // rather than showing a blank "Label: N/A" line.
     function detailRow(iconPaths, label, value, accentColor) {
@@ -18,7 +23,7 @@ jQuery(document).ready(function ($) {
             '<div style="min-width:24px;color:' + accentColor + ';margin-right:12px;margin-top:1px;">' +
             icon(iconPaths) + '</div>' +
             '<div><span style="font-weight:600;color:' + S.title_color + ';">' + label + ':</span> ' +
-            '<span style="color:' + S.text_color + ';font-size:15px;">' + value + '</span></div></div>';
+            '<span style="color:' + S.text_color + ';font-size:15px;">' + esc(value) + '</span></div></div>';
     }
 
     // SVG path constants
@@ -31,17 +36,63 @@ jQuery(document).ready(function ($) {
     var ICON_ALERT = '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>';
     var ICON_X = '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>';
 
+    // The recipient can hide their name from verification (My Certificates page).
+    function nameText(d) {
+        return d.name_hidden ? 'Hidden by the recipient' : d.student_name;
+    }
+
+    // The verify link for this certificate, by its code: what every share button posts.
+    function shareUrl(d) {
+        return location.origin + location.pathname + '?code=' + encodeURIComponent(d.verification_code.replace(/-/g, ''));
+    }
+
+    // X, WhatsApp and copy-link, next to LinkedIn. Full answers only, like LinkedIn.
+    function shareButtons(d, br) {
+        if (!d.verification_code) return '';
+        var url = shareUrl(d);
+        // Wording from Settings (Pro) or the translatable default; see certificate_generator_share_text().
+        var text = (S.share_text || 'My {certificate_type} certificate from {issuer} — verify it here:')
+            .replace(/\{certificate_type\}/g, d.certificate_type || 'certificate')
+            .replace(/\{issuer\}/g, d.issuer_name || '')
+            .replace(/\s+/g, ' ').trim();
+        // X counts a link as 23 characters; shorten the text, never the link.
+        var max = 280 - 24;
+        var xText = text.length > max ? text.slice(0, max - 1) + '…' : text;
+        var btn = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:' + br + ';' +
+            'text-decoration:none;font-weight:600;font-size:13px;border:1px solid #dcdcde;color:#1d2327;background:#fff;cursor:pointer;';
+        return '<div class="cg-share" style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+            '<a href="https://x.com/intent/post?text=' + encodeURIComponent(xText) + '&url=' + encodeURIComponent(url) + '" target="_blank" rel="noopener noreferrer" style="' + btn + '">Share on X</a>' +
+            '<a href="https://wa.me/?text=' + encodeURIComponent(text + ' ' + url) + '" target="_blank" rel="noopener noreferrer" style="' + btn + '">WhatsApp</a>' +
+            '<button type="button" class="cg-copy-link" data-url="' + esc(url) + '" style="' + btn + '">Copy link</button>' +
+            '</div>';
+    }
+
+    $(document).on('click', '.cg-copy-link', function () {
+        var $b = $(this), url = $b.data('url');
+        var done = function () { $b.text('Link copied'); };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(url).then(done, function () { window.prompt('Copy this link:', url); });
+        } else {
+            window.prompt('Copy this link:', url);
+        }
+    });
+
     // LinkedIn's documented "Add to Profile" URL: https://www.linkedin.com/help/linkedin/answer/a566688
     function linkedInButton(d, br) {
-        if (!d.pdf_url) return ''; // nothing to link to — omit the button rather than send a dead link
+        // Share only full answers: a link with the bare serial would show a masked name.
+        if (!d.verification_code) return '';
 
+        // Link to this verify page, not the PDF: the PDF URL is never handed to anonymous visitors.
         var params = {
             startTask: 'CERTIFICATION_NAME',
             name: d.certificate_type || 'Certificate',
             organizationName: d.issuer_name || '',
-            certUrl: d.pdf_url,
+            certUrl: shareUrl(d),
             certId: d.serial_number || ''
         };
+        if (S.linkedin_org_id) {
+            params.organizationId = S.linkedin_org_id; // links the certificate to the issuer's LinkedIn page
+        }
         if (d.issued_at) {
             var dt = new Date(String(d.issued_at).replace(' ', 'T'));
             if (!isNaN(dt.getTime())) {
@@ -74,16 +125,23 @@ jQuery(document).ready(function ($) {
 
         // Details
         html += '<div style="margin-bottom:10px;">';
-        html += detailRow(ICON_USER, 'Name', d.student_name, '#27ae60');
+        html += detailRow(ICON_USER, 'Name', nameText(d), '#27ae60');
         if (d.certificate_type) {
             html += detailRow(ICON_AWARD, 'Certificate Type', d.certificate_type, '#27ae60');
         }
         html += detailRow(ICON_HASH, 'Serial Number', d.serial_number, '#27ae60');
         html += detailRow(ICON_CALENDAR, 'Issued', d.issued_at, '#27ae60');
+        if (d.corrected_at) {
+            html += detailRow(ICON_CALENDAR, 'Corrected', d.corrected_at, '#27ae60');
+        }
         if (d.expires_at) {
             html += detailRow(ICON_CLOCK, 'Expires', d.expires_at, '#27ae60');
         }
         html += '</div>';
+        if (d.masked && !d.name_hidden) {
+            html += '<p class="cg-verify-masked" style="color:' + S.text_color + ';font-size:14px;margin:0 0 15px;">' +
+                'The name is partly hidden. Scan the QR code on the certificate, or enter its verification code, to see the full details.</p>';
+        }
 
         // Verified badge
         html += '<div style="background:linear-gradient(to right,rgba(39,174,96,0.06),rgba(39,174,96,0.02));' +
@@ -93,6 +151,7 @@ jQuery(document).ready(function ($) {
             '</div><span style="color:#27ae60;font-weight:600;">This certificate has been verified as authentic.</span></div>';
 
         html += linkedInButton(d, br);
+        html += shareButtons(d, br);
 
         html += '</div>';
         return html;
@@ -109,7 +168,7 @@ jQuery(document).ready(function ($) {
             '</div>';
 
         html += '<div style="margin-bottom:10px;">';
-        html += detailRow(ICON_USER, 'Name', d.student_name, '#e67e22');
+        html += detailRow(ICON_USER, 'Name', nameText(d), '#e67e22');
         if (d.certificate_type) {
             html += detailRow(ICON_AWARD, 'Certificate Type', d.certificate_type, '#e67e22');
         }
@@ -138,13 +197,13 @@ jQuery(document).ready(function ($) {
             '</div>';
 
         if (d.student_name) {
-            html += '<div style="margin-bottom:10px;">' + detailRow(ICON_USER, 'Name', d.student_name, '#e74c3c') + '</div>';
+            html += '<div style="margin-bottom:10px;">' + detailRow(ICON_USER, 'Name', nameText(d), '#e74c3c') + '</div>';
         }
 
         html += '<div style="background:linear-gradient(to right,rgba(231,76,60,0.06),rgba(231,76,60,0.02));' +
             'border-radius:' + br + ';padding:15px 20px;border-left:4px solid #e74c3c;display:flex;align-items:center;">' +
             '<div style="color:#e74c3c;margin-right:10px;">' + icon(ICON_ALERT) + '</div>' +
-            '<span style="color:#e74c3c;font-weight:600;">' + (r.message || 'This certificate has been revoked.') + '</span></div>';
+            '<span style="color:#e74c3c;font-weight:600;">' + esc(r.message || 'This certificate has been revoked.') + '</span></div>';
 
         html += '</div>';
         return html;
@@ -159,14 +218,14 @@ jQuery(document).ready(function ($) {
 
         html += '<h3 style="color:' + S.title_color + ';font-size:24px;margin:0 0 12px;font-weight:700;">Certificate Not Found</h3>';
         html += '<p style="color:' + S.text_color + ';margin-bottom:25px;line-height:1.6;font-size:16px;">' +
-            'We could not find a certificate matching this serial number. Please double-check the number and try again.</p>';
+            'We could not find a certificate matching this code or serial number. Please double-check it and try again.</p>';
 
         // Support box
         html += '<div style="background:linear-gradient(to right,rgba(231,76,60,0.05),rgba(231,76,60,0.02));' +
             'border-radius:' + br + ';padding:20px;border-left:4px solid #e74c3c;text-align:left;">' +
             '<p style="color:' + S.title_color + ';font-weight:600;margin:0 0 8px;">Tips:</p>' +
             '<ul style="margin:0;padding-left:20px;color:' + S.text_color + ';line-height:1.8;">' +
-            '<li>Check that you typed the serial number exactly as printed (including dashes).</li>' +
+            '<li>Check that you typed the verification code or serial number exactly as printed.</li>' +
             '<li>The serial number is usually near the bottom of the certificate or in the QR code.</li>' +
             '<li>If you still cannot verify, please contact the issuing organization.</li>' +
             '</ul></div>';
@@ -180,7 +239,7 @@ jQuery(document).ready(function ($) {
             'box-shadow:0 10px 40px rgba(0,0,0,0.08);text-align:center;border-top:4px solid #e74c3c;">' +
             '<div style="color:#e74c3c;margin-bottom:10px;">' + icon(ICON_X, 40) + '</div>' +
             '<h3 style="color:' + S.title_color + ';margin:0 0 8px;font-size:20px;">Verification Failed</h3>' +
-            '<p style="color:' + S.text_color + ';margin:0;">' + (msg || 'An unexpected error occurred. Please try again.') + '</p></div>';
+            '<p style="color:' + S.text_color + ';margin:0;">' + esc(msg || 'An unexpected error occurred. Please try again.') + '</p></div>';
     }
 
     $('#cg-verify-form').on('submit', function (e) {
@@ -239,9 +298,9 @@ jQuery(document).ready(function ($) {
         });
     });
 
-    // Auto-verify if serial_number is in the URL
+    // Auto-verify from the QR link (?code=) or an older serial link (?serial_number=)
     var urlParams = new URLSearchParams(window.location.search);
-    var urlSerial = urlParams.get('serial_number');
+    var urlSerial = urlParams.get('code') || urlParams.get('serial_number');
     if (urlSerial && $('#cg-verify-form').length) {
         var $input = $('#cg-serial-input');
         $input.val(urlSerial);

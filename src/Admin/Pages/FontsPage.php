@@ -172,7 +172,7 @@ class FontsPage extends Page {
 
 	/** Handler for admin-post.php?action=certificate_generator_font_sample (registered in Plugin::register_hooks()). */
 	public static function stream_sample_pdf(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions', 'certificate-generator' ), 403 );
 		}
 		check_admin_referer( 'certificate_generator_font_sample' );

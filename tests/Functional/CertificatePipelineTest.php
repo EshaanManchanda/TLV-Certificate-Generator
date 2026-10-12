@@ -90,8 +90,8 @@ class CertificatePipelineTest extends WP_UnitTestCase {
 			$serial
 		);
 
-		// ── Step 4: public verification ─────────────────────────────────────
-		$verification = ( new \CertificateGenerator\Services\SerialNumberService() )->verify( $serial );
+		// ── Step 4: public verification, by the code the QR carries ─────────
+		$verification = ( new \CertificateGenerator\Services\SerialNumberService() )->verify( certificate_generator_verification_code( $serial ) );
 
 		$this->assertTrue( $verification['valid'] );
 		$this->assertFalse( $verification['expired'] );

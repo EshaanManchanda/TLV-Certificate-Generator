@@ -9,7 +9,7 @@ section number and what you saw (a screenshot helps). Automated tests are covere
 **Before you start**
 - [ ] The site is running in Local, and you are logged in as an Administrator.
 - [ ] `WP_DEBUG` and `WP_DEBUG_LOG` are `true` in `wp-config.php`. Keep `wp-content/debug.log` open and look for new errors after each section.
-- [ ] You have the sample CSVs in `doc/samples/` (`students.csv`, `teacher.csv`, `school.csv`, `certificates.csv`).
+- [ ] You have the sample CSVs from `assets/samples/` (`students.csv`, `teachers.csv`, `schools.csv`, `templates.csv`), or downloaded them from **Documentation → User Guide**.
 - [ ] A test inbox is set up (e.g. a Mailtrap/MailHog SMTP account, or the WP Mail SMTP plugin in test mode). Don't email real people.
 
 **Test data used below.** Create these as you go and reuse them:
@@ -26,7 +26,7 @@ section number and what you saw (a screenshot helps). Automated tests are covere
 
 ## 1. Activation & upgrade
 - [ ] Deactivate and reactivate the plugin: no errors, and the **Certificate Generator** menu appears with an award icon.
-- [ ] **Tools / Migration page** (under Advanced, if shown) reports the DB version as **009**, with nothing pending.
+- [ ] **Tools / Migration page** (under Advanced, if shown) reports the DB version as **012**, with nothing pending.
 - [ ] Reload any admin page twice: no "database error" notices and nothing new in `debug.log`.
 
 ## 2. Dashboard
@@ -39,6 +39,9 @@ section number and what you saw (a screenshot helps). Automated tests are covere
 - [ ] Create a second **Participation** template with event date **15-03-2026** and a *visibly different* background.
 - [ ] Create a **Winner** template (any date) and a **Mentor** template for teachers (entity type = Teachers).
 - [ ] **Preview** each template: the PDF opens, the fields sit where you placed them, and the serial area shows `PREVIEW-SERIAL`.
+- [ ] **Preview with** a real record (the dropdown next to Preview Certificate): the PDF shows that record's values, and its QR code opens a valid verify result. Bulk Serials' counts don't change.
+- [ ] Give field 1 its own font, size and colour, and tick UPPERCASE: the preview shows them; field 2 keeps the template defaults.
+- [ ] Add a **Custom text with {fields}…** slot, e.g. `Awarded to {student_name} for {certificate_type}`: the preview fills both tags.
 - [ ] After previewing, **Bulk Serials** still has the same "with serial" count as before (previews must not use up real serials).
 - [ ] QR code toggle: turn it on, then preview. The QR appears at the configured position and size.
 - [ ] Serial display toggle: turn it on, then preview. The serial text appears at the configured position.
@@ -70,8 +73,14 @@ Repeat this block for **Students**, then **Teachers**, then **Schools**.
 - [ ] Link students to the event, then filter the Students list by that event.
 
 ## 6. Bulk Import
-Use `doc/samples/*.csv` and a CSV of your own containing the test data table above.
-- [ ] Import **students.csv**. The success message shows the right count, and the rows appear in Students.
+Use `assets/samples/*.csv` (import `templates.csv` first) and a CSV of your own containing the test data table above.
+- [ ] Each tab's **Download a sample CSV** opens in Excel with readable columns.
+- [ ] **Upload and check** students.csv: the check shows the delimiter and encoding, every column's **Imports as**, the counts and the first rows, and says *Nothing has been saved yet*. The Students list is unchanged.
+- [ ] Rename a header to `Pupil`: the check says *Required columns not mapped: student_name* and Import is disabled. Map the column by hand, **Check again**: Import is enabled.
+- [ ] A file with dates like `03/04/2026`: the check asks for the date order. Choose day/month/year; after import the record's date is 3 April 2026.
+- [ ] A semicolon-separated file saved from Excel as plain "CSV" (Windows encoding) with `José` in it: imports, and the name is right.
+- [ ] **Leave the record unchanged** on a re-import: matching rows are counted as skipped and keep their old values.
+- [ ] **Import**: the result counts equal the check's counts, and the rows appear in Students.
 - [ ] Right after the import, the **upload form is still visible**, so you can import another file straight away.
 - [ ] Press **F5** after an import: the CSV is **not** imported a second time (the row count is unchanged).
 - [ ] Import the same person twice with **different event dates** (Asha Multi, 10-01-2026 and 15-03-2026). You get **two rows**, and neither overwrites the other.
@@ -89,6 +98,8 @@ Use `doc/samples/*.csv` and a CSV of your own containing the test data table abo
 - [ ] Generate for **Tara Teacher**. The PDF uses the **Mentor** template.
 - [ ] Generate for a person whose type/date has **no template**. You get a clear "no matching template" message, and **no** certificate with the wrong design.
 - [ ] Names with accents (e.g. *José Ñúñez*) render correctly in the PDF.
+- [ ] Non-Latin names render with joined letters: a Hindi name (*श्रीमती क्षत्रिय*), a Tamil name (*தமிழ்செல்வி*), an Urdu name (*محمد علی خان*, right to left) and a mixed one (*Ravi रवि Kumar*, Latin parts in the template font). Also *Łukasz* and *O’Brien*.
+- [ ] Download a Hindi certificate as **PNG**: you get the PDF instead (named `.pdf`).
 - [ ] A long name wraps or fits, and doesn't run off the page.
 - [ ] If student photos are used: the photo appears; with no photo, the placeholder appears.
 
@@ -109,19 +120,23 @@ Use `doc/samples/*.csv` and a CSV of your own containing the test data table abo
 
 ## 9. Verification (public)
 Create a page containing `[certificate_generator_verify_certificate]` and open it in a **logged-out / private window**.
-- [ ] Enter Ben's serial. It shows **Valid** with the right name, type and date.
-- [ ] Enter Asha's two serials. Each shows Asha with the correct event.
+- [ ] Scan or open the QR code link from Ben's PDF (`?code=…`). It shows **Valid** with Ben's full name, type and date, and his verification code.
+- [ ] Type the code with lower case and without dashes: same result. Change one character: **Not found** (the check character rejects it).
+- [ ] Enter Ben's **serial** instead: **Valid**, but the name is masked (`B** W*****`) and there's a note explaining why. No LinkedIn button.
+- [ ] Enter Asha's two serials. Each shows a valid certificate with the correct event.
 - [ ] An unknown serial shows **Not found**.
-- [ ] Scan or open the QR code link from a PDF. It lands on the verify page with the serial pre-filled and valid.
-- [ ] The **LinkedIn – Add to Profile** button appears on a valid certificate and opens LinkedIn with the details pre-filled.
+- [ ] The **LinkedIn – Add to Profile** button appears on a full (code) result and opens LinkedIn with the details pre-filled.
 - [ ] Hit verify about 25 times within a minute. After about 20 you get a "too many attempts" message (the rate limit works).
-- [ ] REST: `/wp-json/certificate-generator/v1/verify/<serial>` returns JSON with `valid: true`.
+- [ ] REST: `/wp-json/certificate-generator/v1/verify/<code>` returns JSON with `valid: true` and `masked: false`; `/verify/<serial>` returns `masked: true`. Neither contains a PDF URL.
 
-## 10. Revoke
+## 10. Revoke, history and reissue
 - [ ] **Revoke Certificate**: revoke Ben's serial with a reason. It shows up in the revoked list.
-- [ ] The public verify page for that serial shows **Revoked** plus the reason (not "valid").
+- [ ] The public verify page for Ben's code shows **Revoked** plus the reason (not "valid").
 - [ ] Click **Reinstate**. Verify shows **Valid** again.
 - [ ] A wrong serial gives the error "No certificate found".
+- [ ] Open Ben's **History** (click his serial on the Students list): it lists issued, revoked, reinstated and the verifications from section 9, with dates.
+- [ ] Edit Ben's template (e.g. move a field), then re-download his certificate: it is **unchanged** (issued certificates keep their layout).
+- [ ] **Reissue** it with a reason: the new PDF uses the edited template, the serial and code stay the same, the history shows *reissued* with the reason, and the verify page shows "Corrected on …".
 
 ## 11. Search shortcodes (front end)
 Create pages with `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]` and
@@ -180,6 +195,18 @@ Enable one integration (e.g. Tutor LMS), then:
 - [ ] Logged out: admin-ajax actions for bulk send, serial generation and revoke return an error, not data.
 - [ ] Enter `<script>alert(1)</script>` as a student name, then view the list, the PDF, the verify page and an email. It shows as text everywhere, and no alert pops up.
 - [ ] Downloading a certificate by guessing another person's file URL doesn't expose data you can't otherwise search for.
+
+## 19b. My Certificates, sharing and privacy
+- [ ] On a page with `[certificate_generator_my_certificates]`, logged out: request a link for a known and an unknown address. Both show the same message; only the known one gets an email.
+- [ ] The emailed link opens that address's certificates only, and the address bar no longer shows `cg_wallet=`. **Sign out** returns to the form. A link older than 30 minutes says it has expired.
+- [ ] Untick **Show my name when someone verifies this**, then open **Verify & share**: Valid, with "Hidden by the recipient".
+- [ ] A full verify result shows LinkedIn, Share on X, WhatsApp and Copy link. With a LinkedIn organization ID set, the LinkedIn link carries `organizationId`.
+- [ ] Paste a `?code=` verify link into WhatsApp Web: the preview reads "Verified certificate: <type>".
+- [ ] Turn on **Require an email link to view certificates**: the student search page shows the email-link form instead of results.
+- [ ] Tools → Export Personal Data for a test student's email: the file has their records, certificates and email logs. Tools → Erase Personal Data: their records are gone and their certificate still verifies, issued to [erased].
+- [ ] **Register**: filter by a school and by Revoked; the table and the CSV / PDF downloads match. The CSV opens in Excel with Hindi names intact; the PDF repeats the header row on page 2. A School Coordinator sees only their school.
+- [ ] Trash the verification page, then run the daily cron (or click **Create it now** on the Dashboard): a published verify page is back, and a new certificate's QR code opens it.
+- [ ] Dashboard checklist: **Hide checklist** hides it; Documentation → Getting Started → **Show this checklist on the Dashboard again** brings it back.
 
 ## 20. Cleanup & final checks
 - [ ] `debug.log` has no new PHP warnings or fatals from this plugin.

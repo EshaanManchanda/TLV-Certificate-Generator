@@ -57,8 +57,24 @@ $run = function () use ( $csv, $source, $wpdb, $table ) {
 	);
 };
 
+// The import page's check step: same pipeline, no writes (its counts must match 'fresh').
+$check = function () use ( $csv, $source, $wpdb ) {
+	memory_reset_peak_usage();
+	$q0  = $wpdb->num_queries;
+	$t0  = microtime( true );
+	$res = certificate_generator_import_run( 'students', $csv, array( 'dry_run' => true, 'source' => $source ) );
+	return array(
+		's'    => microtime( true ) - $t0,
+		'q'    => $wpdb->num_queries - $q0,
+		'mb'   => memory_get_peak_usage() / MB_IN_BYTES,
+		'rows' => $res['report']['counts']['new'],
+		'msg'  => '',
+	);
+};
+
 $results = array(
-	'fresh'    => $run(),
+	'check'     => $check(),
+	'fresh'     => $run(),
 	're-import' => $run(),
 );
 
@@ -67,6 +83,6 @@ $wpdb->query( "DELETE FROM " . \CertificateGenerator\Database\CustomTables::inst
 unlink( $csv );
 
 foreach ( $results as $phase => $r ) {
-	WP_CLI::log( sprintf( 'N=%d %-9s %.2fs | %d queries (%.1f/row) | peak %.0f MB | rows in table %d', $n, $phase, $r['s'], $r['q'], $r['q'] / $n, $r['mb'], $r['rows'] ) );
+	WP_CLI::log( sprintf( 'N=%d %-9s %.2fs | %d queries (%.1f/row) | peak %.0f MB | rows %d (check: rows it would add; others: rows in table)', $n, $phase, $r['s'], $r['q'], $r['q'] / $n, $r['mb'], $r['rows'] ) );
 }
 WP_CLI::log( 'last report: ' . substr( $results['re-import']['msg'], -220 ) );

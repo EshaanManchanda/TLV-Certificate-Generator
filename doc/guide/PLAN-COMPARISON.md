@@ -34,12 +34,16 @@ default `https://tlvapi.techlovev.in`) is the backend API and has no pricing pag
 | Feature | Free | Pro | Business |
 |---|:---:|:---:|:---:|
 | PDF generation, manual issue, 27 built-in fonts | ✔ | ✔ | ✔ |
+| Names in any language (Indian scripts, Urdu / Arabic, Ł, Cyrillic, …) | ✔ | ✔ | ✔ |
+| Per-field fonts, custom-text fields with `{field}` tags | ✔ | ✔ | ✔ |
 | Students / teachers / schools, CSV import & export (no row limit) | ✔ | ✔ | ✔ |
+| Import check before saving: column mapping, counts, date order, encoding / delimiter detection, sample CSV | ✔ | ✔ | ✔ |
 | Certificate email, bulk send and queue (no monthly limit) | ✔ | ✔ | ✔ |
 | Email templates (per type, placeholders, CC/BCC) | ✔ | ✔ | ✔ |
 | Recipient renewal reminders (`CG_USE_RENEWAL_REMINDERS`) | ✔ | ✔ | ✔ |
 | Search shortcodes (`[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]`) | ✔ | ✔ | ✔ |
-| Verification / QR lookup (`[certificate_generator_verify_certificate]`) | ✔ | ✔ | ✔ |
+| Verification / QR lookup with unguessable codes (`[certificate_generator_verify_certificate]`) | ✔ | ✔ | ✔ |
+| Certificate history, revoke / reinstate, reissue, issued certificates keep their layout | ✔ | ✔ | ✔ |
 | Analytics, serial numbers | ✔ | ✔ | ✔ |
 | Digital badges, image / e-signature fields | ✔ | ✔ | ✔ |
 | Admin "Download Certificates" ZIP page | ✔ | ✔ | ✔ |

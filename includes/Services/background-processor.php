@@ -325,7 +325,7 @@ class CertificateGenerator_Background_Processor {
 	 */
 	public function check_progress() {
 		// Verify nonce
-		if ( ! current_user_can( 'manage_options' ) || ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'certificate_generation_progress_nonce' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) || ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'certificate_generation_progress_nonce' ) ) {
 			wp_send_json_error( 'Invalid nonce' );
 		}
 

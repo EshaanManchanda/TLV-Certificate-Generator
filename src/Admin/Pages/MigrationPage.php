@@ -21,14 +21,14 @@ class MigrationPage {
 			'cg-dashboard',
 			$this->title,
 			'SQL Migration',
-			'manage_options',
+			'certificate_generator_manage_settings',
 			$this->slug,
 			array( $this, 'render' )
 		);
 	}
 
 	public function render(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions', 'certificate-generator' ) );
 		}
 
@@ -108,6 +108,7 @@ class MigrationPage {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$remaining_rows   = $wpdb->get_results(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 				"SELECT post_type, COUNT(*) AS cnt FROM {$wpdb->posts} WHERE post_type IN ($placeholders) GROUP BY post_type",
 				...$legacy_cpt_types
 			)
@@ -481,6 +482,7 @@ class MigrationPage {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$post_ids = $wpdb->get_col(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 				"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders)",
 				...$post_types
 			)

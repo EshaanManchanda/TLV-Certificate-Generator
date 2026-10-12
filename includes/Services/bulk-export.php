@@ -116,7 +116,7 @@ function certificate_generator_render_bulk_export_students_page() {
 function certificate_generator_bulk_export_students() {
 	if ( isset( $_POST['export_students'] ) ) {
 		check_admin_referer( 'cg_export_students', '_wpnonce_cg_export' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 		}
 		if ( ob_get_level() ) {
@@ -172,7 +172,7 @@ function certificate_generator_bulk_export_students() {
 				$output  = fopen( 'php://output', 'w' );
 				$headers = array( 'student_name', 'email', 'phone', 'school_name', 'certificate_type', 'issue_date', 'year', 'status', 'serial_number', 'send_email', 'photo_url' );
 				$headers = array_merge( $headers, $extra_keys );
-				fputcsv( $output, $headers );
+				certificate_generator_fputcsv( $output, $headers );
 
 				foreach ( $rows as $row ) {
 					$extra = ! empty( $row['extra_fields'] ) ? json_decode( $row['extra_fields'], true ) : array();
@@ -195,7 +195,7 @@ function certificate_generator_bulk_export_students() {
 					foreach ( $extra_keys as $key ) {
 						$csv_row[] = $extra[ $key ] ?? '';
 					}
-					fputcsv( $output, $csv_row );
+					certificate_generator_fputcsv( $output, $csv_row );
 				}
 
 				fclose( $output );
@@ -248,7 +248,7 @@ function certificate_generator_bulk_export_students() {
 			array( 'student_name', 'email', 'phone', 'school_name', 'certificate_type', 'issue_date', 'status', 'send_email' ),
 			$extra_slugs
 		);
-		fputcsv( $output, $headers );
+		certificate_generator_fputcsv( $output, $headers );
 
 		foreach ( $students as $student ) {
 			$send = get_post_meta( $student->ID, 'send_email', true );
@@ -265,7 +265,7 @@ function certificate_generator_bulk_export_students() {
 			foreach ( $extra_slugs as $slug ) {
 				$row[] = get_post_meta( $student->ID, $slug, true );
 			}
-			fputcsv( $output, $row );
+			certificate_generator_fputcsv( $output, $row );
 		}
 
 		fclose( $output );
@@ -292,7 +292,7 @@ function certificate_generator_render_bulk_export_schools_page() {
 function certificate_generator_bulk_export_schools() {
 	if ( isset( $_POST['export_schools'] ) ) {
 		check_admin_referer( 'cg_export_schools', '_wpnonce_cg_export' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 		}
 		if ( ob_get_level() ) {
@@ -346,7 +346,7 @@ function certificate_generator_bulk_export_schools() {
 				$output  = fopen( 'php://output', 'w' );
 				$headers = array( 'school_name', 'place', 'certificate_type', 'issue_date', 'year', 'status', 'serial_number', 'send_email' );
 				$headers = array_merge( $headers, $extra_keys );
-				fputcsv( $output, $headers );
+				certificate_generator_fputcsv( $output, $headers );
 
 				foreach ( $rows as $row ) {
 					$extra = ! empty( $row['extra_fields'] ) ? json_decode( $row['extra_fields'], true ) : array();
@@ -366,7 +366,7 @@ function certificate_generator_bulk_export_schools() {
 					foreach ( $extra_keys as $key ) {
 						$csv_row[] = $extra[ $key ] ?? '';
 					}
-					fputcsv( $output, $csv_row );
+					certificate_generator_fputcsv( $output, $csv_row );
 				}
 
 				fclose( $output );
@@ -399,7 +399,7 @@ function certificate_generator_bulk_export_schools() {
 
 		$output  = fopen( 'php://output', 'w' );
 		$headers = array( 'school_name', 'place', 'certificate_type', 'issue_date', 'status', 'send_email' );
-		fputcsv( $output, $headers );
+		certificate_generator_fputcsv( $output, $headers );
 
 		foreach ( $schools as $school ) {
 			$send = get_post_meta( $school->ID, 'send_email', true );
@@ -411,7 +411,7 @@ function certificate_generator_bulk_export_schools() {
 				get_post_meta( $school->ID, 'status', true ) ?: 'active',
 				( $send !== '' && ! $send ) ? 'false' : 'true',
 			);
-			fputcsv( $output, $row );
+			certificate_generator_fputcsv( $output, $row );
 		}
 
 		fclose( $output );
@@ -438,7 +438,7 @@ function certificate_generator_render_bulk_export_teachers_page() {
 function certificate_generator_bulk_export_teachers() {
 	if ( isset( $_POST['export_teachers'] ) ) {
 		check_admin_referer( 'cg_export_teachers', '_wpnonce_cg_export' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 		}
 		if ( ob_get_level() ) {
@@ -492,7 +492,7 @@ function certificate_generator_bulk_export_teachers() {
 				$output  = fopen( 'php://output', 'w' );
 				$headers = array( 'teacher_name', 'email', 'phone', 'school_name', 'certificate_type', 'issue_date', 'year', 'status', 'serial_number', 'send_email' );
 				$headers = array_merge( $headers, $extra_keys );
-				fputcsv( $output, $headers );
+				certificate_generator_fputcsv( $output, $headers );
 
 				foreach ( $rows as $row ) {
 					$extra = ! empty( $row['extra_fields'] ) ? json_decode( $row['extra_fields'], true ) : array();
@@ -514,7 +514,7 @@ function certificate_generator_bulk_export_teachers() {
 					foreach ( $extra_keys as $key ) {
 						$csv_row[] = $extra[ $key ] ?? '';
 					}
-					fputcsv( $output, $csv_row );
+					certificate_generator_fputcsv( $output, $csv_row );
 				}
 
 				fclose( $output );
@@ -554,7 +554,7 @@ function certificate_generator_bulk_export_teachers() {
 			'issue_date',
 			'certificate_type',
 		);
-		fputcsv( $output, $headers );
+		certificate_generator_fputcsv( $output, $headers );
 
 		foreach ( $teachers as $teacher ) {
 			$row = array(
@@ -566,7 +566,7 @@ function certificate_generator_bulk_export_teachers() {
 				get_post_meta( $teacher->ID, 'certificate_type', true ),
 			);
 
-			fputcsv( $output, $row );
+			certificate_generator_fputcsv( $output, $row );
 		}
 
 		fclose( $output );
@@ -655,7 +655,7 @@ function certificate_generator_output_templates_csv( array $rows ): void {
 	header( 'Expires: 0' );
 
 	$output = fopen( 'php://output', 'w' );
-	fputcsv( $output, $headers );
+	certificate_generator_fputcsv( $output, $headers );
 
 	foreach ( $decoded_rows as $decoded_row ) {
 		$row          = $decoded_row['row'];
@@ -681,7 +681,7 @@ function certificate_generator_output_templates_csv( array $rows ): void {
 				$csv_row[] = $extra_data[ "field_{$i}_{$prop}" ] ?? $field_config[ $i ][ $prop ] ?? '';
 			}
 		}
-		fputcsv( $output, $csv_row );
+		certificate_generator_fputcsv( $output, $csv_row );
 	}
 
 	fclose( $output );
@@ -691,7 +691,7 @@ function certificate_generator_output_templates_csv( array $rows ): void {
 function certificate_generator_bulk_export_certificates() {
 	if ( isset( $_POST['export_certificates'] ) ) {
 		check_admin_referer( 'cg_export_certificates', '_wpnonce_cg_export' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 		}
 		if ( ob_get_level() ) {
@@ -780,7 +780,7 @@ function certificate_generator_bulk_export_certificates() {
 				$headers[] = "field_{$i}_{$prop}";
 			}
 		}
-		fputcsv( $output, $headers );
+		certificate_generator_fputcsv( $output, $headers );
 
 		foreach ( $certificates as $certificate ) {
 			$row = array(
@@ -802,7 +802,7 @@ function certificate_generator_bulk_export_certificates() {
 				}
 			}
 
-			fputcsv( $output, $row );
+			certificate_generator_fputcsv( $output, $row );
 		}
 
 		fclose( $output );

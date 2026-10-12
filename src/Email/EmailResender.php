@@ -107,7 +107,7 @@ class EmailResender {
 
 	public static function ajax_resend_one(): void {
 		check_ajax_referer( 'cg_resend_email', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ), 403 );
 		}
 		$result = self::resend_log( absint( $_POST['log_id'] ?? 0 ) );
@@ -116,7 +116,7 @@ class EmailResender {
 
 	public static function ajax_resend_all_failed(): void {
 		check_ajax_referer( 'cg_resend_email', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ), 403 );
 		}
 		$queued = self::queue_all_failed();

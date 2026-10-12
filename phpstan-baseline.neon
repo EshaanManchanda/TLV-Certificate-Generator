@@ -171,11 +171,6 @@ parameters:
 			path: includes/Services/certificate-search.php
 
 		-
-			message: "#^Parameter \\#2 \\$force_send of function certificate_generator_auto_send_email expects bool, string given\\.$#"
-			count: 2
-			path: includes/Services/certificate-search.php
-
-		-
 			message: "#^Right side of && is always true\\.$#"
 			count: 1
 			path: includes/Services/certificate-search.php
@@ -229,16 +224,6 @@ parameters:
 			message: "#^Variable \\$total_certificates_found in isset\\(\\) always exists and is not nullable\\.$#"
 			count: 1
 			path: includes/Services/certificate-search.php
-
-		-
-			message: "#^Access to an undefined property object\\:\\:\\$serial_number\\.$#"
-			count: 1
-			path: includes/Services/serial-generator.php
-
-		-
-			message: "#^Access to an undefined property object\\:\\:\\$student_name\\.$#"
-			count: 1
-			path: includes/Services/serial-generator.php
 
 		-
 			message: "#^Call to function is_wp_error\\(\\) with int\\<0, max\\> will always evaluate to false\\.$#"

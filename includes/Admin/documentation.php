@@ -14,6 +14,9 @@ add_action(
 	'wp_ajax_certificate_generator_dismiss_welcome',
 	function () {
 		check_ajax_referer( 'certificate_generator_dismiss_welcome', 'nonce' );
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
+			wp_send_json_error( null, 403 );
+		}
 		update_option( 'certificate_generator_welcome_dismissed', 1 );
 		wp_send_json_success();
 	}
@@ -25,18 +28,19 @@ function certificate_generator_maybe_show_welcome_banner() {
 	if ( get_option( 'certificate_generator_welcome_dismissed' ) ) {
 		return;
 	}
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		return;
 	}
 
-	$docs_url = admin_url( 'admin.php?page=cg-documentation' );
+	$dashboard_url = admin_url( 'admin.php?page=cg-dashboard' );
+	$docs_url      = admin_url( 'admin.php?page=cg-documentation' );
 	?>
 	<div class="notice notice-info cg-welcome-banner" style="display:flex;align-items:center;gap:16px;padding:14px 16px;">
 		<span class="dashicons dashicons-award" style="font-size:32px;color:#2271b1;flex-shrink:0;"></span>
 		<div style="flex:1;">
 			<strong>Certificate Generator is active!</strong>
-			New here? The <a href="<?php echo esc_url( $docs_url ); ?>">Getting Started guide</a>
-			walks you through SMTP setup, templates, and your first bulk send in under 10 minutes.
+			New here? The <a href="<?php echo esc_url( $dashboard_url ); ?>">setup checklist</a>
+			takes you from a template to an issued, verified certificate. The <a href="<?php echo esc_url( $docs_url ); ?>">Getting Started guide</a> explains each step.
 		</div>
 		<button type="button" class="cg-dismiss-welcome notice-dismiss" style="position:static;flex-shrink:0;">
 			<span class="screen-reader-text"><?php esc_html_e( 'Dismiss', 'certificate-generator' ); ?></span>
@@ -59,11 +63,11 @@ function certificate_generator_maybe_show_welcome_banner() {
 
 // ── Page renderer ─────────────────────────────────────────────────────────────
 function certificate_generator_render_documentation_page() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_view' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ) );
 	}
 
-	$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'getting-started';
+	$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'getting-started'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	$base_url   = admin_url( 'admin.php?page=cg-documentation' );
 
 	// ── Live setup status ────────────────────────────────────────────────────
@@ -145,6 +149,9 @@ function certificate_generator_render_documentation_page() {
 		?>
 
 		<h2>Setup Checklist</h2>
+		<?php if ( function_exists( 'certificate_generator_checklist_hidden' ) && certificate_generator_checklist_hidden() ) : ?>
+			<p><a href="<?php echo esc_url( certificate_generator_checklist_toggle_url() ); ?>"><?php esc_html_e( 'Show this checklist on the Dashboard again', 'certificate-generator' ); ?></a></p>
+		<?php endif; ?>
 		<div class="cg-docs-steps">
 		<?php foreach ( $steps as $step ) : ?>
 			<div class="cg-step">
@@ -223,7 +230,7 @@ function certificate_generator_render_documentation_page() {
 					<li>Choose the <strong>Entity Type</strong> the template is for: Student, Teacher, or School. This controls which core fields (e.g. <code>graduation_date</code> for students, <code>subject</code> for teachers) appear in the field dropdowns below.</li>
 					<li>Upload your own certificate background image (PNG or JPG, A4 landscape recommended), or pick one from the <strong>bundled template gallery</strong> (see below) to skip designing your own.</li>
 					<li>Set <strong>Orientation</strong> (Portrait/Landscape) and <strong>Page Size</strong> (A4, Letter, Legal, or Custom).</li>
-					<li>Set the default <strong>Font</strong>, size, and colour — each field can also override these individually.</li>
+					<li>Set the default <strong>Font</strong>, size, and colour. Each field can override them: pick its own <strong>Font</strong> and <strong>Size</strong>, tick <strong>Colour</strong> for its own colour, and <strong>UPPERCASE</strong> to print it in capitals.</li>
 					<li>Use the drag-and-drop canvas to position each field slot, and pick what data each slot shows from its dropdown (see <strong>Field mapping</strong> below).</li>
 					<li>Click <strong>Save Template</strong>.</li>
 				</ol>
@@ -240,14 +247,22 @@ function certificate_generator_render_documentation_page() {
 					<li><strong>Text</strong> — the default. Renders the selected field's value as text, with alignment (Left/Centre/Right) and width for wrapping.</li>
 					<li><strong>Image</strong> — a static image that's the same on every certificate (e.g. a signature or logo). Upload it once on the template; it doesn't come from student data.</li>
 					<li><strong>Photo</strong> — draws that specific recipient's own photo (see <strong>Photo</strong> in Managing Students below). Falls back to a blank slot if the recipient has no photo uploaded.</li>
+					<li><strong>Custom text with {fields}…</strong> — your own sentence with tags filled from the record, e.g. <code>Awarded to {student_name} for {certificate_type}</code>. Any column can be a tag, including extra CSV fields; dates print as dd-mm-yyyy.</li>
 				</ul>
 				<div class="cg-note">Image and Photo fields have an optional <strong>Height</strong> (mm) — leave it blank to keep the source image's own aspect ratio, or set it to force a fixed size.</div>
 
 				<h4>QR code &amp; serial number placement</h4>
 				<p>Toggle <strong>QR Code</strong> and <strong>Serial Number Display</strong> on the template, then drag their markers to position them — these are separate from the numbered field slots. See the <strong>QR Codes</strong> and <strong>Serial Numbers</strong> sections below.</p>
 
+				<h4>Previewing</h4>
+				<p><strong>Preview Certificate</strong> renders the saved template with sample data. To check it with real data, choose a record of that certificate type in the <strong>Preview with</strong> dropdown next to the button: the preview uses its values and its existing serial, so the QR code really verifies. A preview never issues a serial or saves anything.</p>
+
 				<h4>Editing an existing template</h4>
-				<p>Open the template and adjust field positions. Changes apply to all future PDF/PNG generations — previously generated files are not regenerated automatically.</p>
+				<p>Open the template and adjust field positions. Changes apply to certificates issued afterwards. Certificates already issued keep the layout they were issued with, so downloading one again gives the same certificate. To apply a corrected template to an issued certificate, <strong>Reissue</strong> it (see <strong>Revoke, History &amp; Reissue</strong> below).</p>
+
+				<h4>Names in any language</h4>
+				<p>Names and text in Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu and Arabic print with properly joined letters, as do Ł, Cyrillic or curly quotes. The plugin switches those certificates to a Unicode PDF engine on its own; Latin parts of a name keep the template's font. Nothing to set up.</p>
+				<div class="cg-note">A PNG download of a certificate in an Indian script or Arabic gives you the PDF instead, because PNG drawing can't join those letters.</div>
 			</div>
 		</details>
 		<hr class="cg-divider">
@@ -266,12 +281,39 @@ function certificate_generator_render_documentation_page() {
 
 				<h4>Bulk import via CSV</h4>
 				<ol>
-					<li>Go to <strong>Bulk Import</strong> and choose Students, Teachers, Schools, or Certificate Templates.</li>
-					<li>Prepare your CSV with the required columns for that entity (see below).</li>
-					<li>Upload the file — matching rows (same email, or same name + certificate type) update existing records instead of creating duplicates.</li>
+					<li>Go to <strong>Bulk Import</strong> and choose Students, Teachers or Schools. <strong>Download a sample CSV</strong> shows the columns.</li>
+					<li>Choose your file and click <strong>Upload and check</strong>. Nothing is saved yet.</li>
+					<li>Review the check: how each column <strong>imports as</strong> (change any dropdown if a column was matched wrongly), the date order if your dates could be read two ways (03/04/2026), whether rows that match an existing record should update it or leave it unchanged, the counts (new, updated, merged, skipped), any problems by row number, and the first rows as they'll be saved.</li>
+					<li>Click <strong>Import</strong>. The result matches the check. Very large files continue automatically if the server's time limit is reached.</li>
 				</ol>
-				<div class="cg-note">Required student CSV columns: <code>student_name</code>, <code>email</code>, <code>school_name</code>, <code>certificate_type</code>, <code>issue_date</code>. Optional columns: <code>status</code>, <code>send_email</code>, <code>phone</code>, <code>year</code>, <code>event_code</code>, <code>photo_url</code>. Teachers and Schools follow the same pattern with their own name column instead of <code>student_name</code>.</div>
+				<div class="cg-note">Files can be comma, semicolon or tab separated, and saved as UTF-8 or as Excel's plain "CSV". Common header names (<code>Name</code>, <code>Email Address</code>, <code>School</code>, <code>Date</code>, <code>Type</code>, …) are recognised. A row matches an existing record when the email, name, school, certificate type and issue date are the same.</div>
+				<div class="cg-note">Required student CSV columns: <code>student_name</code>, <code>email</code>, <code>school_name</code>, <code>certificate_type</code>, <code>issue_date</code>. Optional columns: <code>status</code>, <code>send_email</code>, <code>phone</code>, <code>year</code>, <code>event_code</code>, <code>photo_url</code>. Teachers use <code>teacher_name</code>; Schools need <code>school_name</code>, <code>place</code>, <code>issue_date</code> and <code>certificate_type</code>. The Certificate Templates tab imports template settings and works as before.</div>
 				<div class="cg-note"><strong>Custom fields:</strong> any extra column not in the list above (e.g. <code>grade</code>, <code>course_name</code>) is automatically saved and registered as a selectable field for that row's certificate type — no separate setup needed. It'll show up in the template editor's field dropdown the next time you edit a matching template.</div>
+
+				<h4>Sample files</h4>
+				<p>Start from a sample: download it, open it in Excel or Google Sheets, replace the example rows with your own (keep the first row of column names), save as CSV and import it on the matching <a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-bulk-import' ) ); ?>">Bulk Import</a> tab.</p>
+				<table class="widefat striped cg-table">
+					<thead><tr><th>File</th><th>Import on</th><th>What's in it</th></tr></thead>
+					<tbody>
+						<?php
+						foreach (
+							array(
+								'students.csv'  => array( 'Students', 'Name, email, phone, school, issue date, certificate type, whether to email, photo URL, and an extra <code>grade</code> column (any extra column becomes a field you can place on a template). One name is in Hindi.' ),
+								'teachers.csv'  => array( 'Teachers', 'Name, email, phone, school, issue date, certificate type, whether to email, and an extra <code>subject</code> column.' ),
+								'schools.csv'   => array( 'Schools', 'School name, place (city), issue date, certificate type, whether to email.' ),
+								'templates.csv' => array( 'Certificates', 'One template per certificate type above: background image URL (replace it with your own from the Media Library), orientation, font, and where each field goes. <code>field_1_name</code> etc. say what each field shows.' ),
+							) as $sample_file => $sample_info
+						) :
+							?>
+						<tr>
+							<td><a href="<?php echo esc_url( CERTIFICATE_GENERATOR_URL . 'assets/samples/' . $sample_file ); ?>" download><?php echo esc_html( $sample_file ); ?></a></td>
+							<td><?php echo esc_html( $sample_info[0] ); ?></td>
+							<td><?php echo wp_kses_post( $sample_info[1] ); ?></td>
+						</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<div class="cg-note">The samples fit together: import <code>templates.csv</code> first (after putting in your image URLs), then the people, and every row has a matching template. Dates are written day-month-year (<code>25-08-2026</code>). Each import tab also has its own <strong>Download a sample CSV</strong> link, which adds the custom fields your templates already use.</div>
 
 				<h4>Bulk export</h4>
 				<p>Go to <strong>Bulk Export</strong> to download all records (including any custom fields, serial numbers, and photo URLs) as CSV. Use this to back up data, migrate to another site, or edit many records at once and re-import.</p>
@@ -313,13 +355,51 @@ function certificate_generator_render_documentation_page() {
 		<details class="cg-section">
 			<summary>QR Codes</summary>
 			<div class="cg-section-body">
-				<p>QR codes are embedded in certificates and link to the public verification page (<code>/verify-certificate/</code>).</p>
+				<p>QR codes are embedded in certificates and open the public verification page with the certificate's verification code.</p>
 				<ul>
 					<li>QR codes are generated automatically during PDF/PNG creation, once enabled on the template.</li>
-					<li>Scanning the code takes the viewer to a page showing the certificate's authenticity status.</li>
+					<li>Every certificate has an unguessable 12-character verification code (shown as <code>XXXX-XXXX-XXXX</code>). Scanning the QR, or typing the code, shows the full result: name, certificate type, dates and an "Add to LinkedIn" button.</li>
+					<li>Typing a <strong>serial number</strong> alone also verifies the certificate, but shows the name masked (e.g. <code>B** W*****</code>), because serial numbers run in sequence and could be stepped through to collect names. QR codes printed before version 7.7.0 carry the serial and work the same way.</li>
+					<li>Verification is rate-limited per visitor.</li>
 					<li>The verification page only shows fields that actually have a value — blank fields are hidden rather than shown empty (smart privacy display).</li>
 					<li>No manual setup required — the library is bundled with the plugin.</li>
 				</ul>
+			</div>
+		</details>
+		<hr class="cg-divider">
+
+		<details class="cg-section">
+			<summary>Revoke, History &amp; Reissue</summary>
+			<div class="cg-section-body">
+				<h4>Revoke and reinstate</h4>
+				<p>Go to <a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-revoke-certificate' ) ); ?>">Revoke Certificate</a>, enter the serial number and a reason. The verification page then shows <strong>Revoked</strong> with the reason. <strong>Reinstate</strong> makes it valid again.</p>
+				<h4>History</h4>
+				<p>Every certificate keeps a history: issued, name corrected, revoked, reinstated, reissued and verified, with who did it and when. Open it from the Revoke page, or by clicking a serial number on the Students or Teachers list. No visitor IP addresses are stored.</p>
+				<h4>Reissue</h4>
+				<p>Issued certificates keep the layout they were issued with. After correcting a template or a record, open the certificate's history and click <strong>Reissue Certificate</strong> with a reason. It keeps the same serial number and verification code (so printed QR codes keep working), uses the template as it is now, and the verification page shows "Corrected on …".</p>
+			</div>
+		</details>
+		<hr class="cg-divider">
+
+		<details class="cg-section">
+			<summary>My Certificates, Sharing &amp; Privacy</summary>
+			<div class="cg-section-body">
+				<h4>My Certificates</h4>
+				<p>Put <code>[certificate_generator_my_certificates]</code> on a page. Recipients type their email and get a private link (valid 30 minutes) to their own certificates: download each one or all as a ZIP, open the verify page to share, and switch off <strong>Show my name when someone verifies this</strong>. No WordPress account is needed. The form answers the same for every address, so it can't reveal who has a certificate.</p>
+				<div class="cg-note">The student search shows certificates to anyone who types an email. To require the emailed link there too, tick <strong>Require an email link to view certificates</strong> under <a href="<?php echo esc_url( admin_url( 'options-general.php?page=certificate_generator_settings' ) ); ?>">Settings → General → Recipients &amp; sharing</a>.</div>
+				<h4>Sharing</h4>
+				<p>A verify result opened with the verification code shows <strong>Add to LinkedIn Profile</strong>, <strong>Share on X</strong>, <strong>WhatsApp</strong> and <strong>Copy link</strong>, and a shared link gets a preview card. Add your <strong>LinkedIn organization ID</strong> in the same settings card to link certificates to your organization's LinkedIn page.</p>
+				<h4>Privacy</h4>
+				<p><strong>Tools → Export Personal Data</strong> and <strong>Tools → Erase Personal Data</strong> include this plugin's records. Erasing deletes the person's records, email logs and PDFs, and anonymises their certificates (name <code>[erased]</code>) so printed certificates still verify.</p>
+			</div>
+		</details>
+		<hr class="cg-divider">
+
+		<details class="cg-section">
+			<summary>Certificate Register</summary>
+			<div class="cg-section-body">
+				<p><a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-register' ) ); ?>">Certificate Generator → Register</a> lists every issued certificate with its serial number, verification code, school, dates and status (Valid, Expired or Revoked). Filter it by certificate type, school, event, issue dates or status, then download it as a <strong>CSV</strong> spreadsheet or a printable <strong>PDF</strong>. Hindi, Arabic and other scripts print correctly.</p>
+				<div class="cg-note">The register is a record of what was issued, so nothing can be deleted from it. To withdraw a certificate, <a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-revoke-certificate' ) ); ?>">revoke it</a>. School Coordinators see only their own school.</div>
 			</div>
 		</details>
 		<hr class="cg-divider">
@@ -331,7 +411,7 @@ function certificate_generator_render_documentation_page() {
 				<p>The primary format. Generated from the template + recipient data, includes QR code and serial number if enabled.</p>
 				<h4>PNG (shareable image)</h4>
 				<p>Each certificate can also be downloaded as a PNG image — handy for sharing on social media or LinkedIn where a PDF isn't practical. Available anywhere a PDF download link appears; requires PHP's GD extension on the server (most hosts have this enabled by default).</p>
-				<div class="cg-note">PNG rendering aims for the same field positions as the PDF, but text wrapping can differ very slightly since the two use different rendering engines.</div>
+				<div class="cg-note">PNG rendering aims for the same field positions as the PDF, but text wrapping can differ very slightly since the two use different rendering engines. For certificates with Indian-script or Arabic text the PNG download gives the PDF instead.</div>
 				<h4>Bulk ZIP download for a school</h4>
 				<p>The <code>[school_bulk_certificate_download]</code> shortcode lets a school look up its name and download a ZIP of every one of its students' PDF certificates in one click.</p>
 				<div class="cg-note">This shortcode comes with the <strong>Certificate Generator Pro</strong> add-on. Admins can always download ZIPs from <strong>Certificate Generator → Download Certificates</strong>.</div>
@@ -373,6 +453,7 @@ function certificate_generator_render_documentation_page() {
 					<li><code>[certificate_generator_student_search]</code> — front-end search form letting a student look up and download their own certificate(s) by email.</li>
 					<li><code>[certificate_generator_teacher_search]</code> — same lookup flow for teachers.</li>
 					<li><code>[certificate_generator_school_search]</code> — same lookup flow for schools (searches by school name and place).</li>
+					<li><code>[certificate_generator_my_certificates]</code> — a recipient's own certificates, opened with an emailed sign-in link.</li>
 					<li><code>[school_bulk_certificate_download]</code> — lets a school download a ZIP of all its students' certificates. <strong>Needs the Pro add-on.</strong></li>
 					<li><code>[certificate_generator_verify_certificate]</code> — public certificate-authenticity verification page (also linked from certificate QR codes).</li>
 				</ul>
@@ -590,16 +671,22 @@ define( 'WP_DEBUG_DISPLAY', false );</pre>
 				'Yes, but Gmail requires an App Password (not your regular login). In WP Mail SMTP: choose Gmail as mailer, follow the OAuth flow or use SMTP with host <code>smtp.gmail.com</code>, port 587, and your App Password.',
 
 			'How do I change the certificate PDF design?' =>
-				'Edit the template in Certificate Generator → Templates. Upload a new background image and reposition the text fields. Future PDFs will use the updated design; previously generated PDFs are not changed.',
+				'Edit the template in Certificate Generator → Templates. Upload a new background image and reposition the text fields. Certificates issued afterwards use the new design; issued certificates keep the layout they were issued with. To apply the new design to an issued certificate, open its history and click <strong>Reissue Certificate</strong>: it keeps the serial number and verification code.',
+
+			'Which languages can certificates print?' =>
+				'Any. Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu and Arabic names print with joined letters, as do names like Łukasz or O’Brien. The plugin picks the right engine and fonts by itself.',
+
+			'What does "Upload and check" do on Bulk Import?' =>
+				'It reads the whole file and saves nothing. You see how each column maps, what will be new, updated, merged or skipped, problems by row number, and the first rows as they will be saved. Fix anything, then click Import.',
 
 			'What happens if an email fails to send?'     =>
 				'The queue retries up to 3 times with exponential backoff. After 3 failures the item is marked <code>failed</code> in the queue and logged in Email Logs with the error message. You can reset failed items from the queue management section.',
 
 			'How long are email logs kept?'               =>
-				'Logs are retained for 90 days. A weekly cron job automatically deletes older entries. You can change this by editing the <code>certificate_generator_cleanup_email_logs()</code> call in <code>includes/Email/log.php</code>.',
+				'90 days by default. A weekly job deletes older email logs, sent queue entries and "verified" history entries. Change the number of days with the <code>certificate_generator_log_retention_days</code> option.',
 
 			'Can students verify their certificate online?' =>
-				'Yes. Each certificate has a QR code that links to <code>/verify-certificate/</code>. Visitors can also search by serial number or email on the results page (<code>/result/</code>).',
+				'Yes. Each certificate has a QR code that opens the verification page with its verification code and shows the full result. A serial number typed alone also verifies, with the name masked.',
 
 			'Is the plugin multisite compatible?'         =>
 				'Partially. The plugin is designed for single-site use. Multisite installs may work but custom table creation has not been formally tested across network sites.',

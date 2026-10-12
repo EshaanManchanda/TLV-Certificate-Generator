@@ -15,26 +15,13 @@ class CertificateGenerator_QR_Code_Generator {
 
 	public function generate_qr_data( $certificate_data, $serial_number = '' ) {
 		$base_url = $this->get_verify_page_url();
-		return add_query_arg( 'serial_number', $serial_number, $base_url );
+		// The code, not the serial: a serial alone only gets a masked answer (see SerialNumberService::verify).
+		$code = certificate_generator_verification_code( (string) $serial_number );
+		return $code ? add_query_arg( 'code', $code, $base_url ) : add_query_arg( 'serial_number', $serial_number, $base_url );
 	}
 
 	private function get_verify_page_url(): string {
-		$cached = get_transient( 'certificate_generator_verify_page_url' );
-		if ( $cached ) {
-			return $cached;
-		}
-
-		global $wpdb;
-		$page_id = $wpdb->get_var(
-			"SELECT ID FROM {$wpdb->posts}
-             WHERE post_status = 'publish' AND post_type = 'page'
-             AND post_content LIKE '%[certificate_generator_verify_certificate%'
-             LIMIT 1"
-		);
-
-		$url = $page_id ? get_permalink( $page_id ) : home_url( '/' );
-		set_transient( 'certificate_generator_verify_page_url', $url, HOUR_IN_SECONDS );
-		return $url;
+		return function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/verify-certificate/' );
 	}
 
 	public function generate_qr_image( $data, $size = 150, $error_correction = 'L' ) {
@@ -55,6 +42,10 @@ class CertificateGenerator_QR_Code_Generator {
 
 		if ( ! file_exists( $qr_dir ) ) {
 			wp_mkdir_p( $qr_dir );
+		}
+		// Block directory listings: each QR encodes a verify URL with its serial.
+		if ( ! file_exists( $qr_dir . 'index.php' ) ) {
+			@file_put_contents( $qr_dir . 'index.php', "<?php // Silence is golden.\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions, WordPress.PHP.NoSilencedErrors
 		}
 
 		// Same data → same image, so a certificate's QR is drawn once, not on every render.

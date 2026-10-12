@@ -31,14 +31,14 @@ class EventsPage {
 	);
 
 	public function register(): void {
-		add_submenu_page( 'cg-dashboard', 'Events', 'Events', 'manage_options', $this->slug, array( $this, 'render_list' ) );
-		add_submenu_page( '', 'Add / Edit Event', '', 'manage_options', $this->edit_slug, array( $this, 'render_edit' ) );
+		add_submenu_page( 'cg-dashboard', 'Events', 'Events', 'certificate_generator_manage_settings', $this->slug, array( $this, 'render_list' ) );
+		add_submenu_page( '', 'Add / Edit Event', '', 'certificate_generator_manage_settings', $this->edit_slug, array( $this, 'render_edit' ) );
 	}
 
 	// ── List View ────────────────────────────────────────────────────────────
 
 	public function render_list(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Insufficient permissions' );
 		}
 
@@ -103,6 +103,7 @@ class EventsPage {
 				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
 				// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 				$counts = $wpdb->get_results(
+					// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 					$wpdb->prepare( "SELECT event_id, COUNT(*) AS c FROM $related_table WHERE event_id IN ($placeholders) GROUP BY event_id", ...$page_ids ),
 					ARRAY_A
 				);
@@ -258,7 +259,7 @@ class EventsPage {
 	// ── Edit / Add Form ──────────────────────────────────────────────────────
 
 	public function render_edit(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Insufficient permissions' );
 		}
 

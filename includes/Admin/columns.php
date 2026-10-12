@@ -46,7 +46,7 @@ add_action( 'wp_ajax_certificate_generator_toggle_bulk_send', 'certificate_gener
 function certificate_generator_ajax_toggle_bulk_send(): void {
 	check_ajax_referer( 'certificate_generator_toggle_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'edit_posts' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ) );
 	}
 
@@ -186,12 +186,6 @@ if ( false ) {
 
 			$position_x = $field_config[ $i ]['position_x'] ?? '';
 			$position_y = $field_config[ $i ]['position_y'] ?? '';
-
-			// Debug log to check what's happening
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				certificate_generator_debug_log( "Checking field position for field_{$i} (X): " . ( $position_x ? $position_x : 'empty' ) );
-				certificate_generator_debug_log( "Checking field position for field_{$i} (Y): " . ( $position_y ? $position_y : 'empty' ) );
-			}
 
 			if ( empty( $position_x ) || empty( $position_y ) ) {
 				$has_enough_fields   = false;
@@ -730,6 +724,7 @@ function certificate_generator_handle_bulk_actions( $redirect_to, $action, $post
 
 // Display bulk action notices
 function certificate_generator_bulk_action_notices() {
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	if ( ! empty( $_REQUEST['bulk_emails_sent'] ) || ! empty( $_REQUEST['bulk_emails_failed'] ) || ! empty( $_REQUEST['bulk_emails_skipped'] ) ) {
 		$sent    = isset( $_REQUEST['bulk_emails_sent'] ) ? intval( $_REQUEST['bulk_emails_sent'] ) : 0;
 		$failed  = isset( $_REQUEST['bulk_emails_failed'] ) ? intval( $_REQUEST['bulk_emails_failed'] ) : 0;
@@ -756,6 +751,7 @@ function certificate_generator_bulk_action_notices() {
 
 	if ( ! empty( $_REQUEST['bulk_email_error'] ) ) {
 		$error   = sanitize_text_field( wp_unslash( $_REQUEST['bulk_email_error'] ) );
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		$message = __( 'Bulk email error: Invalid post type.', 'certificate-generator' );
 		certificate_generator_ui_notice( 'error', esc_html( $message ) );
 	}
@@ -773,7 +769,7 @@ function certificate_generator_bulk_email_progress_ajax() {
 	check_ajax_referer( 'certificate_generator_bulk_email', 'nonce' );
 
 	// Check if user has permission
-	if ( ! current_user_can( 'edit_posts' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( array( 'message' => __( 'You do not have permission to perform this action.', 'certificate-generator' ) ) );
 		wp_die();
 	}
@@ -992,9 +988,11 @@ function certificate_generator_add_list_filters( $post_type ) {
 	}
 
 	// Get current filter values
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	$filter_school       = isset( $_GET['filter_school'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_school'] ) ) : '';
 	$filter_cert_type    = isset( $_GET['filter_cert_type'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_cert_type'] ) ) : '';
 	$filter_email_status = isset( $_GET['filter_email_status'] ) ? sanitize_text_field( wp_unslash( $_GET['filter_email_status'] ) ) : '';
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 	// Get unique schools
 	$schools = certificate_generator_get_unique_schools( $post_type );
@@ -1064,6 +1062,7 @@ function certificate_generator_apply_list_filters( $query ) {
 		return;
 	}
 
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	$post_type = isset( $_GET['post_type'] ) ? sanitize_text_field( wp_unslash( $_GET['post_type'] ) ) : '';
 	if ( ! in_array( $post_type, array( 'students', 'teachers', 'schools' ) ) ) {
 		return;
@@ -1092,6 +1091,7 @@ function certificate_generator_apply_list_filters( $query ) {
 	// Email status filter
 	if ( ! empty( $_GET['filter_email_status'] ) ) {
 		$email_status = sanitize_text_field( wp_unslash( $_GET['filter_email_status'] ) );
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		switch ( $email_status ) {
 			case 'has_email':
@@ -1144,7 +1144,7 @@ function certificate_generator_filter_posts_join( $join, $query ) {
 		return $join;
 	}
 
-	if ( ! empty( $_GET['filter_email_status'] ) && in_array( $_GET['filter_email_status'], array( 'sent', 'not_sent' ) ) ) {
+	if ( ! empty( $_GET['filter_email_status'] ) && in_array( $_GET['filter_email_status'], array( 'sent', 'not_sent' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 		$table_name = $wpdb->prefix . 'cert_email_logs';
 		$join      .= " LEFT JOIN (
             SELECT certificate_id, MAX(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as is_sent
@@ -1166,8 +1166,10 @@ function certificate_generator_filter_posts_where( $where, $query ) {
 		return $where;
 	}
 
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	if ( ! empty( $_GET['filter_email_status'] ) ) {
 		$email_status = sanitize_text_field( wp_unslash( $_GET['filter_email_status'] ) );
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		if ( $email_status === 'sent' ) {
 			$where .= ' AND el.is_sent = 1';
@@ -1189,7 +1191,7 @@ function certificate_generator_filter_posts_groupby( $groupby, $query ) {
 		return $groupby;
 	}
 
-	if ( ! empty( $_GET['filter_email_status'] ) && in_array( $_GET['filter_email_status'], array( 'sent', 'not_sent' ) ) ) {
+	if ( ! empty( $_GET['filter_email_status'] ) && in_array( $_GET['filter_email_status'], array( 'sent', 'not_sent' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 		if ( empty( $groupby ) ) {
 			$groupby = "{$wpdb->posts}.ID";
 		}
@@ -1221,6 +1223,7 @@ function certificate_generator_add_send_filtered_button( $which ) {
 	);
 
 	// Apply same filters
+	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	if ( ! empty( $_GET['filter_school'] ) ) {
 		$args['meta_query'][] = array(
 			'key'     => 'school_name',
@@ -1233,6 +1236,7 @@ function certificate_generator_add_send_filtered_button( $which ) {
 		$args['meta_query'][] = array(
 			'key'     => 'certificate_type',
 			'value'   => sanitize_text_field( wp_unslash( $_GET['filter_cert_type'] ) ),
+	// phpcs:enable WordPress.Security.NonceVerification.Recommended
 			'compare' => '=',
 		);
 	}
@@ -1519,6 +1523,10 @@ add_action( 'bulk_edit_custom_box', 'certificate_generator_bulk_edit_fields_cert
  */
 function certificate_generator_save_bulk_edit_fields( $post_id ) {
 	// Check if we are performing a bulk edit
+	// The posts list table's bulk-edit form carries the 'bulk-posts' nonce.
+	if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ?? '' ) ), 'bulk-posts' ) ) {
+		return;
+	}
 	if ( ! isset( $_REQUEST['certificate_bulk_edit'] ) || ! is_array( $_REQUEST['certificate_bulk_edit'] ) ) {
 		return;
 	}

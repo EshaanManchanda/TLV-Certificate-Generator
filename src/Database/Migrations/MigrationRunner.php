@@ -9,7 +9,7 @@ namespace CertificateGenerator\Database\Migrations;
 class MigrationRunner {
 
 	private string $option_key      = 'certificate_generator_db_version';
-	private string $current_version = '010';
+	private string $current_version = '013';
 	private array $migrations       = array();
 
 	public function __construct() {
@@ -24,6 +24,9 @@ class MigrationRunner {
 			'008' => new Migration008_AddTemplateEntityType(),
 			'009' => new Migration009_AddLookupIndexes(),
 			'010' => new Migration010_PrefixRename(),
+			'011' => new Migration011_VerificationCode(),
+			'012' => new Migration012_TemplateSnapshot(),
+			'013' => new Migration013_ShowName(),
 		);
 	}
 

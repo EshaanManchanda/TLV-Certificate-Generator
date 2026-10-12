@@ -18,6 +18,49 @@ class CertificateGenerator_Public_Verification {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_certificate_generator_public_verify', array( $this, 'ajax_public_verify' ) );
 		add_action( 'wp_ajax_nopriv_certificate_generator_public_verify', array( $this, 'ajax_public_verify' ) );
+		add_action( 'wp_head', array( $this, 'print_share_meta' ), 5 );
+	}
+
+	/**
+	 * Link-preview tags for a shared verify link (?code=…), so WhatsApp, LinkedIn and X show
+	 * "Verified certificate: Participation" instead of a bare URL. Only for a well-formed code,
+	 * within the verify rate limit, with the name masked (or none when the recipient hid it).
+	 * Not recorded as a verification: preview bots aren't verifiers. SEO plugins print their own
+	 * tags, so this stays out of their way.
+	 */
+	public function print_share_meta(): void {
+		if ( ! is_singular() || defined( 'WPSEO_VERSION' ) || class_exists( 'RankMath' ) || defined( 'AIOSEO_VERSION' ) ) {
+			return;
+		}
+		$post = get_post();
+		if ( ! $post || ! has_shortcode( (string) $post->post_content, 'certificate_generator_verify_certificate' ) ) {
+			return;
+		}
+		$code = \CertificateGenerator\Services\VerificationCodeService::normalize( sanitize_text_field( wp_unslash( $_GET['code'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only public lookup
+		if ( ! \CertificateGenerator\Services\VerificationCodeService::is_well_formed( $code )
+			|| ( class_exists( 'CertificateGenerator_SecurityHelper' ) && ! CertificateGenerator_SecurityHelper::check_rate_limit( 'cg_verify', 20, 60 ) ) ) {
+			return;
+		}
+		$result = ( new \CertificateGenerator\Services\SerialNumberService() )->verify( $code, false );
+		if ( empty( $result['data'] ) ) {
+			return;
+		}
+		$d     = $result['data'];
+		$type  = (string) ( $d['certificate_type'] ?? '' );
+		$state = ! empty( $result['revoked'] ) ? __( 'Revoked certificate', 'certificate-generator' ) : ( ! empty( $result['expired'] ) ? __( 'Expired certificate', 'certificate-generator' ) : __( 'Verified certificate', 'certificate-generator' ) );
+		$title = '' !== $type ? $state . ': ' . $type : $state;
+		$name  = empty( $d['name_hidden'] ) && '' !== (string) ( $d['student_name'] ?? '' ) ? \CertificateGenerator\Services\SerialNumberService::mask_name( (string) $d['student_name'] ) : '';
+		/* translators: 1: masked recipient name, 2: issuer (site) name */
+		$desc = '' !== $name ? sprintf( __( 'Issued to %1$s by %2$s.', 'certificate-generator' ), $name, get_bloginfo( 'name' ) )
+			/* translators: %s: issuer (site) name */
+			: sprintf( __( 'Issued by %s.', 'certificate-generator' ), get_bloginfo( 'name' ) );
+		$url = add_query_arg( 'code', $code, get_permalink( $post ) );
+
+		printf( '<meta property="og:type" content="website" />' . "\n" );
+		printf( '<meta property="og:title" content="%s" />' . "\n", esc_attr( $title ) );
+		printf( '<meta property="og:description" content="%s" />' . "\n", esc_attr( $desc ) );
+		printf( '<meta property="og:url" content="%s" />' . "\n", esc_url( $url ) );
+		printf( '<meta name="twitter:card" content="summary" />' . "\n" );
 	}
 
 	public function enqueue_assets() {
@@ -30,13 +73,13 @@ class CertificateGenerator_Public_Verification {
 		}
 
 		// Fallback: if serial_number is in URL, enqueue anyway (QR code deep-link)
-		if ( isset( $_GET['serial_number'] ) ) {
+		if ( isset( $_GET['serial_number'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 			$this->do_enqueue();
 		}
 	}
 
 	private function do_enqueue() {
-		wp_enqueue_script( 'cg-verify-js', CERTIFICATE_GENERATOR_URL . 'assets/js/verify-script.js', array( 'jquery' ), '2.0.2', true );
+		wp_enqueue_script( 'cg-verify-js', CERTIFICATE_GENERATOR_URL . 'assets/js/verify-script.js', array( 'jquery' ), '2.2.0', true );
 		wp_localize_script(
 			'cg-verify-js',
 			'cgVerify',
@@ -55,6 +98,9 @@ class CertificateGenerator_Public_Verification {
 			'btn_start'     => $options['btn_start'] ?? '#3498db',
 			'btn_end'       => $options['btn_end'] ?? '#2980b9',
 			'border_radius' => $options['border_radius'] ?? '12',
+			// LinkedIn company page id for "Add to Profile" (Settings → General). Digits only.
+			'linkedin_org_id' => preg_replace( '/\D/', '', (string) get_option( 'certificate_generator_linkedin_org_id', '' ) ),
+			'share_text'      => certificate_generator_share_text(),
 		);
 	}
 
@@ -98,7 +144,7 @@ class CertificateGenerator_Public_Verification {
 				<!-- Input with floating label -->
 				<div style="position:relative;margin-bottom:30px;">
 					<label for="cg-serial-input" style="position:absolute;left:16px;top:18px;color:<?php echo esc_attr( $s['text_color'] ); ?>;font-size:16px;transition:all .2s ease;pointer-events:none;">
-						<?php esc_html_e( 'Serial Number', 'certificate-generator' ); ?>
+						<?php esc_html_e( 'Verification Code or Serial Number', 'certificate-generator' ); ?>
 					</label>
 					<input type="text" id="cg-serial-input" name="serial_number" required autocomplete="off"
 							placeholder=""
@@ -157,63 +203,93 @@ class CertificateGenerator_Public_Verification {
 			wp_send_json_error( array( 'message' => 'Too many verification attempts. Please try again in a minute.' ), 429 );
 		}
 
-		$serial = sanitize_text_field( wp_unslash( $_POST['serial_number'] ?? '' ) );
-		if ( empty( $serial ) ) {
-			wp_send_json_error( array( 'message' => 'Serial number is required' ) );
+		// One field: a verification code (from the QR) or a serial number.
+		$input = sanitize_text_field( wp_unslash( $_POST['code'] ?? $_POST['serial_number'] ?? '' ) );
+		if ( empty( $input ) ) {
+			wp_send_json_error( array( 'message' => 'Verification code or serial number is required' ) );
 		}
 
-		if ( class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
-			$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
-			$result     = $serial_gen->verify( $serial );
-			wp_send_json_success( $result );
-		}
+		wp_send_json_success( ( new \CertificateGenerator\Services\SerialNumberService() )->verify( $input ) );
+	}
+}
 
-		// Fallback: query certificate_generator table directly
-		global $wpdb;
-		$table = $wpdb->prefix . 'cg_certificates';
-		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
-			$table = $wpdb->prefix . 'certificate_generator';
-		}
+/** True when this page is published and holds the verify shortcode. */
+function certificate_generator_is_verify_page( int $page_id ): bool {
+	$page = $page_id ? get_post( $page_id ) : null;
+	return $page && 'page' === $page->post_type && 'publish' === $page->post_status
+		&& has_shortcode( (string) $page->post_content, 'certificate_generator_verify_certificate' );
+}
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
-		$cert = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT * FROM $table WHERE serial_number = %s",
-				$serial
-			)
-		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+/**
+ * Make sure a published verify page exists, so QR codes and {verify_link} never point at a
+ * missing page. Adopts a page that already has the shortcode, otherwise creates one. Runs on
+ * activation, daily from cron and from the setup checklist, never on a front-end request.
+ *
+ * @return int The verify page's ID, 0 if it couldn't be created.
+ */
+function certificate_generator_ensure_verify_page(): int {
+	$page_id = (int) get_option( 'certificate_generator_verify_page_id', 0 );
+	if ( certificate_generator_is_verify_page( $page_id ) ) {
+		return $page_id;
+	}
 
-		if ( ! $cert ) {
-			wp_send_json_success(
-				array(
-					'valid'   => false,
-					'message' => 'Certificate not found',
-					'data'    => null,
-				)
-			);
-		}
-
-		$is_expired = false;
-		if ( ! empty( $cert->expires_at ) ) {
-			$is_expired = strtotime( $cert->expires_at ) < time();
-		}
-
-		$recipient_name = $cert->recipient_name ?? $cert->student_name ?? '';
-
-		wp_send_json_success(
+	$page_id = certificate_generator_find_verify_page();
+	if ( ! $page_id ) {
+		$page_id = (int) wp_insert_post(
 			array(
-				'valid'   => true,
-				'expired' => $is_expired,
-				'message' => $is_expired ? 'Certificate has expired' : 'Certificate is valid',
-				'data'    => array(
-					'student_name'     => $recipient_name,
-					'certificate_type' => $cert->certificate_type ?? '',
-					'serial_number'    => $cert->serial_number,
-					'issued_at'        => ! empty( $cert->issued_at ) ? certificate_generator_format_date( $cert->issued_at ) : '',
-					'expires_at'       => ! empty( $cert->expires_at ) ? certificate_generator_format_date( $cert->expires_at ) : '',
-				),
+				'post_type'    => 'page',
+				'post_status'  => 'publish',
+				'post_title'   => __( 'Verify Certificate', 'certificate-generator' ),
+				'post_name'    => 'verify-certificate',
+				'post_content' => '[certificate_generator_verify_certificate]',
 			)
 		);
 	}
+	if ( $page_id ) {
+		update_option( 'certificate_generator_verify_page_id', $page_id );
+	}
+	delete_transient( 'certificate_generator_verify_page_url' );
+	return $page_id;
+}
+
+/** First published page holding the verify shortcode, 0 if none. */
+function certificate_generator_find_verify_page(): int {
+	global $wpdb;
+	return (int) $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE %s ORDER BY ID ASC LIMIT 1",
+			'%' . $wpdb->esc_like( '[certificate_generator_verify_certificate' ) . '%'
+		)
+	);
+}
+
+/**
+ * URL of the verify page, for QR codes and {verify_link}. Sites that haven't run
+ * certificate_generator_ensure_verify_page() yet get any page with the shortcode (looked up
+ * once an hour), then /verify-certificate/.
+ */
+function certificate_generator_verify_page_url(): string {
+	$page_id = (int) get_option( 'certificate_generator_verify_page_id', 0 );
+	if ( certificate_generator_is_verify_page( $page_id ) ) {
+		return (string) get_permalink( $page_id );
+	}
+	$url = get_transient( 'certificate_generator_verify_page_url' );
+	if ( ! $url ) {
+		$found = certificate_generator_find_verify_page();
+		$url   = $found ? (string) get_permalink( $found ) : home_url( '/verify-certificate/' );
+		set_transient( 'certificate_generator_verify_page_url', $url, HOUR_IN_SECONDS );
+	}
+	return $url;
+}
+
+/**
+ * Text posted with a shared verify link (X, WhatsApp), before the link itself.
+ * {certificate_type} and {issuer} (the site name) are filled in on the verify page.
+ * Filter: certificate_generator_share_text (the Pro add-on makes it a setting).
+ */
+function certificate_generator_share_text(): string {
+	/* translators: keep {certificate_type} and {issuer}; they are replaced on the verify page */
+	$default = __( 'My {certificate_type} certificate from {issuer} — verify it here:', 'certificate-generator' );
+	$text    = trim( (string) apply_filters( 'certificate_generator_share_text', $default ) );
+	return '' !== $text ? $text : $default;
 }

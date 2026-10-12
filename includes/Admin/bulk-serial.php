@@ -28,7 +28,7 @@ class CertificateGenerator_Bulk_Serial_Generator {
 			'cg-dashboard',
 			'Bulk Serial Numbers',
 			'Bulk Serials',
-			'manage_options',
+			'certificate_generator_manage_settings',
 			'cg-bulk-serials',
 			array( $this, 'render_bulk_serial_page' )
 		);
@@ -144,7 +144,7 @@ class CertificateGenerator_Bulk_Serial_Generator {
 	}
 
 	public function render_bulk_serial_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			return;
 		}
 
@@ -270,7 +270,7 @@ class CertificateGenerator_Bulk_Serial_Generator {
 	 */
 	public function ajax_bulk_generate() {
 		check_ajax_referer( 'cg_bulk_serial_nonce', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_send_json_error( 'Unauthorized' );
 		}
 
@@ -398,7 +398,7 @@ class CertificateGenerator_Bulk_Serial_Generator {
 	 */
 	public function ajax_get_status() {
 		check_ajax_referer( 'cg_bulk_serial_nonce', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_send_json_error( 'Unauthorized' );
 		}
 

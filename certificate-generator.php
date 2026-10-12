@@ -3,7 +3,7 @@
  * Plugin Name:       Certificate Generator – Bulk PDF Certificates, Email & QR Verification
  * Plugin URI:        https://techlovev.in/plugins/certificate-generator
  * Description:       A comprehensive plugin for managing, generating, and bulk-sending certificates for students and teachers.
- * Version:           7.6.0
+ * Version:           7.8.0
  * Requires at least: 6.0
  * Requires PHP:      8.2
  * Tested up to:      7.1
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define constants for plugin paths
-define( 'CERTIFICATE_GENERATOR_VERSION', '7.6.0' ); // keep in sync with the Version header and readme.txt Stable tag
+define( 'CERTIFICATE_GENERATOR_VERSION', '7.8.0' ); // keep in sync with the Version header and readme.txt Stable tag
 define( 'CERTIFICATE_GENERATOR_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CERTIFICATE_GENERATOR_URL', plugin_dir_url( __FILE__ ) );
 define( 'CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE', 50 );
@@ -155,6 +155,8 @@ $certificate_generator_critical_files = array(
 	'includes/Core/server-compatibility.php' => 'Server compatibility checker',
 	'includes/Core/error-reporting.php'      => 'Error reporting system',
 	'includes/Admin/ui.php'                  => 'Shared admin UI helpers',
+	'includes/Core/capabilities.php'         => 'Capabilities and school scope',
+	'includes/Core/privacy.php'              => 'Personal data export and erasure',
 );
 
 $certificate_generator_optional_files = array(
@@ -177,9 +179,10 @@ $certificate_generator_optional_files = array(
 	'includes/legacy-shims.php'                         => 'v8 anti-corruption shims (frozen, @deprecated v8)',
 	'includes/Admin/bulk-email.php'                     => 'Bulk email admin page',
 	'includes/Admin/cert-download-admin.php'            => 'Admin certificate download page',
+	'includes/Services/certificate-events.php'          => 'Certificate audit trail',
 	'includes/Admin/revoke-certificate.php'             => 'Revoke certificate admin tool',
+	'includes/Admin/register.php'                       => 'Certificate register (CSV / PDF)',
 	'includes/Admin/filters-api.php'                    => 'Admin filters API',
-	'includes/Public/student-template.php'              => 'Student public profile template',
 	'includes/Database/migrator.php'                    => 'Database migrator',
 	'includes/Database/migration-scheduled-status.php'  => 'Scheduled status migration',
 	'includes/Database/migration-send-email-column.php' => 'Send email column migration',
@@ -190,6 +193,7 @@ $certificate_generator_optional_files = array(
 	'includes/Admin/analytics.php'                      => 'Analytics dashboard',
 	'includes/Admin/bulk-serial.php'                    => 'Bulk serial generator',
 	'includes/Public/verification.php'                  => 'Public verification page',
+	'includes/Public/my-certificates.php'               => 'My Certificates page (emailed sign-in link)',
 	'includes/Cron/jobs.php'                            => 'Scheduled cron jobs',
 	'includes/Admin/documentation.php'                  => 'Documentation & getting started page',
 	'includes/Admin/feedback-contact.php'               => 'Feedback & contact form links',
@@ -342,10 +346,11 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 		'admin_menu',
 		function () {
 			// Top-level dashboard menu
+			// view: School Coordinators get the menu too; the Dashboard sends them on to Students.
 			add_menu_page(
 				'Certificate Generator',
 				'Certificate Generator',
-				'manage_options',
+				'certificate_generator_view',
 				'cg-dashboard',
 				'certificate_generator_render_dashboard_page',
 				'dashicons-award',
@@ -356,7 +361,7 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 			// hooks, any priority/order) becomes the top-level link's target instead
 			// of the dashboard itself, and WP renders that link as a bare page slug
 			// (e.g. "cg-bulk-serials") instead of "admin.php?page=...", which 404s.
-			add_submenu_page( 'cg-dashboard', 'Certificate Generator', 'Dashboard', 'manage_options', 'cg-dashboard' );
+			add_submenu_page( 'cg-dashboard', 'Certificate Generator', 'Dashboard', 'certificate_generator_view', 'cg-dashboard' );
 
 			// ── Entities (who the certificates are for) ──
 			if ( class_exists( '\CertificateGenerator\Admin\Pages\StudentsPage' ) ) {
@@ -381,21 +386,22 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 			}
 
 			// ── Bulk Operations ──
-			add_submenu_page( 'cg-dashboard', 'Bulk Import', 'Bulk Import', 'manage_options', 'cg-bulk-import', 'certificate_generator_render_bulk_import_page' );
-			add_submenu_page( 'cg-dashboard', 'Bulk Export', 'Bulk Export', 'manage_options', 'cg-bulk-export', 'certificate_generator_render_bulk_export_page' );
+			add_submenu_page( 'cg-dashboard', 'Bulk Import', 'Bulk Import', 'certificate_generator_issue', 'cg-bulk-import', 'certificate_generator_render_bulk_import_page' );
+			add_submenu_page( 'cg-dashboard', 'Bulk Export', 'Bulk Export', 'certificate_generator_manage_settings', 'cg-bulk-export', 'certificate_generator_render_bulk_export_page' );
 			if ( class_exists( 'CertificateGenerator_Bulk_Serial_Generator' ) ) {
 				CertificateGenerator_Bulk_Serial_Generator::get_instance()->add_bulk_serial_menu();
 			}
-			add_submenu_page( 'cg-dashboard', 'Download Certificates', 'Download Certs', 'manage_options', 'cg-cert-download', 'certificate_generator_render_admin_cert_download_page' );
+			add_submenu_page( 'cg-dashboard', 'Download Certificates', 'Download Certs', 'certificate_generator_issue', 'cg-cert-download', 'certificate_generator_render_admin_cert_download_page' );
+			add_submenu_page( 'cg-dashboard', 'Certificate Register', 'Register', 'certificate_generator_view', 'cg-register', 'certificate_generator_render_register_page' );
 
 			// ── Email ──
-			add_submenu_page( 'cg-dashboard', 'Bulk Send Certificates', 'Bulk Send', 'manage_options', 'certificate-bulk-send', 'certificate_generator_render_bulk_send_page' );
-			add_submenu_page( 'cg-dashboard', 'Email Logs', 'Email Logs', 'manage_options', 'certificate-email-logs', 'certificate_generator_render_email_logs_page' );
+			add_submenu_page( 'cg-dashboard', 'Bulk Send Certificates', 'Bulk Send', 'certificate_generator_issue', 'certificate-bulk-send', 'certificate_generator_render_bulk_send_page' );
+			add_submenu_page( 'cg-dashboard', 'Email Logs', 'Email Logs', 'certificate_generator_manage_settings', 'certificate-email-logs', 'certificate_generator_render_email_logs_page' );
 
 			// ── Certificate Management & Settings ──
-			add_submenu_page( 'cg-dashboard', 'Certificate Analytics', 'Analytics', 'manage_options', 'cg-analytics', 'certificate_generator_render_analytics_page' );
-			add_submenu_page( 'cg-dashboard', 'Revoke Certificate', 'Revoke Certificate', 'manage_options', 'cg-revoke-certificate', 'certificate_generator_render_revoke_certificate_page' );
-			add_submenu_page( 'cg-dashboard', 'Serial Number Settings', 'Serial Settings', 'manage_options', 'cg-serial-settings', 'certificate_generator_render_serial_settings_page' );
+			add_submenu_page( 'cg-dashboard', 'Certificate Analytics', 'Analytics', 'certificate_generator_manage_settings', 'cg-analytics', 'certificate_generator_render_analytics_page' );
+			add_submenu_page( 'cg-dashboard', 'Revoke Certificate', 'Revoke Certificate', 'certificate_generator_manage_settings', 'cg-revoke-certificate', 'certificate_generator_render_revoke_certificate_page' );
+			add_submenu_page( 'cg-dashboard', 'Serial Number Settings', 'Serial Settings', 'certificate_generator_manage_settings', 'cg-serial-settings', 'certificate_generator_render_serial_settings_page' );
 
 			// ── Integrations: the Pro add-on adds its LMS / WooCommerce pages here ──
 			do_action( 'certificate_generator_admin_menu_integrations' );
@@ -415,7 +421,7 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 				'cg-dashboard',
 				'Documentation',
 				'📖 Documentation',
-				'manage_options',
+				'certificate_generator_view',
 				'cg-documentation',
 				'certificate_generator_render_documentation_page'
 			);
@@ -425,7 +431,7 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 				'cg-dashboard',
 				'Feedback',
 				'💬 Feedback',
-				'manage_options',
+				'certificate_generator_manage_settings',
 				'cg-feedback',
 				'certificate_generator_render_feedback_page'
 			);
@@ -433,7 +439,7 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 				'cg-dashboard',
 				'Contact Us',
 				'✉️ Contact Us',
-				'manage_options',
+				'certificate_generator_manage_settings',
 				'cg-contact',
 				'certificate_generator_render_contact_page'
 			);
@@ -450,7 +456,16 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
  * Started so the two can't drift apart. Keys: done, label, url, cta.
  */
 function certificate_generator_setup_steps( int $templates, int $records, bool $has_issued ): array {
+	global $wpdb;
+	$verify_page = (int) get_option( 'certificate_generator_verify_page_id', 0 );
+	$verified    = (bool) $wpdb->get_var( "SELECT 1 FROM {$wpdb->prefix}cg_certificate_events WHERE event_type = 'verified' LIMIT 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name comes from $wpdb->prefix
 	return array(
+		array(
+			'done'  => function_exists( 'certificate_generator_is_verify_page' ) && certificate_generator_is_verify_page( $verify_page ),
+			'label' => __( 'Publish the certificate verification page', 'certificate-generator' ),
+			'url'   => wp_nonce_url( admin_url( 'admin-post.php?action=certificate_generator_create_verify_page' ), 'certificate_generator_create_verify_page' ),
+			'cta'   => __( 'Create it now', 'certificate-generator' ),
+		),
 		array(
 			'done'  => $templates > 0,
 			'label' => __( 'Create your first certificate template', 'certificate-generator' ),
@@ -465,9 +480,9 @@ function certificate_generator_setup_steps( int $templates, int $records, bool $
 		),
 		array(
 			'done'  => $records > 0,
-			'label' => __( 'Add a student, teacher, or school record', 'certificate-generator' ),
-			'url'   => admin_url( 'admin.php?page=cg-students' ),
-			'cta'   => __( 'Add a record', 'certificate-generator' ),
+			'label' => __( 'Add students, teachers or schools (or import the sample CSV)', 'certificate-generator' ),
+			'url'   => admin_url( 'admin.php?page=cg-bulk-import' ),
+			'cta'   => __( 'Import records', 'certificate-generator' ),
 		),
 		array(
 			'done'  => $has_issued,
@@ -475,7 +490,53 @@ function certificate_generator_setup_steps( int $templates, int $records, bool $
 			'url'   => admin_url( 'admin.php?page=cg-students' ),
 			'cta'   => __( 'Issue a certificate', 'certificate-generator' ),
 		),
+		array(
+			'done'  => $verified,
+			'label' => __( 'Verify a certificate: scan its QR code or enter its code on the verification page', 'certificate-generator' ),
+			'url'   => function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/' ),
+			'cta'   => __( 'Open the verification page', 'certificate-generator' ),
+		),
 	);
+}
+
+/** The checklist is hidden per user; Documentation → Getting Started shows it again. */
+function certificate_generator_checklist_hidden(): bool {
+	return (bool) get_user_meta( get_current_user_id(), 'certificate_generator_checklist_hidden', true );
+}
+
+add_action(
+	'admin_post_certificate_generator_create_verify_page',
+	static function (): void {
+		check_admin_referer( 'certificate_generator_create_verify_page' );
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
+			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
+		}
+		certificate_generator_ensure_verify_page();
+		wp_safe_redirect( admin_url( 'admin.php?page=cg-dashboard' ) );
+		exit;
+	}
+);
+
+add_action(
+	'admin_post_certificate_generator_toggle_checklist',
+	static function (): void {
+		check_admin_referer( 'certificate_generator_toggle_checklist' );
+		if ( ! current_user_can( 'certificate_generator_view' ) ) {
+			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
+		}
+		if ( certificate_generator_checklist_hidden() ) {
+			delete_user_meta( get_current_user_id(), 'certificate_generator_checklist_hidden' );
+		} else {
+			update_user_meta( get_current_user_id(), 'certificate_generator_checklist_hidden', 1 );
+		}
+		wp_safe_redirect( admin_url( 'admin.php?page=cg-dashboard' ) );
+		exit;
+	}
+);
+
+/** Link that hides the checklist, or shows it again when hidden. */
+function certificate_generator_checklist_toggle_url(): string {
+	return wp_nonce_url( admin_url( 'admin-post.php?action=certificate_generator_toggle_checklist' ), 'certificate_generator_toggle_checklist' );
 }
 
 /**
@@ -523,17 +584,18 @@ function certificate_generator_render_dashboard_page(): void {
 		);
 		?>
 
-		<?php if ( $done_count < count( $steps ) ) : ?>
+		<?php if ( $done_count < count( $steps ) && ! certificate_generator_checklist_hidden() ) : ?>
 			<?php
 			certificate_generator_ui_card_open(
 				/* translators: 1: completed steps, 2: total steps */
 				sprintf( __( 'Getting Started (%1$d of %2$d done)', 'certificate-generator' ), $done_count, count( $steps ) ),
 				array(
-					'icon'  => 'flag',
-					'class' => 'cg-checklist',
+					'icon'         => 'flag',
+					'class'        => 'cg-checklist',
+					'actions_html' => '<a class="cg-checklist__hide" href="' . esc_url( certificate_generator_checklist_toggle_url() ) . '">' . esc_html__( 'Hide checklist', 'certificate-generator' ) . '</a>',
 				)
 			);
-			certificate_generator_ui_progress( 'cg-getting-started', __( 'Finish these steps to issue your first certificate.', 'certificate-generator' ), true, $done_count, count( $steps ) );
+			certificate_generator_ui_progress( 'cg-getting-started', __( 'Finish these steps to issue and verify your first certificate.', 'certificate-generator' ), true, $done_count, count( $steps ) );
 			?>
 			<ul class="cg-checklist__list">
 				<?php foreach ( $steps as $step ) : ?>
@@ -654,6 +716,16 @@ function certificate_generator_activate() {
 		delete_option( 'certificate_generator_welcome_dismissed' );
 		set_transient( 'certificate_generator_activation_redirect', 1, 30 );
 
+		// QR codes and {verify_link} need a published verify page. Creating a page needs rewrite
+		// rules, which don't exist yet when activation runs before init (WP-CLI, test bootstraps).
+		if ( function_exists( 'certificate_generator_ensure_verify_page' ) ) {
+			if ( did_action( 'init' ) ) {
+				certificate_generator_ensure_verify_page();
+			} else {
+				add_action( 'init', 'certificate_generator_ensure_verify_page' );
+			}
+		}
+
 		// Determine installation mode based on server capabilities
 		$installation_mode = 'minimal'; // Safe default
 		if ( function_exists( 'certificate_generator_get_installation_recommendation' ) ) {
@@ -719,7 +791,7 @@ add_action(
 			return;
 		}
 		delete_transient( 'certificate_generator_activation_redirect' );
-		if ( isset( $_GET['activate-multi'] ) ) {
+		if ( isset( $_GET['activate-multi'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 			return; // skip on bulk activate
 		}
 		wp_safe_redirect( admin_url( 'admin.php?page=cg-documentation&tab=getting-started' ) );
@@ -747,6 +819,8 @@ function certificate_generator_uninstall() {
 
 	global $wpdb;
 
+	remove_role( 'certificate_generator_school_coordinator' );
+
 	// Drop legacy tables.
 	$legacy_tables = array(
 		$wpdb->prefix . 'certificate_generator',
@@ -768,6 +842,14 @@ function certificate_generator_uninstall() {
 		$cg_prefix . 'teacher_certificates',
 		$cg_prefix . 'settings',
 		$cg_prefix . 'migrations',
+		$cg_prefix . 'lms_course_map',
+		$cg_prefix . 'lms_tracks',
+		$cg_prefix . 'lms_track_courses',
+		$cg_prefix . 'renewal_reminders_sent',
+		$cg_prefix . 'custom_fonts',
+		$cg_prefix . 'email_templates',
+		$cg_prefix . 'events',
+		$cg_prefix . 'certificate_events',
 	);
 
 	foreach ( array_merge( $legacy_tables, $cg_tables ) as $table ) {
@@ -804,6 +886,10 @@ function certificate_generator_uninstall() {
 		'certificate_generator_serial_suffix',
 		'certificate_generator_serial_reset_period',
 		'certificate_generator_serial_include_date',
+		'certificate_generator_verification_secret',
+		'certificate_generator_verify_serial_full_details',
+		'certificate_generator_log_retention_days',
+		'certificate_generator_verify_page_id', // the page itself is the site owner's content and stays
 	);
 	foreach ( $options as $opt ) {
 		delete_option( $opt );
@@ -836,7 +922,7 @@ add_action(
 add_action(
 	'admin_footer-plugins.php',
 	function () {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			return;
 		}
 		$plugin_file = plugin_basename( __FILE__ );
@@ -914,7 +1000,7 @@ add_action(
 	'wp_ajax_certificate_generator_set_keep_data',
 	function () {
 		check_ajax_referer( 'certificate_generator_set_keep_data', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Forbidden', 403 );
 		}
 		$keep = ( sanitize_text_field( wp_unslash( $_POST['keep'] ?? '1' ) ) === '0' ) ? '0' : '1';
@@ -943,7 +1029,7 @@ add_action(
 	'wp_ajax_certificate_generator_save_feature_toggles',
 	function () {
 		check_ajax_referer( 'certificate_generator_save_feature_toggles', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Forbidden', 403 );
 		}
 		$allowed_flags = array_keys( certificate_generator_feature_flags() );
@@ -1104,10 +1190,12 @@ add_action( 'admin_init', 'certificate_generator_check_memory_usage' );
 add_action(
 	'admin_init',
 	function () {
-		if ( ! current_user_can( 'manage_options' ) || empty( $_GET['page'] ) ) {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) || empty( $_GET['page'] ) ) {
 			return;
 		}
 		$page = sanitize_text_field( wp_unslash( $_GET['page'] ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		if ( $page === 'cg-email-settings' ) {
 			wp_safe_redirect( admin_url( 'options-general.php?page=certificate_generator_settings&tab=templates' ) );
 			exit;
@@ -1122,17 +1210,27 @@ add_action(
 // ── Centralized page renderers ──
 
 function certificate_generator_render_bulk_import_page(): void {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_die( 'Insufficient permissions' );
 	}
 	require_once CERTIFICATE_GENERATOR_PATH . 'includes/Services/bulk-import.php';
-	$tab  = sanitize_key( $_GET['tab'] ?? 'students' );
+	$tab  = sanitize_key( $_GET['tab'] ?? 'students' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	$tabs = array(
 		'students'     => 'Students',
 		'teachers'     => 'Teachers',
 		'schools'      => 'Schools',
 		'certificates' => 'Certificates',
 	);
+	// School Coordinators import students and teachers only (into their own school).
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
+		unset( $tabs['schools'] );
+	}
+	if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
+		unset( $tabs['certificates'] );
+	}
+	if ( ! isset( $tabs[ $tab ] ) ) {
+		$tab = 'students';
+	}
 	$base = admin_url( 'admin.php?page=cg-bulk-import' );
 	?>
 	<div class="wrap">
@@ -1169,11 +1267,11 @@ function certificate_generator_render_bulk_import_page(): void {
 }
 
 function certificate_generator_render_bulk_export_page(): void {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_die( 'Insufficient permissions' );
 	}
 	require_once CERTIFICATE_GENERATOR_PATH . 'includes/Services/bulk-export.php';
-	$tab  = sanitize_key( $_GET['tab'] ?? 'students' );
+	$tab  = sanitize_key( $_GET['tab'] ?? 'students' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 	$tabs = array(
 		'students'     => 'Students',
 		'teachers'     => 'Teachers',

@@ -496,7 +496,8 @@ function AddFont($family, $style='', $file='', $uni=false)
 			$ttf = new TTFontFile();
 			$ttf->getMetrics($ttffile);
 			$cw = $ttf->charWidths;
-			$name = preg_replace('/[ ()]/','',$ttf->fullName);
+			// Font name comes from the TTF file itself: keep it to safe characters (it ends up in a PHP cache file and the PDF).
+			$name = preg_replace('/[^A-Za-z0-9_\-]/','',$ttf->fullName);
 
 			$desc= array('Ascent'=>round($ttf->ascent),
 			'Descent'=>round($ttf->descent),
@@ -512,14 +513,15 @@ function AddFont($family, $style='', $file='', $uni=false)
 			$type = 'TTF';
 			// Generate metrics .php file
 			$s='<?php'."\n";
-			$s.='$name=\''.$name."';\n";
-			$s.='$type=\''.$type."';\n";
+			// var_export() quotes every value, so nothing from the font file can break out of the string.
+			$s.='$name='.var_export($name,true).";\n";
+			$s.='$type='.var_export($type,true).";\n";
 			$s.='$desc='.var_export($desc,true).";\n";
-			$s.='$up='.$up.";\n";
-			$s.='$ut='.$ut.";\n";
-			$s.='$ttffile=\''.$ttffile."';\n";
-			$s.='$originalsize='.$originalsize.";\n";
-			$s.='$fontkey=\''.$fontkey."';\n";
+			$s.='$up='.var_export((int)$up,true).";\n";
+			$s.='$ut='.var_export((int)$ut,true).";\n";
+			$s.='$ttffile='.var_export($ttffile,true).";\n";
+			$s.='$originalsize='.var_export((int)$originalsize,true).";\n";
+			$s.='$fontkey='.var_export($fontkey,true).";\n";
 			$s.="?>";
 			if (is_writable(dirname($this->fontpath.'unifont/'.'x'))) {
 				$fh = fopen($unifilename.'.mtx.php',"w");

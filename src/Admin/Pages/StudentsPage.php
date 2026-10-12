@@ -44,7 +44,7 @@ class StudentsPage extends EntityListPage {
 			'',
 			'Add / Edit Student',
 			'',
-			'manage_options',
+			'certificate_generator_issue',
 			$this->edit_slug,
 			array( $this, 'render_edit' )
 		);
@@ -97,13 +97,20 @@ class StudentsPage extends EntityListPage {
 	// ── Add / Edit Form ──────────────────────────────────────────────────────
 
 	public function render_edit(): void {
-		if ( ! \current_user_can( 'manage_options' ) ) {
+		if ( ! \current_user_can( 'certificate_generator_issue' ) ) {
 			\wp_die( 'Insufficient permissions' );
 		}
 
 		global $wpdb;
 		$table   = CustomTables::instance()->get_table( $this->table_key );
 		$id      = absint( $_GET['id'] ?? 0 );
+		if ( $id && function_exists( 'certificate_generator_record_in_scope' ) && ! certificate_generator_record_in_scope( $this->table_key, $id ) ) {
+			\wp_die( 'Record not found.', 404 );
+		}
+		$school_lock = function_exists( 'certificate_generator_user_school' ) ? certificate_generator_user_school() : null; // set for School Coordinators
+		if ( '' === $school_lock ) {
+			\wp_die( 'No school is assigned to your account yet. Ask an administrator to set one on your user profile.', 403 );
+		}
 		$row     = $id ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id = %d", $id ), \ARRAY_A ) : null; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$extra   = ! empty( $row['extra_fields'] ) ? ( json_decode( $row['extra_fields'], true ) ?: array() ) : array();
 		$message = '';
@@ -149,7 +156,7 @@ class StudentsPage extends EntityListPage {
 					'student_name'     => $name,
 					'email'            => $email,
 					'phone'            => \sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) ),
-					'school_name'      => \sanitize_text_field( wp_unslash( $_POST['school_name'] ?? '' ) ),
+					'school_name'      => $school_lock ?? \sanitize_text_field( wp_unslash( $_POST['school_name'] ?? '' ) ),
 					'photo_url'        => $photo_url ?: null,
 					'event_id'         => absint( $_POST['event_id'] ?? 0 ) ?: null,
 					'certificate_type' => \sanitize_text_field( wp_unslash( $_POST['certificate_type'] ?? '' ) ),
@@ -221,7 +228,7 @@ class StudentsPage extends EntityListPage {
 					<tr><th><label for="phone">Phone</label></th>
 						<td><input type="text" id="phone" name="phone" class="regular-text" value="<?php echo \esc_attr( $row['phone'] ?? '' ); ?>"></td></tr>
 					<tr><th><label for="school_name">School Name</label></th>
-						<td><input type="text" id="school_name" name="school_name" class="regular-text" value="<?php echo \esc_attr( $row['school_name'] ?? '' ); ?>"></td></tr>
+						<td><input type="text" id="school_name" name="school_name" class="regular-text" value="<?php echo \esc_attr( $school_lock ?? ( $row['school_name'] ?? '' ) ); ?>"<?php echo null !== $school_lock ? ' readonly' : ''; ?>></td></tr>
 					<tr><th><label for="event_id">Event</label></th>
 						<td><select id="event_id" name="event_id">
 							<option value="">— None —</option>

@@ -25,7 +25,7 @@ class CertificateGenerator_Analytics_Dashboard {
 			'cg-dashboard',
 			'Certificate Analytics',
 			'Analytics',
-			'manage_options',
+			'certificate_generator_manage_settings',
 			'cg-analytics',
 			array( $this, 'render_analytics_page' )
 		);
@@ -51,7 +51,7 @@ class CertificateGenerator_Analytics_Dashboard {
 	}
 
 	public function render_analytics_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			return;
 		}
 
@@ -259,7 +259,7 @@ class CertificateGenerator_Analytics_Dashboard {
 
 	public function ajax_get_analytics_data() {
 		check_ajax_referer( 'cg_analytics_nonce', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_send_json_error( 'Unauthorized' );
 		}
 
@@ -270,7 +270,7 @@ class CertificateGenerator_Analytics_Dashboard {
 		if ( ! isset( $_GET['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'cg_export_nonce' ) ) {
 			wp_die( 'Invalid nonce' );
 		}
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Unauthorized' );
 		}
 
@@ -295,7 +295,7 @@ class CertificateGenerator_Analytics_Dashboard {
 		header( 'Content-Disposition: attachment; filename="certificate_expiration_report_' . gmdate( 'd-m-Y' ) . '.csv"' );
 
 		$output = fopen( 'php://output', 'w' );
-		fputcsv( $output, array( 'ID', 'Student Name', 'Serial Number', 'Issued At', 'Expires At', 'Status', 'Created At' ) );
+		certificate_generator_fputcsv( $output, array( 'ID', 'Student Name', 'Serial Number', 'Issued At', 'Expires At', 'Status', 'Created At' ) );
 
 		foreach ( $results as $row ) {
 			if ( empty( $row['expires_at'] ) ) {
@@ -310,7 +310,7 @@ class CertificateGenerator_Analytics_Dashboard {
 					$status = 'Valid';
 				}
 			}
-			fputcsv(
+			certificate_generator_fputcsv(
 				$output,
 				array(
 					$row['id'],
@@ -332,7 +332,7 @@ class CertificateGenerator_Analytics_Dashboard {
 		if ( ! isset( $_GET['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'cg_export_nonce' ) ) {
 			wp_die( 'Invalid nonce' );
 		}
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Unauthorized' );
 		}
 
@@ -359,10 +359,10 @@ class CertificateGenerator_Analytics_Dashboard {
 		header( 'Content-Disposition: attachment; filename="certificate_monthly_report_' . gmdate( 'd-m-Y' ) . '.csv"' );
 
 		$output = fopen( 'php://output', 'w' );
-		fputcsv( $output, array( 'Month', 'Certificates Issued' ) );
+		certificate_generator_fputcsv( $output, array( 'Month', 'Certificates Issued' ) );
 
 		foreach ( $results as $row ) {
-			fputcsv( $output, array( $row['month'], $row['count'] ) );
+			certificate_generator_fputcsv( $output, array( $row['month'], $row['count'] ) );
 		}
 
 		fclose( $output ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closes a php://output / php://temp stream

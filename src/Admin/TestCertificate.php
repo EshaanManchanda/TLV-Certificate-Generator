@@ -75,7 +75,7 @@ class TestCertificate {
 
 	public static function ajax_send(): void {
 		check_ajax_referer( 'certificate_generator_send_test_certificate', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
 			wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'certificate-generator' ) ), 403 );
 		}
 		$result = self::send( absint( $_POST['template_id'] ?? 0 ), wp_get_current_user() );

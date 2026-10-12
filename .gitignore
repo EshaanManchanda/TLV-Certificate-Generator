@@ -20,3 +20,6 @@ playwright/.auth/
 # Private notes (market research, backlog) — kept out of the public repo
 /doc/research/
 /doc/internal/
+/Market Research.md
+/certificate_generator_competitor_research.json
+/updated plan.md

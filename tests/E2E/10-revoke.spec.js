@@ -7,15 +7,17 @@ const SERIAL = 'E2E-R-BEN-0001';
 const REASON = 'E2E revoked for testing';
 
 test.describe('§10 Revoke', () => {
-	let verifyUrl;
+	let verifyUrl, code;
 	test.beforeAll(() => {
 		verifyUrl = wp.ensurePage('Verify', '[certificate_generator_verify_certificate]');
 		wp.seedCertificate({ serial_number: SERIAL, student_name: 'E2E Ben Winner', email: 'ben@e2e.test', certificate_type: 'E2E Winner' });
+		code = wp.codeFor(SERIAL);
 		wp.resetRateLimit();
 	});
 
+	// The QR link (?code=) gets the full answer, including the revocation reason.
 	async function publicResult(anon) {
-		await anon.goto(`${verifyUrl}${verifyUrl.includes('?') ? '&' : '?'}serial_number=${SERIAL}`);
+		await anon.goto(`${verifyUrl}${verifyUrl.includes('?') ? '&' : '?'}code=${code}`);
 		const h = anon.locator('#cg-verify-result h3');
 		await expect(h).not.toBeEmpty();
 		return anon.locator('#cg-verify-result');
@@ -58,5 +60,14 @@ test.describe('§10 Revoke', () => {
 	test('?serial= pre-fills the revoke form (link from Bulk Serials duplicates)', async ({ page }) => {
 		await page.goto(adminUrl('cg-revoke-certificate', { serial: SERIAL }));
 		await expect(page.locator('#cg-revoke-serial')).toHaveValue(SERIAL);
+	});
+
+	test('?serial= shows the history: revoke with reason, reinstate, public verifications', async ({ page }) => {
+		await page.goto(adminUrl('cg-revoke-certificate', { serial: SERIAL }));
+		const history = page.locator('.cg-certificate-history');
+		await expect(history).toContainText(`History for ${SERIAL}`);
+		await expect(history).toContainText('Reinstated');
+		await expect(history).toContainText(`reason: ${REASON}`);
+		await expect(history).toContainText('Verified publicly');
 	});
 });

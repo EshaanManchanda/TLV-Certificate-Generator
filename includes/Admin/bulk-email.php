@@ -24,7 +24,8 @@ add_action( 'wp_ajax_certificate_generator_send_to_filtered', 'certificate_gener
 function certificate_generator_ajax_start_bulk_send() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	// Sends to every record of the type, unfiltered: not for School Coordinators (the page uses send_to_filtered).
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( 'Unauthorized' );
 	}
 
@@ -47,7 +48,7 @@ function certificate_generator_ajax_start_bulk_send() {
 function certificate_generator_ajax_get_queue_progress() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_send_json_error( 'Unauthorized' );
 	}
 
@@ -59,7 +60,7 @@ function certificate_generator_ajax_get_queue_progress() {
 function certificate_generator_ajax_pause_queue() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( 'Unauthorized' );
 	}
 
@@ -71,7 +72,7 @@ function certificate_generator_ajax_pause_queue() {
 function certificate_generator_ajax_resume_queue() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( 'Unauthorized' );
 	}
 
@@ -83,7 +84,7 @@ function certificate_generator_ajax_resume_queue() {
 function certificate_generator_ajax_clear_queue() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( 'Unauthorized' );
 	}
 
@@ -103,7 +104,7 @@ function certificate_generator_ajax_clear_queue() {
 
 // Render bulk send page
 function certificate_generator_bulk_send_page() {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_die( esc_html__( 'You do not have permission to access this page.', 'certificate-generator' ) );
 	}
 
@@ -313,7 +314,7 @@ function certificate_generator_bulk_send_page() {
 function certificate_generator_ajax_get_filter_options() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_send_json_error( array( 'message' => 'Insufficient permissions' ) );
 	}
 
@@ -344,7 +345,34 @@ function certificate_generator_ajax_get_filter_options() {
 			wp_send_json_error( array( 'message' => 'Invalid option type' ) );
 	}
 
+	// The lists above are cached for the whole site; a School Coordinator gets only their school's.
+	$school = function_exists( 'certificate_generator_user_school' ) ? certificate_generator_user_school() : null;
+	if ( null !== $school ) {
+		if ( 'schools' === $option_type ) {
+			$data = '' !== $school ? array( $school ) : array();
+		} elseif ( 'sources' === $option_type ) {
+			$data = array(); // CSV file names can name other schools
+		} elseif ( 'emails' === $option_type ) {
+			$data = certificate_generator_school_emails( $school );
+		}
+	}
+
 	wp_send_json_success( $data );
+}
+
+/** Email addresses of one school's students and teachers (the Bulk Send email picker for a School Coordinator). */
+function certificate_generator_school_emails( string $school ): array {
+	global $wpdb;
+	if ( '' === $school || ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
+		return array();
+	}
+	$tables = \CertificateGenerator\Database\CustomTables::instance();
+	$emails = array();
+	foreach ( array( 'students', 'teachers' ) as $entity ) {
+		$table  = $tables->get_table( $entity );
+		$emails = array_merge( $emails, (array) $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT email FROM $table WHERE school_name = %s AND email != '' ORDER BY email", $school ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix
+	}
+	return array_values( array_unique( $emails ) );
 }
 
 /**
@@ -409,7 +437,7 @@ function certificate_generator_bulk_send_read_filters(): array {
 function certificate_generator_ajax_preview_recipients() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_send_json_error( array( 'message' => 'Insufficient permissions' ) );
 	}
 
@@ -439,7 +467,7 @@ function certificate_generator_ajax_preview_recipients() {
 function certificate_generator_ajax_send_to_filtered() {
 	check_ajax_referer( 'cert_bulk_send', 'nonce' );
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
 		wp_send_json_error( array( 'message' => 'Insufficient permissions' ) );
 	}
 

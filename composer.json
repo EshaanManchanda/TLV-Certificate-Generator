@@ -34,6 +34,7 @@
         "zip": "powershell -ExecutionPolicy Bypass -File bin/build-zip.ps1"
     },
     "require": {
-        "endroid/qr-code": "^6.0"
+        "endroid/qr-code": "^6.0",
+        "mpdf/mpdf": "^8.2"
     }
 }

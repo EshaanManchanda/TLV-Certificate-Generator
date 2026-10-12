@@ -20,7 +20,7 @@ class SchoolsPage extends EntityListPage {
 
 	public function register(): void {
 		$this->add_list_page( 'Schools', 'Schools' );
-		add_submenu_page( '', 'Add / Edit School', '', 'manage_options', $this->edit_slug, array( $this, 'render_edit' ) );
+		add_submenu_page( '', 'Add / Edit School', '', 'certificate_generator_manage_settings', $this->edit_slug, array( $this, 'render_edit' ) );
 	}
 
 	protected function config(): array {
@@ -70,7 +70,7 @@ class SchoolsPage extends EntityListPage {
 	// ── Edit / Add Form ──────────────────────────────────────────────────────
 
 	public function render_edit(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			wp_die( 'Insufficient permissions' );
 		}
 

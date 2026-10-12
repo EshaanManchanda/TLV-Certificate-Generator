@@ -59,7 +59,7 @@ function certificate_generator_get_unique_schools( $post_types = array( 'student
              INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID
              WHERE pm.meta_key = 'school_name' AND pm.meta_value != ''
                AND p.post_type IN ($placeholders) AND p.post_status = 'publish'
-             ORDER BY pm.meta_value ASC",
+             ORDER BY pm.meta_value ASC", // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 				...$post_types
 			)
 		);
@@ -117,7 +117,7 @@ function certificate_generator_get_unique_certificate_types( $post_types = array
              INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID
              WHERE pm.meta_key = 'certificate_type' AND pm.meta_value != ''
                AND p.post_type IN ($placeholders) AND p.post_status = 'publish'
-             ORDER BY pm.meta_value ASC",
+             ORDER BY pm.meta_value ASC", // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 				...$post_types
 			)
 		);
@@ -305,6 +305,14 @@ function certificate_generator_build_recipient_filter_sql( array $filters, strin
 		$where[] = "{$p}email IN ($ph)"; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		$params  = array_merge( $params, $filters['emails'] );
 	}
+	// School Coordinators only ever reach their own school, whatever filters were sent.
+	if ( function_exists( 'certificate_generator_school_scope_sql' ) ) {
+		[ $scope, $scope_params ] = certificate_generator_school_scope_sql( "{$p}school_name" );
+		if ( '' !== $scope ) {
+			$where[] = $scope;
+			$params  = array_merge( $params, $scope_params );
+		}
+	}
 
 	return array( $where, $params );
 }
@@ -355,7 +363,7 @@ function certificate_generator_get_unique_emails( $post_types = array( 'students
          AND pm.meta_value != ''
          AND p.post_type IN ($placeholders)
          AND p.post_status = 'publish'
-         ORDER BY pm.meta_value ASC",
+         ORDER BY pm.meta_value ASC", // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 		...$post_types
 	);
 	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -389,7 +397,7 @@ function certificate_generator_get_email_status_for_posts( $post_ids ) {
                 MAX(sent_at) as last_sent
          FROM $table_name
          WHERE certificate_id IN ($placeholders)
-         GROUP BY certificate_id",
+         GROUP BY certificate_id", // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 		...$post_ids
 	);
 	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -557,7 +565,7 @@ function certificate_generator_get_filtered_recipients( $filters = array() ) {
 		$params[]         = $filters['limit'];
 		$params[]         = $filters['offset'];
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-		return $wpdb->get_results( $wpdb->prepare( "$sql ORDER BY name ASC, post_type ASC, row_id ASC LIMIT %d OFFSET %d", ...$params ), ARRAY_A ) ?: array(); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
+		return $wpdb->get_results( $wpdb->prepare( "$sql ORDER BY name ASC, post_type ASC, row_id ASC LIMIT %d OFFSET %d", ...$params ), ARRAY_A ) ?: array(); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	}
 
 	// CPT fallback — only reachable when CustomTables class is absent (misconfigured/broken install).

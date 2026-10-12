@@ -392,6 +392,7 @@ function certificate_generator_bulk_queue_emails( $post_type = '', $cg_ids = arr
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 				"SELECT id, email FROM $cg_table WHERE email != '' AND id IN ($placeholders) ORDER BY id ASC",
 				array_map( 'intval', $cg_ids )
 			),

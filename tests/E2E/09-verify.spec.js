@@ -11,7 +11,7 @@ const S = {
 };
 
 test.describe('§09 Verification (public)', () => {
-	let verifyUrl;
+	let verifyUrl, benCode;
 
 	test.beforeAll(() => {
 		verifyUrl = wp.ensurePage('Verify', '[certificate_generator_verify_certificate]');
@@ -19,6 +19,7 @@ test.describe('§09 Verification (public)', () => {
 		wp.seedCertificate({ serial_number: S.ashaJan, student_name: 'E2E Asha Multi', email: 'asha@e2e.test', certificate_type: 'E2E Participation', issued_at: '2026-01-10 00:00:00' });
 		wp.seedCertificate({ serial_number: S.ashaMar, student_name: 'E2E Asha Multi', email: 'asha@e2e.test', certificate_type: 'E2E Participation', issued_at: '2026-03-15 00:00:00' });
 		wp.seedCertificate({ serial_number: S.rest, student_name: 'E2E Rest Check', email: 'rest@e2e.test' });
+		benCode = wp.codeFor(S.ben);
 		wp.resetRateLimit();
 	});
 	test.afterAll(() => wp.resetRateLimit());
@@ -33,21 +34,37 @@ test.describe('§09 Verification (public)', () => {
 		return result;
 	}
 
-	test("Ben's serial shows Valid with name, type and date", async ({ anon }) => {
-		const r = await verify(anon, S.ben);
+	test("Ben's verification code (typed with dashes, lower case) shows Valid with full name, type and date", async ({ anon }) => {
+		const typed = benCode.toLowerCase().replace(/(.{4})(?=.)/g, '$1-');
+		const r = await verify(anon, typed);
 		await expect(r.locator('h3')).toHaveText(/Certificate is Valid/);
 		await expect(r).toContainText('E2E Ben Winner');
 		await expect(r).toContainText('E2E Winner');
 		await expect(r).toContainText(/2026|Jan/);
+		await expect(r.locator('.cg-verify-masked')).toHaveCount(0);
 	});
 
-	test("Asha's two serials each show Asha", async ({ anon }) => {
+	test('a serial alone is valid but the name is masked (serials can be walked)', async ({ anon }) => {
+		const r = await verify(anon, S.ben);
+		await expect(r.locator('h3')).toHaveText(/Certificate is Valid/);
+		await expect(r).not.toContainText('E2E Ben Winner');
+		await expect(r).toContainText('E** B** W*****');
+		await expect(r.locator('.cg-verify-masked')).toBeVisible();
+	});
+
+	test("Asha's two serials each verify with their own serial", async ({ anon }) => {
 		for (const s of [S.ashaJan, S.ashaMar]) {
 			const r = await verify(anon, s);
 			await expect(r.locator('h3')).toHaveText(/Certificate is Valid/);
-			await expect(r).toContainText('E2E Asha Multi');
+			await expect(r).toContainText('E** A*** M****');
 			await expect(r).toContainText(s);
 		}
+	});
+
+	test('a code with one wrong character shows Not Found', async ({ anon }) => {
+		const bad = benCode.slice(0, -1) + (benCode.endsWith('0') ? '1' : '0');
+		const r = await verify(anon, bad);
+		await expect(r.locator('h3')).toHaveText(/Certificate Not Found/);
 	});
 
 	test('unknown serial shows Not Found', async ({ anon }) => {
@@ -55,23 +72,36 @@ test.describe('§09 Verification (public)', () => {
 		await expect(r.locator('h3')).toHaveText(/Certificate Not Found/);
 	});
 
-	test('QR deep link (?serial_number=) pre-fills and verifies', async ({ anon }) => {
+	test('QR deep link (?code=) pre-fills and shows the full answer', async ({ anon }) => {
+		const u = new URL(verifyUrl);
+		u.searchParams.set('code', benCode);
+		await anon.goto(u.toString());
+		await expect(anon.locator('#cg-serial-input')).toHaveValue(benCode);
+		await expect(anon.locator('#cg-verify-result h3')).toHaveText(/Certificate is Valid/);
+		await expect(anon.locator('#cg-verify-result')).toContainText('E2E Ben Winner');
+	});
+
+	test('older QR link (?serial_number=) still verifies, masked', async ({ anon }) => {
 		const u = new URL(verifyUrl);
 		u.searchParams.set('serial_number', S.ben);
 		await anon.goto(u.toString());
-		await expect(anon.locator('#cg-serial-input')).toHaveValue(S.ben);
 		await expect(anon.locator('#cg-verify-result h3')).toHaveText(/Certificate is Valid/);
+		await expect(anon.locator('#cg-verify-result')).toContainText('E** B** W*****');
 	});
 
-	test('LinkedIn "Add to Profile" button on a valid certificate with a PDF', async ({ anon }) => {
-		// The button only renders when the cert has a pdf_url (from wp_cg_certificates).
-		wp.sql("INSERT INTO {p}cg_certificates (recipient_name, recipient_email, recipient_type, certificate_type, serial_number, issued_at, pdf_url, status) VALUES ('E2E Ben Winner','ben@e2e.test','student','E2E Winner',%s,NOW(),'https://example.com/e2e.pdf','active')", S.ben);
-		const r = await verify(anon, S.ben);
+	test('LinkedIn "Add to Profile" button links to the verify page by code, not the PDF', async ({ anon }) => {
+		const r = await verify(anon, benCode);
 		const link = r.locator('a[href^="https://www.linkedin.com/profile/add"]');
 		await expect(link).toBeVisible();
 		const href = new URL(/** @type {string} */ (await link.getAttribute('href')));
 		expect(href.searchParams.get('certId')).toBe(S.ben);
 		expect(href.searchParams.get('name')).toBeTruthy();
+		expect(new URL(/** @type {string} */ (href.searchParams.get('certUrl'))).searchParams.get('code')).toBe(benCode);
+	});
+
+	test('no LinkedIn button on a masked (serial-only) answer', async ({ anon }) => {
+		const r = await verify(anon, S.ben);
+		await expect(r.locator('a[href^="https://www.linkedin.com/profile/add"]')).toHaveCount(0);
 	});
 
 	test('rate limit: ~20 verifies per minute, then 429', async ({ anon }) => {

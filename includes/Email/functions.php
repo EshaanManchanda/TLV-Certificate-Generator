@@ -506,6 +506,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 				$_ids  = array_map( 'intval', $scope[ $_ent ] );
 				// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 				$_rows = $wpdb->get_results(
+					// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 					$wpdb->prepare(
 						"SELECT * FROM $_tbl WHERE email = %s AND id IN (" . implode( ',', array_fill( 0, count( $_ids ), '%d' ) ) . ') ORDER BY id ASC', // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 						$recipient_email,
@@ -610,7 +611,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 
 	// Generate result page URL
 	$result_page_url = home_url( '/result/?student_email=' . urlencode( $recipient_email ) );
-	$verify_page_url = home_url( '/verify-certificate/' );
+	$verify_page_url = function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/verify-certificate/' );
 
 	// Initialize ZIP link (will be populated later if ZIP is created)
 	$zip_download_url = '';
@@ -635,9 +636,16 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		'{site_name}'         => get_bloginfo( 'name' ),
 	);
 
+	// Shortcodes in the admin's template (e.g. [site_name], [event_fees] from wp-dynamic-tags) run
+	// BEFORE recipient data goes in, so a name like "[some_shortcode]" is never executed.
+	$subject = do_shortcode( $subject );
+	$message = do_shortcode( $message );
+	$title   = do_shortcode( $title );
+
+	// Subject is plain text and the title is escaped at output; the message body is HTML.
 	$subject = str_replace( array_keys( $placeholders ), array_values( $placeholders ), $subject );
 	$title   = str_replace( array_keys( $placeholders ), array_values( $placeholders ), $title );
-	$message = str_replace( array_keys( $placeholders ), array_values( $placeholders ), $message );
+	$message = str_replace( array_keys( $placeholders ), array_map( 'esc_html', array_values( $placeholders ) ), $message );
 
 	// Get additional email settings
 	$reply_to = isset( $options[ $prefix . 'reply_to' ] ) ? $options[ $prefix . 'reply_to' ] : '';
@@ -758,14 +766,9 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 	}
 
 	// Replace {zip_link} placeholder now that we know if ZIP was created
-	$message = str_replace( '{zip_link}', $zip_download_url, $message );
+	$message = str_replace( '{zip_link}', esc_url( $zip_download_url ), $message );
 	$subject = str_replace( '{zip_link}', $zip_download_url, $subject );
 	$title   = str_replace( '{zip_link}', $zip_download_url, $title );
-
-	// Process WordPress shortcodes in email templates (e.g. [site_name], [event_fees] from wp-dynamic-tags)
-	$subject = do_shortcode( $subject );
-	$message = do_shortcode( $message );
-	$title   = do_shortcode( $title );
 
 	// Check final $message (covers per-type + global template) for result_link usage.
 	$result_link_used = strpos( $message, $result_page_url ) !== false
@@ -1209,34 +1212,6 @@ function certificate_generator_email_already_sent( $cg_id, $email ) {
 }
 
 /**
- * Auto-send certificate email when certificate is generated or found
- *
- * @param int  $post_id The post ID
- * @param bool $force_send Whether to send even if auto-send is disabled
- * @return bool Whether email was sent
- */
-function certificate_generator_auto_send_email( $post_id, $force_send = false ) {
-	// Check if auto-send is enabled (you can add this setting to admin)
-	$auto_send_enabled = get_option( 'certificate_generator_auto_send_enabled', false );
-
-	if ( ! $auto_send_enabled && ! $force_send ) {
-		return false;
-	}
-
-	// Check if email was already sent to avoid duplicates.
-	global $wpdb;
-	$cg_table = $wpdb->prefix . 'certificate_generator';
-	$cg_row   = $wpdb->get_row( $wpdb->prepare( "SELECT id, email FROM $cg_table WHERE id = %d LIMIT 1", $post_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
-	$email    = $cg_row['email'] ?? '';
-	if ( ! empty( $email ) && certificate_generator_email_already_sent( (int) $post_id, $email ) ) {
-		return false;
-	}
-
-	// Send the email
-	return certificate_generator_send_email( $post_id );
-}
-
-/**
  * Get the appropriate from email address based on SMTP configuration
  *
  * @return string From email address
@@ -1625,6 +1600,7 @@ function certificate_generator_queue_bulk_emails_async( $post_type, $skip_alread
 			$cg_ids = array_map(
 				'intval',
 				$wpdb->get_col(
+					// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 					$wpdb->prepare( "SELECT MIN(id) FROM $cg_table WHERE email IN ($placeholders) GROUP BY email ORDER BY MIN(id) ASC", $emails )
 				)
 			);
@@ -1724,7 +1700,7 @@ function certificate_generator_process_batch_ajax() {
 	check_ajax_referer( 'certificate_generator_bulk_email', 'nonce' );
 
 	// Check permissions
-	if ( ! current_user_can( 'edit_posts' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_send_json_error( array( 'message' => __( 'Insufficient permissions', 'certificate-generator' ) ) );
 	}
 

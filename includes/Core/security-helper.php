@@ -139,10 +139,13 @@ class CertificateGenerator_SecurityHelper {
 		// comes from a proxy on a private network (a load balancer in front of this server).
 		$from_private_proxy = ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
 		if ( $from_private_proxy ) {
-			foreach ( array( 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP' ) as $header ) {
-				$first = trim( explode( ',', sanitize_text_field( wp_unslash( $_SERVER[ $header ] ?? '' ) ) )[0] );
-				if ( filter_var( $first, FILTER_VALIDATE_IP ) ) {
-					$ip = $first;
+			// Proxies append the address they saw, so only the LAST hop was written by our proxy;
+			// earlier entries (and pass-through headers like CF-Connecting-IP) are client-supplied.
+			foreach ( array( 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP' ) as $header ) {
+				$hops = explode( ',', sanitize_text_field( wp_unslash( $_SERVER[ $header ] ?? '' ) ) );
+				$last = trim( (string) end( $hops ) );
+				if ( filter_var( $last, FILTER_VALIDATE_IP ) ) {
+					$ip = $last;
 					break;
 				}
 			}
@@ -182,3 +185,16 @@ class CertificateGenerator_SecurityHelper {
 	}
 }
 
+
+/**
+ * fputcsv() for anything that ends up in a spreadsheet: a cell starting with = + - @ or a
+ * tab/CR is prefixed with ' so Excel/Sheets show it as text instead of running it as a formula.
+ */
+function certificate_generator_fputcsv( $handle, array $row ) {
+	foreach ( $row as $i => $cell ) {
+		if ( is_string( $cell ) && preg_match( '/^[=+\-@\t\r]/', $cell ) ) {
+			$row[ $i ] = "'" . $cell;
+		}
+	}
+	return fputcsv( $handle, $row );
+}

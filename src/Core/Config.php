@@ -8,7 +8,7 @@ namespace CertificateGenerator\Core;
  */
 class Config {
 
-	public const VERSION           = '7.6.0';
+	public const VERSION           = '7.8.0';
 	public const DB_VERSION_OPTION = 'certificate_generator_db_version';
 	public const DB_TARGET_VERSION = '008';
 
@@ -36,7 +36,7 @@ class Config {
 
 	public const CERTIFICATE_GENERATED_ACTION = 'certificate_generated';
 
-	public const CAPABILITY_MANAGE     = 'manage_options';
+	public const CAPABILITY_MANAGE     = 'certificate_generator_manage_settings';
 	public const CAPABILITY_EDIT_POSTS = 'edit_posts';
 
 	// ── Queue processing (mirrors defines in certificate-generator.php) ──────────

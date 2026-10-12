@@ -717,7 +717,7 @@ add_action( 'acf/init', 'certificate_generator_add_custom_fields' );
 // add_menu_page(
 // 'Custom Post Management',
 // 'Post Management',
-// 'manage_options',
+// 'certificate_generator_manage_settings',
 // 'custom-post-management',
 // 'certificate_generator_render_custom_post_admin_page',
 // 'dashicons-admin-generic',

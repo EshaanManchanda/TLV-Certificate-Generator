@@ -68,6 +68,14 @@ try {
     Pop-Location
 }
 
+# mPDF ships ~88 MB of fonts; the plugin points it at assets/fonts/unicode instead (src/Services/MpdfCanvas.php).
+foreach ($unused in @("vendor/mpdf/mpdf/ttfonts", "vendor/mpdf/mpdf/tmp")) {
+    $path = Join-Path $pluginDir $unused
+    if (Test-Path $path) {
+        Remove-Item -Recurse -Force $path
+    }
+}
+
 $distDir = Join-Path $repoRoot "dist"
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 $zipPath = Join-Path $distDir "$slug-$version.zip"

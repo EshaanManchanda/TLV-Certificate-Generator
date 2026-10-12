@@ -15,7 +15,7 @@ Canonical settings are owned by `src/Services/SettingsService.php` (prefix `cg_`
 
 ### Per-certificate-type email templates
 
-Beyond the single global template above, the `wp_cg_email_templates` table (see [`DATABASE.md`](../dev/DATABASE.md)) stores named templates keyed 1:1 to a `certificate_type` — subject, title, message, attach-certificate toggle, reply-to, cc, bcc. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first and only falls back to `certificate_generator_email_subject`/`certificate_generator_email_body` when no row matches. Managed from **Settings → Email**; this is the **Email Templates** row in the [plan comparison](PLAN-COMPARISON.md) (Pro/Business only).
+Beyond the single global template above, the `wp_cg_email_templates` table (see [`DATABASE.md`](../dev/DATABASE.md)) stores named templates keyed 1:1 to a `certificate_type` — subject, title, message, attach-certificate toggle, reply-to, cc, bcc. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first and only falls back to `certificate_generator_email_subject`/`certificate_generator_email_body` when no row matches. Managed from **Settings → Email**; free on every plan (the **Email Templates** row in the [plan comparison](PLAN-COMPARISON.md)).
 
 ### Email placeholders
 
@@ -55,7 +55,7 @@ Rate limits for bulk sending (defaults: 60 emails/hour, 10 emails/minute) are co
 
 ### Plans
 
-No plan has a certificate, email or import/export limit. Every plan gets the same 27 built-in fonts.
+No plan has a certificate, email or import/export limit. Every plan gets the same 27 built-in fonts and prints every language.
 The Pro add-on (separate plugin) adds the school bulk ZIP shortcode, the REST API and
 custom `.ttf` font upload, documented under [LMS / e-commerce, badges & fonts](#lms--e-commerce-auto-issuance-v9) below.
 
@@ -84,13 +84,13 @@ Each mapping page lets an admin map a course (or, for WooCommerce, a product) to
 | `CG_USE_BADGES` (`src/Core/Config.php`) | When enabled, generates a companion badge PNG (via GD, `src/Services/BadgeGenerator.php`) alongside every certificate issued from a template that has a `badge_template_url` set. Not plan-gated. |
 | Template field `type: image` | Certificate template fields can be `image` type (in addition to `text`) — e.g. a signature or seal — placed independently of student data. Configured in **Templates → Add/Edit** (`src/Admin/Pages/TemplatesPage.php`). Not plan-gated. |
 
-The public verification result (`/verify/{serial}`) additionally returns `pdf_url` and `issuer_name`, powering a "LinkedIn — Add to Profile" button on the verification page — see [`REST-API.md`](../dev/REST-API.md).
+A full verification result (by verification code) returns `issuer_name` and the code, powering a "LinkedIn — Add to Profile" button on the verification page; no PDF URL is returned — see [`REST-API.md`](../dev/REST-API.md).
 
 ## Recipient renewal reminders
 
 | Option/flag | Purpose |
 |---|---|
-| `CG_USE_RENEWAL_REMINDERS` (`src/Core/Config.php`) | Enables `CertificateGenerator_Cron_Jobs::send_recipient_renewal_reminders()` (`includes/Cron/jobs.php`) — a daily cron that emails certificate **holders** (not just the admin) at configurable day-offsets before `expires_at` (default 30/7/1 days). **Gated to Pro/Business** — mirrors the Email Templates gate. Distinct from the existing admin-only expiring-certificates digest. |
+| `CG_USE_RENEWAL_REMINDERS` (`src/Core/Config.php`) | Enables `CertificateGenerator_Cron_Jobs::send_recipient_renewal_reminders()` (`includes/Cron/jobs.php`) — a daily cron that emails certificate **holders** (not just the admin) at configurable day-offsets before `expires_at` (default 30/7/1 days). Free on every plan. Distinct from the existing admin-only expiring-certificates digest. |
 
 `wp_cg_renewal_reminders_sent` (see [`DATABASE.md`](../dev/DATABASE.md)) records which stage has already fired per certificate so a recipient is never reminded twice for the same stage. Only certificates with a `recipient_email` on file can receive one — some SQL-first issuance paths leave that column blank. There is no self-serve "renew" purchase flow in the plugin, so the reminder email links to the existing certificate PDF rather than a renewal page.
 
@@ -104,9 +104,30 @@ The public verification result (`/verify/{serial}`) additionally returns `pdf_ur
 | `certificate_generator_keep_data_on_uninstall` | If false, uninstall drops all custom tables and deletes plugin options |
 | `certificate_generator_extra_fields_{cert_type_key}` | Per-certificate-type custom field registry (max 15 extra slots), managed by `CertificateGenerator_Field_Schema` (`includes/Core/field-schema.php`) |
 
+## Verification and history
+
+| Option | Purpose |
+|---|---|
+| `certificate_generator_verify_serial_full_details` | `1` shows full details (unmasked name, revoke reason) when a certificate is verified by serial number alone. Default `0`: serials are sequential, so only the verification code (in the QR) gets the full answer |
+| `certificate_generator_log_retention_days` | Days to keep email logs, sent email-queue rows and `verified` certificate-history events. Default 90; cleaned by the weekly `certificate_generator_cleanup_logs` cron. Issued, revoked, reinstated, reissued and name-change events are kept |
+
+Hooks: `certificate_generator_certificate_revoked` (`$serial, $reason`) and `certificate_generator_certificate_reinstated` (`$serial`) fire on revoke / reinstate; `certificate_generator_certificate_generated` fires on issue. Each writes to the certificate's history (`wp_cg_certificate_events`).
+
+## Recipients and sharing
+
+Settings → General → Recipients & sharing.
+
+| Option | Purpose |
+|---|---|
+| `certificate_generator_search_requires_link` | `1`: `[certificate_generator_student_search]` shows the My Certificates form (an emailed sign-in link) instead of listing certificates for any typed email, and its ZIP download only works for the signed-in address. Default `0` |
+| `certificate_generator_verify_page_id` | The verification page that QR codes and `{verify_link}` point to. Set automatically (an existing page with `[certificate_generator_verify_certificate]`, or a new "Verify Certificate" page) and re-created daily if it's deleted |
+| `certificate_generator_linkedin_org_id` | LinkedIn organization ID (digits only). "Add to LinkedIn Profile" then links the certificate to your organization's page. Default empty |
+
+Filters: `certificate_generator_wallet_email_subject` (`$subject, $email`), `certificate_generator_wallet_email_body` (`$html, $email, $link`), `certificate_generator_share_text` (`$text`: the text posted with a shared verify link; `{certificate_type}` and `{issuer}` are filled in). Action `certificate_generator_settings_sharing_fields` adds rows to the Recipients & sharing card. With the Pro add-on, option `certificate_generator_share_text` (the **Share text** field there) replaces the default. Personal data export and erasure register with WordPress's privacy tools under the key `certificate-generator`.
+
 ## Required CSV columns (Bulk Import)
 
-`student_name`, `email`, `school_name`, `certificate_type`, `issue_date`. Sample files live in `doc/samples/` (`students.csv`, `teacher.csv`, `school.csv`, `certificates.csv`). There is no row limit on any plan.
+Students: `student_name`, `email`, `school_name`, `certificate_type`, `issue_date`. Teachers use `teacher_name`; schools need `school_name`, `place`, `issue_date`, `certificate_type`. Headers are matched ignoring case and spaces, plus common aliases (`Name`, `Email Address`, `School`, `Date`, `Type`, …), and can be mapped by hand in the import check. Comma, semicolon or tab; UTF-8, UTF-16 or Windows-1252. Ready-to-edit samples for students, teachers, schools and templates: [`assets/samples/`](../../assets/samples/) (see [Sample files](documentation.md#sample-files)); each import tab also offers **Download a sample CSV**. There is no row limit on any plan. Details: [`documentation.md`](documentation.md#required-csv-columns).
 
 ## Uninstall
 

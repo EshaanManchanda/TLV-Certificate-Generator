@@ -24,8 +24,9 @@ class EmailService {
 		}
 
 		$cert_data += array( 'email' => $to );
-		$subject    = do_shortcode( $this->replace_placeholders( $this->subject_template, $name, $cert_data ) );
-		$body       = do_shortcode( $this->replace_placeholders( $this->body_template, $name, $cert_data ) );
+		// Template shortcodes run before recipient data goes in, so a name like "[some_shortcode]" never executes.
+		$subject    = $this->replace_placeholders( do_shortcode( $this->subject_template ), $name, $cert_data, false );
+		$body       = $this->replace_placeholders( do_shortcode( $this->body_template ), $name, $cert_data, true );
 
 		$result = $this->mailer->send_html( $to, $subject, $body, $attachments );
 
@@ -71,23 +72,25 @@ class EmailService {
 
 	// Same placeholder set as the main send path (certificate_generator_send_email()), so one
 	// template works for both; LMS emails used to ship a literal {result_link}.
-	private function replace_placeholders( string $template, string $name, array $data ): string {
-		$email = (string) ( $data['email'] ?? '' );
+	// $html: escape values for the HTML body (the subject is plain text).
+	private function replace_placeholders( string $template, string $name, array $data, bool $html ): string {
+		$email  = (string) ( $data['email'] ?? '' );
+		$values = array(
+			$name,
+			$data['certificate_title'] ?? '',
+			$data['serial_number'] ?? 'N/A',
+			$data['expires_at'] ?? 'Never',
+			$data['issue_date'] ?? current_time( 'mysql' ),
+			$email,
+			home_url( '/result/?student_email=' . rawurlencode( $email ) ),
+			function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/verify-certificate/' ),
+			get_bloginfo( 'name' ),
+			'1',
+			'',
+		);
 		return str_replace(
 			array( '{name}', '{certificate_title}', '{serial_number}', '{expires_at}', '{issue_date}', '{email}', '{result_link}', '{verify_link}', '{site_name}', '{certificate_count}', '{zip_link}' ),
-			array(
-				$name,
-				$data['certificate_title'] ?? '',
-				$data['serial_number'] ?? 'N/A',
-				$data['expires_at'] ?? 'Never',
-				$data['issue_date'] ?? current_time( 'mysql' ),
-				$email,
-				home_url( '/result/?student_email=' . rawurlencode( $email ) ),
-				home_url( '/verify-certificate/' ),
-				get_bloginfo( 'name' ),
-				'1',
-				'',
-			),
+			$html ? array_map( 'esc_html', array_map( 'strval', $values ) ) : $values,
 			$template
 		);
 	}

@@ -373,6 +373,13 @@ function certificate_generator_schedule_log_cleanup() {
 add_action(
 	'certificate_generator_cleanup_logs',
 	function () {
-		certificate_generator_cleanup_email_logs( 90 ); // Keep logs for 90 days
+		$days = max( 1, (int) get_option( 'certificate_generator_log_retention_days', 90 ) );
+		certificate_generator_cleanup_email_logs( $days );
+		if ( function_exists( 'certificate_generator_cleanup_queue' ) ) {
+			certificate_generator_cleanup_queue( $days );
+		}
+		if ( function_exists( 'certificate_generator_prune_certificate_events' ) ) {
+			certificate_generator_prune_certificate_events( $days );
+		}
 	}
 );

@@ -177,8 +177,11 @@ function seedCertificate(c) {
 		student_name: 'E2E Seeded', email: 'seeded@e2e.test', certificate_type: 'Participation',
 		generated_via: 'e2e', created_at: now(), issued_at: now(), updated_at: now(), certificate_data: '{}', pdf_path: '', ...c,
 	};
-	return wpEval(`$wpdb->insert($wpdb->prefix . 'certificate_generator', ${php(data)}); echo (int) $wpdb->insert_id;`);
+	return wpEval(`$d = ${php(data)}; $d['verification_code'] = $d['verification_code'] ?? certificate_generator_verification_code((string) ($d['serial_number'] ?? '')); $wpdb->insert($wpdb->prefix . 'certificate_generator', $d); echo (int) $wpdb->insert_id;`);
 }
+
+/** Verification code (12 chars, no dashes) for a serial. */
+const codeFor = (serial) => wpEval(`echo certificate_generator_verification_code(${php(serial)});`).trim();
 
 const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -191,7 +194,7 @@ const runCron = (hook, args = []) => wpEval(`do_action_ref_array(${php(hook)}, $
 function ensurePage(title, content) {
 	return wpEval(`
 		$t = ${php(`E2E ${title}`)};
-		$p = get_page_by_title($t, OBJECT, 'page');
+		$p = get_posts(['post_type' => 'page', 'title' => $t, 'post_status' => 'any', 'numberposts' => 1])[0] ?? null;
 		$id = $p ? $p->ID : wp_insert_post(['post_title' => $t, 'post_content' => ${php(content)}, 'post_status' => 'publish', 'post_type' => 'page']);
 		delete_transient('certificate_generator_verify_page_url');
 		echo json_encode(get_permalink($id));`);
@@ -246,6 +249,6 @@ const siteInfo = () => wpEval(`
 		'uploads' => wp_upload_dir()['basedir'], 'plan' => get_option('cg_plan', 'free')]);`);
 
 module.exports = {
-	WP_PATH, wpEval, php, sql, getOption, setOption, deleteOption, seedPerson, seedTemplate, seedCertificate,
+	WP_PATH, wpEval, php, sql, getOption, setOption, deleteOption, seedPerson, seedTemplate, seedCertificate, codeFor,
 	resetRateLimit, runCron, bundledBg, ensurePage, ensureUser, cleanupE2E, siteInfo, mailpitUrl, mailpitSmtpPort, ENTITY, now,
 };

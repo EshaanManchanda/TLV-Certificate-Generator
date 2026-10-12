@@ -12,7 +12,7 @@ class CustomTables {
 	// Bump whenever a column/index is added to any create_*_table() method below,
 	// so existing installs get dbDelta() re-run (all_tables_exist() alone only
 	// catches a fully-missing table, never a stale column on an existing one).
-	private const SCHEMA_VERSION = '1.3.1';
+	private const SCHEMA_VERSION = '1.3.3';
 
 	private static ?CustomTables $instance = null;
 	private array $tables                  = array();
@@ -49,6 +49,7 @@ class CustomTables {
 			'custom_fonts'          => $prefix . 'custom_fonts',
 			'email_templates'       => $prefix . 'email_templates',
 			'events'                => $prefix . 'events',
+			'certificate_events'    => $prefix . 'certificate_events',
 		);
 	}
 
@@ -78,6 +79,7 @@ class CustomTables {
 		$this->create_custom_fonts_table();
 		$this->create_email_templates_table();
 		$this->create_events_table();
+		$this->create_certificate_events_table();
 
 		update_option( 'certificate_generator_custom_tables_version', self::SCHEMA_VERSION );
 	}
@@ -310,6 +312,9 @@ class CustomTables {
             recipient_type ENUM('student','teacher','other') DEFAULT 'student',
             certificate_type VARCHAR(100) NOT NULL,
             serial_number VARCHAR(50) DEFAULT NULL,
+            verification_code CHAR(12) DEFAULT NULL,
+            show_name TINYINT(1) NOT NULL DEFAULT 1,
+            revision INT UNSIGNED NOT NULL DEFAULT 0,
             issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             expires_at DATETIME DEFAULT NULL,
             generated_via ENUM('manual','bulk','api','automatic','preview') DEFAULT 'manual',
@@ -317,6 +322,7 @@ class CustomTables {
             pdf_path VARCHAR(500) DEFAULT NULL,
             pdf_url VARCHAR(500) DEFAULT NULL,
             certificate_data JSON DEFAULT NULL,
+            layout_snapshot LONGTEXT DEFAULT NULL,
             status ENUM('pending','generated','sent','failed','revoked') DEFAULT 'generated',
             email_sent TINYINT(1) DEFAULT 0,
             email_sent_at DATETIME DEFAULT NULL,
@@ -331,6 +337,7 @@ class CustomTables {
             INDEX idx_school_id (school_id),
             INDEX idx_certificate_type (certificate_type),
             INDEX idx_serial_number (serial_number),
+            INDEX idx_verification_code (verification_code),
             INDEX idx_issued_at (issued_at),
             INDEX idx_expires_at (expires_at),
             INDEX idx_status (status),
@@ -625,6 +632,33 @@ class CustomTables {
             UNIQUE KEY uk_event_code (event_code),
             INDEX idx_year (year),
             INDEX idx_status (status)
+        ) $charset_collate;";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
+	 * Audit trail per certificate (issued, regenerated, revoked, reinstated, verified).
+	 * Keyed on serial because both certificate tables share it. No IP or user agent is
+	 * stored; anonymous events (public verification) have a NULL actor.
+	 */
+	private function create_certificate_events_table(): void {
+		global $wpdb;
+		$table           = $this->tables['certificate_events'];
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            certificate_serial VARCHAR(50) NOT NULL,
+            event_type VARCHAR(32) NOT NULL,
+            actor_id BIGINT UNSIGNED DEFAULT NULL,
+            meta_json JSON DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX idx_serial (certificate_serial),
+            INDEX idx_type (event_type),
+            INDEX idx_created_at (created_at)
         ) $charset_collate;";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

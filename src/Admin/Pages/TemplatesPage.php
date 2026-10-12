@@ -115,7 +115,7 @@ class TemplatesPage extends EntityListPage {
 			'',
 			'Add / Edit Template',
 			'Add / Edit Template',
-			'manage_options',
+			'certificate_generator_manage_templates',
 			$this->edit_slug,
 			array( $this, 'render_edit' )
 		);
@@ -136,7 +136,7 @@ class TemplatesPage extends EntityListPage {
 		add_action(
 			'admin_init',
 			function (): void {
-				if ( ( isset( $_GET['page'] ) && $_GET['page'] === $this->edit_slug )
+				if ( ( isset( $_GET['page'] ) && $_GET['page'] === $this->edit_slug ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 				&& $GLOBALS['title'] === ''
 				) {
 					$GLOBALS['title'] = 'Add / Edit Template';
@@ -154,10 +154,10 @@ class TemplatesPage extends EntityListPage {
 				if ( $_GET['page'] !== $this->slug || $_GET['action'] !== 'duplicate' ) {
 					return;
 				}
-				if ( ! current_user_can( 'manage_options' ) ) {
+				if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
 					return;
 				}
-				$src_id = absint( $_GET['id'] );
+				$src_id = absint( $_GET['id'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce for this id is verified on the next line
 				if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'cg_duplicate_template_' . $src_id ) ) {
 					return;
 				}
@@ -209,7 +209,7 @@ class TemplatesPage extends EntityListPage {
 	 */
 	public function ajax_use_bundled_template(): void {
 		check_ajax_referer( 'cg_bundled_template', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
 			wp_send_json_error( array( 'message' => 'Insufficient permissions' ), 403 );
 		}
 
@@ -253,7 +253,7 @@ class TemplatesPage extends EntityListPage {
 	// ── Add / Edit Form ──────────────────────────────────────────────────────
 
 	public function render_edit(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
 			wp_die( 'Insufficient permissions' );
 		}
 
@@ -360,7 +360,8 @@ class TemplatesPage extends EntityListPage {
 				// server-side (never trust the client-submitted <select> options).
 				$allowed_field_keys = array_merge(
 					\CertificateGenerator\Services\FieldManager::get_core_fields( $data['entity_type'] ),
-					\CertificateGenerator\Services\FieldManager::discover_extra_field_keys( $data['entity_type'] )
+					\CertificateGenerator\Services\FieldManager::discover_extra_field_keys( $data['entity_type'] ),
+					array( 'custom_text' )
 				);
 				// Only persist slots actually in use — writing placeholder
 				// width/alignment defaults for unused slots up to MAX_FIELDS
@@ -388,6 +389,20 @@ class TemplatesPage extends EntityListPage {
 					$field_type                              = sanitize_key( $_POST[ "field_{$i}_type" ] ?? 'text' );
 					$extra_fields[ "field_{$i}_type" ]       = in_array( $field_type, array( 'text', 'image', 'photo' ), true ) ? $field_type : 'text';
 					$extra_fields[ "field_{$i}_image_url" ]  = esc_url_raw( wp_unslash( $_POST[ "field_{$i}_image_url" ] ?? '' ) );
+
+					// Per-field font: '' means "use the template's font / size / colour".
+					$field_font                              = sanitize_text_field( wp_unslash( $_POST[ "field_{$i}_font_style" ] ?? '' ) );
+					$extra_fields[ "field_{$i}_font_style" ] = isset( $font_options[ $field_font ] ) ? $field_font : '';
+					$field_size                              = sanitize_text_field( wp_unslash( $_POST[ "field_{$i}_font_size" ] ?? '' ) );
+					$extra_fields[ "field_{$i}_font_size" ]  = is_numeric( $field_size ) ? max( 6, min( 120, (float) $field_size ) ) : '';
+					$extra_fields[ "field_{$i}_font_color" ] = ! empty( $_POST[ "field_{$i}_font_color_custom" ] )
+						? (string) sanitize_hex_color( wp_unslash( $_POST[ "field_{$i}_font_color" ] ?? '' ) )
+						: '';
+					$extra_fields[ "field_{$i}_text_transform" ] = ! empty( $_POST[ "field_{$i}_text_transform" ] ) ? 'upper' : '';
+					// Custom-text slot: literal text with {field} tags, filled per recipient.
+					$extra_fields[ "field_{$i}_text" ] = 'custom_text' === $extra_fields[ "field_{$i}_name" ]
+						? sanitize_text_field( wp_unslash( $_POST[ "field_{$i}_text" ] ?? '' ) )
+						: '';
 				}
 				$data['extra_fields'] = wp_json_encode( $extra_fields );
 
@@ -691,6 +706,10 @@ class TemplatesPage extends EntityListPage {
 						},
 						$etype_keys
 					);
+					$field_options_by_entity[ $etype ][] = array(
+						'key'   => 'custom_text',
+						'label' => __( 'Custom text with {fields}…', 'certificate-generator' ),
+					);
 				}
 
 				// Does this template already use explicit per-slot field mapping? If so,
@@ -873,6 +892,11 @@ class TemplatesPage extends EntityListPage {
 							$pa    = $extra_fields_data[ "field_{$i}_alignment" ] ?? 'C';
 							$ftype = $extra_fields_data[ "field_{$i}_type" ] ?? 'text';
 							$fimg  = $extra_fields_data[ "field_{$i}_image_url" ] ?? '';
+							$ffont = $extra_fields_data[ "field_{$i}_font_style" ] ?? '';
+							$fsize = $extra_fields_data[ "field_{$i}_font_size" ] ?? '';
+							$fclr  = $extra_fields_data[ "field_{$i}_font_color" ] ?? '';
+							$ftext = $extra_fields_data[ "field_{$i}_text" ] ?? '';
+							$fupper = ( $extra_fields_data[ "field_{$i}_text_transform" ] ?? '' ) === 'upper';
 							$show  = $i <= $field_count_val ? '' : 'display:none;';
 
 							$saved_field_key = $extra_fields_data[ "field_{$i}_name" ] ?? '';
@@ -940,6 +964,29 @@ class TemplatesPage extends EntityListPage {
 										</select>
 									</label>
 								</div>
+								<div class="cg-field-row-footer cg-field-font-row" id="cg-field-font-row-<?php echo (int) $i; ?>"<?php echo $ftype === 'text' ? '' : ' style="display:none;"'; ?>>
+									<label><?php esc_html_e( 'Font', 'certificate-generator' ); ?>
+										<select id="field_<?php echo (int) $i; ?>_font_style" name="field_<?php echo (int) $i; ?>_font_style">
+											<option value=""><?php esc_html_e( 'Template default', 'certificate-generator' ); ?></option>
+											<?php foreach ( $font_options as $font_key => $font_label ) : ?>
+												<option value="<?php echo esc_attr( $font_key ); ?>" <?php selected( $ffont, $font_key ); ?>><?php echo esc_html( $font_label ); ?></option>
+											<?php endforeach; ?>
+										</select>
+									</label>
+									<label><?php esc_html_e( 'Size', 'certificate-generator' ); ?>
+										<input type="number" id="field_<?php echo (int) $i; ?>_font_size" name="field_<?php echo (int) $i; ?>_font_size" value="<?php echo esc_attr( $fsize ); ?>" min="6" max="120" step="0.5" placeholder="<?php echo esc_attr( $row['font_size'] ?? 12 ); ?>">
+									</label>
+									<label title="<?php esc_attr_e( 'Untick to use the template colour', 'certificate-generator' ); ?>"><input type="checkbox" name="field_<?php echo (int) $i; ?>_font_color_custom" value="1" <?php checked( $fclr !== '' ); ?>> <?php esc_html_e( 'Colour', 'certificate-generator' ); ?>
+										<input type="color" id="field_<?php echo (int) $i; ?>_font_color" name="field_<?php echo (int) $i; ?>_font_color" value="<?php echo esc_attr( $fclr !== '' ? $fclr : ( $row['font_color'] ?? '#000000' ) ); ?>">
+									</label>
+									<label><input type="checkbox" id="field_<?php echo (int) $i; ?>_text_transform" name="field_<?php echo (int) $i; ?>_text_transform" value="upper" <?php checked( $fupper ); ?>> <?php esc_html_e( 'UPPERCASE', 'certificate-generator' ); ?></label>
+								</div>
+								<div class="cg-field-row-footer cg-field-text-row" id="cg-field-text-row-<?php echo (int) $i; ?>"<?php echo 'custom_text' === $current_field_key ? '' : ' style="display:none;"'; ?>>
+									<label class="cg-tpl-grow-label"><?php esc_html_e( 'Text', 'certificate-generator' ); ?>
+										<input type="text" id="field_<?php echo (int) $i; ?>_text" name="field_<?php echo (int) $i; ?>_text" class="widefat" value="<?php echo esc_attr( $ftext ); ?>" placeholder="<?php esc_attr_e( 'e.g. Awarded to {student_name} for {certificate_type}', 'certificate-generator' ); ?>">
+									</label>
+									<p class="cg-hint"><?php esc_html_e( 'Use any field in braces: {student_name}, {school_name}, {certificate_type}, {issue_date}, or a CSV column such as {grade}.', 'certificate-generator' ); ?></p>
+								</div>
 								<div class="cg-field-image-row" id="cg-field-image-row-<?php echo (int) $i; ?>"<?php echo $ftype === 'image' ? '' : ' style="display:none;"'; ?>>
 									<input type="hidden" id="field_<?php echo (int) $i; ?>_image_url" name="field_<?php echo (int) $i; ?>_image_url" value="<?php echo esc_attr( $fimg ); ?>">
 									<button type="button" class="button cg-media-btn" data-input="#field_<?php echo (int) $i; ?>_image_url" data-preview="#cg-field-image-preview-<?php echo (int) $i; ?>" data-title="<?php esc_attr_e( 'Select Image', 'certificate-generator' ); ?>" data-button-text="<?php esc_attr_e( 'Use this image', 'certificate-generator' ); ?>"><?php esc_html_e( 'Choose Image', 'certificate-generator' ); ?></button>
@@ -958,6 +1005,16 @@ class TemplatesPage extends EntityListPage {
 					<button type="submit" class="button button-primary"><?php echo esc_html( $id ? __( 'Update Template', 'certificate-generator' ) : __( 'Add Template', 'certificate-generator' ) ); ?></button>
 					<a href="<?php echo esc_url( $list_url ); ?>" class="button"><?php esc_html_e( 'Cancel', 'certificate-generator' ); ?></a>
 					<?php if ( $id ) : ?>
+					<?php $preview_records = function_exists( 'certificate_generator_template_preview_records' ) ? certificate_generator_template_preview_records( (int) $id ) : array(); ?>
+					<?php if ( $preview_records ) : ?>
+					<label class="screen-reader-text" for="cg_preview_record"><?php esc_html_e( 'Preview with', 'certificate-generator' ); ?></label>
+					<select id="cg_preview_record" name="cg_preview_record">
+						<option value=""><?php esc_html_e( 'Preview with sample data', 'certificate-generator' ); ?></option>
+						<?php foreach ( $preview_records as $record_id => $record_label ) : ?>
+						<option value="<?php echo (int) $record_id; ?>"><?php echo esc_html( $record_label ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<?php endif; ?>
 					<button type="button" id="cg_preview_cert_btn" class="button button-secondary"><?php esc_html_e( 'Preview Certificate', 'certificate-generator' ); ?></button>
 					<button type="button" id="cg_test_cert_btn" class="button button-secondary" title="<?php esc_attr_e( 'Uses the saved template. Save first if you changed anything.', 'certificate-generator' ); ?>">
 						<?php
@@ -1475,6 +1532,12 @@ class TemplatesPage extends EntityListPage {
 					var isImageish = ['image', 'photo'].indexOf($(this).val()) !== -1;
 					$('#cg-field-image-row-' + n).toggle($(this).val() === 'image');
 					$('#cg-field-height-wrap-' + n).toggle(isImageish);
+					$('#cg-field-font-row-' + n).toggle(!isImageish);
+				});
+				// Custom-text slots show their text box (the select is rebuilt on entity change, so delegate).
+				$(document).on('change', '.cg-field-name-select', function () {
+					var n = this.id.replace(/^field_(\d+)_name$/, '$1');
+					$('#cg-field-text-row-' + n).toggle($(this).val() === 'custom_text');
 				});
 
 				// ── Boot ──────────────────────────────────────────────────────

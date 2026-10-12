@@ -111,10 +111,13 @@ class PdfCacheTest extends WP_UnitTestCase {
 		$this->assertSame( 2, $this->renders );
 	}
 
-	public function test_changed_template_rerenders(): void {
+	public function test_changed_template_rerenders_certificate_without_snapshot(): void {
 		global $wpdb;
 		$row = $this->make_row( 'MEERA RAO' );
 		$this->generate( $row );
+		// Issued before 7.8.0: no layout snapshot, so it follows template edits.
+		// (Certificates with a snapshot keep their layout; see TemplateSnapshotTest.)
+		$wpdb->update( $wpdb->prefix . 'cg_certificates', array( 'layout_snapshot' => null ), array( 'serial_number' => 'CACHE-0001' ) );
 		$wpdb->update(
 			\CertificateGenerator\Database\CustomTables::instance()->get_table( 'certificate_templates' ),
 			array( 'extra_fields' => wp_json_encode( array( '1_position_x' => 60, '1_position_y' => 50 ) ) ),

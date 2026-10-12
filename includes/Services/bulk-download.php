@@ -16,11 +16,15 @@ function certificate_generator_handle_individual_certificate_download() {
 	}
 
 	// Auth gate: must be logged in with edit capability
-	if ( ! is_user_logged_in() || ! current_user_can( 'edit_posts' ) ) {
+	// edit_posts: staff using the Pro school ZIP shortcode; issue: School Coordinators (school-checked below).
+	if ( ! is_user_logged_in() || ! ( current_user_can( 'edit_posts' ) || current_user_can( 'certificate_generator_issue' ) ) ) {
 		wp_die( 'You must be logged in to download certificates.', 'Forbidden', array( 'response' => 403 ) );
 	}
 
 	$student_row_id = intval( $_GET['student_id'] );
+	if ( function_exists( 'certificate_generator_record_in_scope' ) && ! certificate_generator_record_in_scope( 'students', $student_row_id ) ) {
+		wp_die( 'Invalid student ID', 'Forbidden', array( 'response' => 403 ) );
+	}
 
 	// Nonce check
 	if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'cg_download_cert_' . $student_row_id ) ) {
@@ -81,11 +85,15 @@ function certificate_generator_handle_individual_certificate_png_download() {
 		return;
 	}
 
-	if ( ! is_user_logged_in() || ! current_user_can( 'edit_posts' ) ) {
+	// edit_posts: staff using the Pro school ZIP shortcode; issue: School Coordinators (school-checked below).
+	if ( ! is_user_logged_in() || ! ( current_user_can( 'edit_posts' ) || current_user_can( 'certificate_generator_issue' ) ) ) {
 		wp_die( 'You must be logged in to download certificates.', 'Forbidden', array( 'response' => 403 ) );
 	}
 
 	$student_row_id = intval( $_GET['student_id'] );
+	if ( function_exists( 'certificate_generator_record_in_scope' ) && ! certificate_generator_record_in_scope( 'students', $student_row_id ) ) {
+		wp_die( 'Invalid student ID', 'Forbidden', array( 'response' => 403 ) );
+	}
 
 	if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'cg_download_cert_' . $student_row_id ) ) {
 		wp_die( 'Security check failed.', 'Forbidden', array( 'response' => 403 ) );
@@ -121,9 +129,11 @@ function certificate_generator_handle_individual_certificate_png_download() {
 		wp_die( 'Certificate file not found. Please contact the administrator.' );
 	}
 
-	$filename = sanitize_file_name( $student_name . '_' . $student['id'] . '_certificate.png' );
+	// PngGenerator hands back the PDF for text GD can't shape (Hindi, Urdu, …).
+	$is_pdf   = str_ends_with( strtolower( $file_path ), '.pdf' );
+	$filename = sanitize_file_name( $student_name . '_' . $student['id'] . '_certificate.' . ( $is_pdf ? 'pdf' : 'png' ) );
 
-	header( 'Content-Type: image/png' );
+	header( 'Content-Type: ' . ( $is_pdf ? 'application/pdf' : 'image/png' ) );
 	header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
 	header( 'Content-Length: ' . filesize( $file_path ) );
 	header( 'Cache-Control: no-cache, must-revalidate' );

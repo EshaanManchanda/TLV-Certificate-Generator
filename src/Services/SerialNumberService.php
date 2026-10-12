@@ -71,17 +71,23 @@ class SerialNumberService {
 		return false;
 	}
 
-	public function verify( string $serial ): array {
-		global $wpdb;
-		$table = $wpdb->prefix . 'certificate_generator';
-
-		$cert = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE serial_number = %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name is $wpdb->prefix + constant.
-				sanitize_text_field( $serial )
-			),
-			ARRAY_A
-		);
+	/**
+	 * Public verification. The input is a verification code (what the QR carries) or a serial.
+	 *
+	 * A code gets the full record. Serials are sequential and can be walked, so a serial
+	 * alone gets the status with a masked name, unless the site opts back in with the
+	 * certificate_generator_verify_serial_full_details option.
+	 */
+	public function verify( string $input, bool $record = true ): array {
+		$input = trim( sanitize_text_field( $input ) );
+		$code  = VerificationCodeService::normalize( $input );
+		// The check character rejects typos and walked guesses before any query.
+		$cert = VerificationCodeService::is_well_formed( $code ) ? $this->find_certificate( 'verification_code', $code ) : null;
+		$full = null !== $cert;
+		if ( ! $cert && '' !== $input ) {
+			$cert = $this->find_certificate( 'serial_number', $input );
+			$full = '1' === (string) get_option( 'certificate_generator_verify_serial_full_details', '0' );
+		}
 
 		if ( ! $cert ) {
 			return array(
@@ -91,51 +97,99 @@ class SerialNumberService {
 			);
 		}
 
-		$expired = false;
-		if ( ! empty( $cert['expires_at'] ) ) {
-			$expired = strtotime( $cert['expires_at'] ) < time();
+		// Admins checking a certificate aren't verifiers; keep them out of the audit trail.
+		if ( $record && function_exists( 'certificate_generator_record_event' ) && ! current_user_can( 'certificate_generator_manage_settings' ) ) {
+			\certificate_generator_record_event( (string) $cert['serial_number'], 'verified', array( 'by' => $full ? 'code' : 'serial' ) );
 		}
+
+		// The recipient can hide their name from verification (My Certificates page).
+		$hidden = isset( $cert['show_name'] ) && '0' === (string) $cert['show_name'];
+		$name   = $hidden ? '' : ( $full ? (string) $cert['student_name'] : self::mask_name( (string) $cert['student_name'] ) );
 
 		if ( ! empty( $cert['revoked_at'] ) ) {
 			return array(
 				'valid'   => false,
 				'revoked' => true,
-				'message' => 'This certificate has been revoked' . ( ! empty( $cert['revoked_reason'] ) ? ': ' . $cert['revoked_reason'] : '.' ),
+				'message' => 'This certificate has been revoked' . ( $full && ! empty( $cert['revoked_reason'] ) ? ': ' . $cert['revoked_reason'] : '.' ),
 				'data'    => array(
-					'student_name'  => $cert['student_name'],
+					'student_name'  => $name,
 					'serial_number' => $cert['serial_number'],
 					'revoked_at'    => $cert['revoked_at'],
+					'masked'        => ! $full,
+					'name_hidden'   => $hidden,
 				),
 			);
 		}
 
-		// The legacy wp_certificate_generator table (queried above) has no pdf_url
-		// column; the newer wp_cg_certificates table does and can carry the same
-		// serial_number (certificate_generator_insert_certificate_record() dedupes serials across both),
-		// so look there for a downloadable URL to hand the LinkedIn "Add to Profile" button.
-		$pdf_url        = '';
-		$sql_cert_table = $wpdb->prefix . 'cg_certificates';
-		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $sql_cert_table ) ) === $sql_cert_table ) {
-			$pdf_url = (string) $wpdb->get_var(
-				$wpdb->prepare( "SELECT pdf_url FROM $sql_cert_table WHERE serial_number = %s LIMIT 1", $serial ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name is $wpdb->prefix + constant.
-			);
-		}
+		$expired = ! empty( $cert['expires_at'] ) && strtotime( $cert['expires_at'] ) < time();
 
+		// Public response: no PDF URL or internal ids.
 		return array(
 			'valid'   => true,
 			'expired' => $expired,
 			'message' => $expired ? 'Certificate has expired' : 'Certificate is valid',
 			'data'    => array(
-				'id'               => $cert['id'],
-				'student_name'     => $cert['student_name'],
+				'student_name'     => $name,
 				'certificate_type' => $cert['certificate_type'] ?? '',
 				'issued_at'        => $cert['issued_at'],
 				'expires_at'       => $cert['expires_at'],
 				'serial_number'    => $cert['serial_number'],
-				'created_at'       => $cert['created_at'],
-				'pdf_url'          => $pdf_url,
 				'issuer_name'      => get_bloginfo( 'name' ),
+				'masked'           => ! $full,
+				'name_hidden'      => $hidden,
+				'corrected_at'     => self::last_correction( (string) $cert['serial_number'] ),
+				// Only for full answers: the visitor already holds the code (or the site opted out of masking).
+				'verification_code' => $full ? VerificationCodeService::format( VerificationCodeService::for_serial( (string) $cert['serial_number'] ) ) : '',
 			),
+		);
+	}
+
+	/**
+	 * Certificate row by serial_number or verification_code. Falls back to wp_cg_certificates
+	 * for certificates recorded only there (no legacy row).
+	 *
+	 * @param string $column 'serial_number' or 'verification_code' (never user input).
+	 */
+	private function find_certificate( string $column, string $value ): ?array {
+		global $wpdb;
+		$column = 'verification_code' === $column ? 'verification_code' : 'serial_number';
+		$legacy = $wpdb->prefix . 'certificate_generator';
+		$modern = $wpdb->prefix . 'cg_certificates';
+
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names are $wpdb->prefix + constant; $column is whitelisted above.
+		$cert = $wpdb->get_row(
+			$wpdb->prepare( "SELECT student_name, certificate_type, issued_at, expires_at, serial_number, show_name, revoked_at, revoked_reason FROM {$legacy} WHERE {$column} = %s LIMIT 1", $value ),
+			ARRAY_A
+		);
+		if ( ! $cert ) {
+			$cert = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT recipient_name AS student_name, certificate_type, issued_at, expires_at, serial_number, show_name,
+						IF(status = 'revoked', updated_at, NULL) AS revoked_at, NULL AS revoked_reason
+					FROM {$modern} WHERE {$column} = %s ORDER BY id DESC LIMIT 1",
+					$value
+				),
+				ARRAY_A
+			);
+		}
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		return $cert ? $cert : null;
+	}
+
+	/** When the certificate was last corrected (reissued or name changed), or '' if never. */
+	private static function last_correction( string $serial ): string {
+		global $wpdb;
+		return (string) $wpdb->get_var( $wpdb->prepare( "SELECT created_at FROM {$wpdb->prefix}cg_certificate_events WHERE certificate_serial = %s AND event_type IN ('reissued','name_changed') ORDER BY id DESC LIMIT 1", $serial ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name comes from $wpdb->prefix
+	}
+
+	/** "Riya Sharma" -> "R*** S*****": first letter of each word (multibyte-safe). */
+	public static function mask_name( string $name ): string {
+		return (string) preg_replace_callback(
+			'/\S+/u',
+			static function ( $m ) {
+				return mb_substr( $m[0], 0, 1 ) . str_repeat( '*', max( 1, mb_strlen( $m[0] ) - 1 ) );
+			},
+			$name
 		);
 	}
 
@@ -225,7 +279,9 @@ class SerialNumberService {
 
 		$serial = $request->get_param( 'serial' );
 		$result = $this->verify( $serial );
-		$status = $result['valid'] || ! empty( $result['revoked'] ) ? 200 : 404;
-		return new \WP_REST_Response( $result, $status );
+		$status   = $result['valid'] || ! empty( $result['revoked'] ) ? 200 : 404;
+		$response = new \WP_REST_Response( $result, $status );
+		$response->header( 'Cache-Control', 'no-store' );
+		return $response;
 	}
 }

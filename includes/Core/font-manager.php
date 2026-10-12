@@ -443,6 +443,10 @@ class CertificateGenerator_FontManager {
 	 * Add font to PDF instance
 	 */
 	public function add_font_to_pdf( $pdf, $font_name, $style = '', $size = 12 ) {
+		// mPDF (non-Latin-1 text) embeds the same font as a TTF; style is ignored, as for bundled fonts in FPDF.
+		if ( $pdf instanceof \CertificateGenerator\Services\MpdfCanvas ) {
+			return $pdf->use_font( (string) $font_name, (float) $size );
+		}
 		if ( $this->is_custom_font( $font_name ) ) {
 			return $this->add_custom_font_to_pdf( $pdf, $font_name, $style, $size );
 		}
@@ -532,7 +536,11 @@ class CertificateGenerator_FontManager {
 
 		$definition = file_get_contents( $php_path );
 		if ( $definition === false || ! preg_match( "/\\\$file\\s*=\\s*'([^']+)';/", $definition, $m ) ) {
-			return null;
+			// Core fonts (Helvetica, Times, Courier) and definitions without an embedded file have no
+			// TTF; FPDF prints them with its core metrics. Use the bundled metric-compatible twin
+			// (Tinos for Times, Arimo for the rest) — GD and mPDF need a real font file.
+			$twin = str_starts_with( (string) $font_name, 'times' ) ? 'times_new_roman' : 'arial';
+			return $twin !== $font_name ? $this->get_ttf_path_for_gd( $twin ) : null;
 		}
 
 		$z_path = dirname( $php_path ) . '/' . $m[1];

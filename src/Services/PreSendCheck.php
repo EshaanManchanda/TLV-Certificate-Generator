@@ -54,6 +54,9 @@ class PreSendCheck {
 	}
 
 	public static function name_too_long( string $name, string $type, string $issue_date, string $entity ): bool {
+		if ( MpdfCanvas::needed_for( array( $name ) ) ) {
+			return false; // ponytail: measured in Latin-1 below; names drawn by mPDF (Hindi, Ł, …) aren't checked
+		}
 		$spec = self::spec( $type, $issue_date, self::NAME_FIELD[ $entity ] ?? 'student_name' );
 		if ( ! $spec ) {
 			return false; // no template / field: generation reports that itself

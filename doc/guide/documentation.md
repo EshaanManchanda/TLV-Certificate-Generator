@@ -38,7 +38,7 @@ and usage analytics.
 
 | | |
 |---|---|
-| **Version** | 7.6.0 (see [`CHANGELOG.md`](../CHANGELOG.md)) |
+| **Version** | 7.8.0 (see [`CHANGELOG.md`](../CHANGELOG.md)) |
 | **Requires** | WordPress 6.0+, PHP 8.2+ |
 | **Tested up to** | WordPress 7.1 |
 | **License** | GPL-2.0-or-later |
@@ -48,13 +48,21 @@ and usage analytics.
 ### Feature list
 
 - **Certificate templates** — upload a background image, drag-position Name/Type/School/Date
-  (and other) fields, set font/size/colour per field, per certificate type.
-- **PDF generation** via a bundled [FPDF](../../lib/fpdf) engine — no TCPDF/mPDF dependency.
-- **QR-code verification** — every certificate gets a QR code (`endroid/qr-code`, bundled in `vendor/`)
-  linking to a public `/verify-certificate/` page.
+  (and other) fields, give each field its own font, size, colour and UPPERCASE setting, and add
+  custom-text fields that mix your own words with `{field}` tags.
+- **PDF generation** via a bundled [FPDF](../../lib/fpdf) engine. Certificates whose text is
+  outside Western European (Indian scripts, Urdu/Arabic, Ł, Cyrillic, …) render through
+  [mPDF](https://github.com/mpdf/mpdf) with bundled fonts, so letters join correctly — see
+  [Languages](#languages-and-non-latin-text).
+- **QR-code verification** — every certificate gets an unguessable verification code; its QR code
+  (`endroid/qr-code`, bundled in `vendor/`) opens the public verification page. A serial number
+  typed alone shows a masked name.
+- **Certificate history, revoke, reinstate and reissue** — a per-certificate history, and issued
+  certificates keep the layout they were issued with (see [Certificate history](#certificate-history-revoke-and-reissue)).
 - **Serial numbers** — auto-generated, configurable format (`PREFIX-{YEAR}-{SEQ}`), with a
   bulk-assignment tool for existing records that don't have one yet.
-- **Students / Teachers / Schools management** — manual entry, or bulk CSV import/export.
+- **Students / Teachers / Schools management** — manual entry, or bulk CSV import/export with a
+  check step before anything is saved (column mapping, counts, date order, encoding).
 - **Bulk email sending** — filter by school/certificate type/source, background queue
   processing, automatic ZIP bundling when a recipient has multiple certificates, configurable
   rate limits, retry with exponential backoff.
@@ -105,6 +113,7 @@ Registered under the **Certificate Generator** top-level menu (`cg-dashboard`) i
 | Bulk Import | `cg-bulk-import` | CSV import for students/teachers/schools/certificate templates |
 | Bulk Export | `cg-bulk-export` | CSV export for the same four entities |
 | Download Certs | `cg-cert-download` | Admin-side certificate download tool |
+| Register | `cg-register` | Every issued certificate (serial, code, school, status), filtered and downloaded as CSV or PDF. School Coordinators see their own school only |
 | Bulk Send | `certificate-bulk-send` | Filtered bulk email sending with background queue |
 | Email Logs | `certificate-email-logs` | Per-send delivery history |
 | Analytics | `cg-analytics` | Charts and breakdowns (`includes/Admin/analytics.php`) |
@@ -121,19 +130,24 @@ Registered under the **Certificate Generator** top-level menu (`cg-dashboard`) i
 The LMS / e-commerce pages come from the Pro add-on — see [Licensing & plans](#licensing--plans)
 and [`CONFIGURATION.md`](CONFIGURATION.md#lms--e-commerce-auto-issuance-v9).
 
-## Getting Started — 4-step quick start
+## Getting Started — setup checklist
 
 The same checklist appears on the Dashboard (`certificate_generator_setup_steps()`) and ticks itself off.
+Hide it with **Hide checklist**; **Documentation → Getting Started** shows it again.
 
-1. **Create a certificate template** — go to **Templates**, upload your background image, and
+1. **Publish the certificate verification page** — created automatically on activation (or adopted,
+   if a page already has `[certificate_generator_verify_certificate]`), and re-created daily if it's
+   deleted. QR codes and the `{verify_link}` email placeholder point to it.
+2. **Create a certificate template** — go to **Templates**, upload your background image, and
    position the text fields (name, certificate type, date, etc.).
-2. **Email yourself a test certificate** — in the template editor, use *Email me a test
+3. **Email yourself a test certificate** — in the template editor, use *Email me a test
    certificate*. For reliable delivery, set up SMTP first (WP Mail SMTP, or **Settings → Email**).
-3. **Add a record** — go to **Students / Teachers / Schools** and add one manually, or use
-   **Bulk Import** (required columns: `student_name`, `email`, `school_name`,
-   `certificate_type`, `issue_date`).
-4. **Issue your first certificate** — go to **Bulk Send**, filter by school / certificate type,
+4. **Add records** — go to **Students / Teachers / Schools** and add one manually, or use
+   **Bulk Import** with one of the sample CSVs (required columns: `student_name`, `email`,
+   `school_name`, `certificate_type`, `issue_date`).
+5. **Issue your first certificate** — go to **Bulk Send**, filter by school / certificate type,
    and click *Send Certificates*.
+6. **Verify a certificate** — scan its QR code or enter its code on the verification page.
 
 ## User Guide
 
@@ -143,23 +157,31 @@ The same checklist appears on the Dashboard (`certificate_generator_setup_steps(
 2. Upload your certificate background image (PNG or JPG, A4 landscape recommended).
 3. Use the field position editor to drag Name, Certificate Type, School, and Date fields onto
    the canvas — up to 15 custom field slots per certificate type (`CertificateGenerator_Field_Schema`).
-4. Set font, size, and colour for each field.
-5. Click **Save Template**.
+4. Set the template's default font, size and colour. Each field can override them: pick a
+   **Font** and **Size**, tick **Colour** to give it its own colour, and **UPPERCASE** to print it
+   in capitals. Fields without overrides use the template defaults.
+5. Optional: set a field's type to **Custom text with {fields}…** and type a sentence such as
+   `Awarded to {student_name} for {certificate_type}`. Tags take any column of the record
+   (including extra CSV fields); dates print as dd-mm-yyyy; an empty tag leaves no double space.
+6. Click **Save Template**. **Preview Certificate** renders it with sample data, or pick a real
+   record of that certificate type in **Preview with** to see its own values and a QR code that
+   verifies. A preview never issues a serial.
 
 A name wider than its field is printed smaller to fit, down to 60% of the template's font size; past that it wraps onto a second line. Set each field's **W** (width, in mm) to the space the text may use.
 
 Each student's certificate type is matched against the template name — if no match is found,
-the default template is used. Editing a template only affects *future* PDF generations;
-previously generated PDFs are not regenerated automatically.
+the default template is used. Editing a template only affects certificates issued afterwards:
+each issued certificate stores a snapshot of its layout and values, so re-downloads stay the
+same. To apply a correction to an issued certificate, reissue it (see
+[Certificate history](#certificate-history-revoke-and-reissue)).
 
 ### Managing Students, Teachers & Schools
 
 - **Manually**: go to **Students / Teachers / Schools → Add New** and fill in Name, Email,
   School, Certificate Type, Issue Date.
-- **Bulk import via CSV**: go to **Bulk Import**, download the sample CSV to see the required
-  columns, fill in your data, upload, and review the import summary. See
-  [Configuration reference](#required-csv-columns) for the exact column list, and
-  [Licensing & plans](#licensing--plans).
+- **Bulk import via CSV**: go to **Bulk Import**, download the sample CSV from the tab, fill in
+  your data, then **Upload and check**. Review the mapping and counts, then **Import**. See
+  [Required CSV columns](#required-csv-columns) for the columns and how the check works.
 - **Bulk export**: go to **Bulk Export** to download all records as CSV — useful for backups or
   migrating data.
 
@@ -178,9 +200,10 @@ This feature is **not plan-gated** — it works identically on Free, Pro, and Bu
 
 ### QR codes
 
-QR codes are embedded in every certificate automatically during PDF creation and link to the
-public verification page (`/verify-certificate/`) — no manual setup required, the QR library
-ships with the plugin.
+QR codes are embedded in every certificate automatically during PDF creation, once enabled on
+the template. Each QR carries the certificate's verification code (`?code=XXXXXXXXXXXX`) and opens
+the public verification page — no manual setup required, the QR library ships with the plugin.
+QR codes printed before 7.7.0 carry the serial number and still verify, with a masked name.
 
 ### Analytics
 
@@ -197,9 +220,148 @@ feature is **not plan-gated** — it works identically on Free, Pro, and Busines
 ### Verification
 
 Every certificate's QR code (and the `[certificate_generator_verify_certificate]` shortcode) resolves to a public
-authenticity check. Visitors can also search by serial number or email on the results page,
-which also shows a **"LinkedIn — Add to Profile"** button so recipients can add the certificate
-to their LinkedIn profile directly. This feature is **not plan-gated**.
+authenticity check:
+
+- **With the verification code** (from the QR code, or typed as `XXXX-XXXX-XXXX`): the full result
+  — name, certificate type, dates, "Corrected on …" if it was reissued, and a **"LinkedIn — Add to
+  Profile"** button.
+- **With a serial number alone**: valid / revoked / expired and the dates, but the name masked
+  (`R**** S****`). Serials run in sequence, so a full answer by serial would let anyone step
+  through them and collect names. To show full details for serials anyway, set the option
+  `certificate_generator_verify_serial_full_details` to `1`.
+- Revoked certificates show **Revoked** (with the reason on a full answer); expired ones show
+  **Expired**.
+
+Lookups are rate-limited per visitor, and recorded as `verified` in the certificate's history
+(no IP addresses). This feature is **not plan-gated**.
+
+### Certificate register
+
+**Certificate Generator → Register** lists every issued certificate: serial number, verification
+code, recipient, email, school, certificate type, event, issue and expiry dates, status (Valid,
+Expired or Revoked) and the revoke reason. Filter by certificate type, school, event, issue dates
+and status, then **Download CSV** (opens in Excel with non-English names intact) or **Download PDF**
+(a printable A4 table; Hindi, Arabic and other scripts print correctly). The page shows the 100
+newest matches; the downloads include all of them.
+
+School Coordinators can open it too, and only ever see their own school. The register is a record
+of what was issued, so it has no delete button: to withdraw a certificate, revoke it. It then
+shows as Revoked here and on the verify page.
+
+### Certificate history, revoke and reissue
+
+**Certificate Generator → Revoke Certificate** revokes a certificate with a reason, or reinstates
+it; both certificate tables are updated and the hooks
+`certificate_generator_certificate_revoked` (`$serial, $reason`) and
+`certificate_generator_certificate_reinstated` (`$serial`) fire.
+
+Open a certificate's **History** (from the Revoke page, or by clicking a serial number on the
+Students or Teachers list) to see every event: issued, name corrected, revoked, reinstated,
+reissued and verified, with who did it and when. Below it, **Reissue** applies the template as it
+is now to that certificate: it keeps the serial number and verification code, bumps its
+revision, records the reason, and the verify page shows "Corrected on …". Use it after fixing a
+spelling in the template or the record.
+
+### My Certificates (recipients)
+
+Put `[certificate_generator_my_certificates]` on a page. A recipient types their email and gets a
+private link (valid 30 minutes) to their own certificates: download each PDF or all as a ZIP,
+open the verify page to share, and choose whether their name shows when someone verifies. No
+WordPress account is needed; a logged-in user whose account email has records sees their list
+straight away.
+
+- The form gives the same answer for every address ("If we have certificates for that address,
+  we've emailed you a link"), so it can't be used to find out who has a certificate. Link
+  requests are limited to 5 per visitor per 10 minutes and one per address every 2 minutes.
+- The link is signed with your site's auth salt; nothing is stored. Opening it moves it into an
+  HttpOnly cookie and removes it from the address bar. **Sign out** clears it.
+- The email goes through your configured transport (WordPress mail, SMTP, Sender.net or
+  Mandrill). Filters: `certificate_generator_wallet_email_subject` (`$subject, $email`) and
+  `certificate_generator_wallet_email_body` (`$html, $email, $link`).
+- **Show my name when someone verifies this** (one switch per certificate): when off, the verify
+  page still answers Valid / Revoked / Expired with the dates but shows "Hidden by the recipient".
+  The change is recorded in the certificate's history (`name_visibility`).
+
+`[certificate_generator_student_search]` shows certificates to anyone who types an email. To
+require the emailed link there too, tick **Settings → General → Recipients & sharing → Require an
+email link to view certificates** (off by default, so existing pages keep working). The student
+search page then shows the My Certificates form, and its ZIP download only works for the
+signed-in address.
+
+### Sharing
+
+A full verify result (by verification code) shows **Add to LinkedIn Profile**, **Share on X**,
+**WhatsApp** and **Copy link**. Every button shares the `?code=` link, so whoever opens it sees the
+full, correct result; serial-only answers show no share buttons. Set **LinkedIn organization ID**
+(Settings → General → Recipients & sharing, the number in your LinkedIn company page's admin URL)
+to link "Add to Profile" to your organization's page.
+
+A shared verify link gets a link preview on WhatsApp, LinkedIn and X: "Verified certificate:
+Participation — Issued to R**** S**** by Your School" (no name when the recipient hid it). The
+tags are printed only for a well-formed code, within the verify rate limit, and are left to your
+SEO plugin when Yoast, Rank Math or All in One SEO is active.
+
+### Personal data export and erasure
+
+The plugin registers with **Tools → Export Personal Data** and **Tools → Erase Personal Data**.
+
+- **Export** includes the person's student and teacher records, their certificates and the
+  emails sent or queued to them.
+- **Erase** deletes their student and teacher records, email logs, queued emails and cached PDFs.
+  Their certificates are **anonymised, not deleted**: name `[erased]`, no email or stored values,
+  history details removed, while the serial number, verification code, dates and status stay so a
+  printed certificate still verifies. WordPress shows a message saying so.
+
+### Languages and non-Latin text
+
+Certificates print any language. When a certificate's text has any character outside
+Western European (ISO-8859-1), it is drawn with mPDF instead of FPDF:
+
+| Script | Font (in `assets/fonts/unicode`) |
+|---|---|
+| Devanagari (Hindi, Marathi, Sanskrit, Nepali), Bengali, Gurmukhi (Punjabi), Gujarati, Tamil, Malayalam, Arabic / Urdu, and other non-Latin letters (Ł, Greek, Cyrillic, …) | FreeSerif (GNU FreeFont, GPL-2.0-or-later with font exception) |
+| Telugu | Lohit Telugu (OFL) |
+| Kannada | Lohit Kannada (OFL) |
+| Odia | Noto Sans Oriya (OFL) |
+
+Each line is split into runs by script: Latin parts keep the field's own font, so "Ravi रवि Kumar"
+prints "Ravi" and "Kumar" in the template font and रवि in FreeSerif. Conjuncts, vowel signs and
+Arabic joining are shaped by mPDF; field positions, fit-to-width and wrapping work as for Latin
+text. Certificates with only Western European text keep using FPDF and come out exactly as
+before. A non-Latin certificate takes about 115 ms to render, against about 45 ms for Latin.
+
+PNG downloads use GD, which can't shape these scripts, so a PNG request for a certificate with
+Indian-script or Arabic text returns the PDF instead (other Unicode text, such as Cyrillic, still
+gets a PNG).
+
+Limits: Indian-script runs always use the regular weight; a mostly-Urdu line with Latin words
+inside may put those words in the wrong order (whole Urdu names are fine); the import check's
+"too long" warning skips non-Latin names.
+
+### Roles and School Coordinators
+
+Admins (anyone who can `manage_options`) can do everything. To let a school's staff issue their
+own certificates without seeing other schools:
+
+1. **Users → Add New**: create the user with the role **School Coordinator**.
+2. On that user's profile, under **Certificate Generator → School**, pick their school (the list
+   holds every school name on your students, teachers and schools).
+
+A School Coordinator sees **Students**, **Teachers**, **Bulk Import** (students and teachers),
+**Download Certs**, **Bulk Send** and **Documentation**, all limited to their school: lists, filters,
+counts, bulk actions, emails, downloads and imports. Every record they add or import is saved to
+their school, and they can't move a record to another school. Templates, schools, events, revoke,
+analytics, email logs, export and settings stay with admins. A coordinator with no school assigned
+sees nothing.
+
+Capabilities, for role-editor plugins: `certificate_generator_view` (see students and teachers),
+`certificate_generator_issue` (edit, import, generate, download, email),
+`certificate_generator_manage_templates`, `certificate_generator_manage_settings`. A user who can
+view but not manage settings is limited to the school on their profile.
+
+If another plugin keeps non-editors out of wp-admin, the coordinator role has
+`view_admin_dashboard`, which WooCommerce honours; plugins that only check `edit_posts` need to
+allow `certificate_generator_view` too.
 
 ### LMS / e-commerce auto-issuance
 
@@ -247,14 +409,15 @@ Beyond the existing admin-only "expiring certificates" digest, the plugin can em
 through some LMS auto-issuance paths may not have a recipient email on file yet, in which case no
 reminder is sent for that certificate.
 
-### Custom fonts (Business)
+### Fonts
 
-**Certificate Generator → Custom Fonts** lists the built-in fonts on every plan, with how many templates use each. Click **Download sample PDF** to see every font exactly as it prints on a certificate.
+**Certificate Generator → Fonts** lists the built-in fonts on every plan, with how many templates use each. Click **Download sample PDF** to see every font exactly as it prints on a certificate.
 
-Business-plan sites can upload their own `.ttf` font file under **Certificate Generator → Custom
-Fonts**, which then becomes selectable on any certificate template alongside the plugin's
-built-in fonts. Uploaded fonts render through a separate PDF engine (tFPDF) from the built-in
-fonts, but the certificate output is otherwise identical.
+With the Pro add-on you can upload your own `.ttf` font file there, which then becomes selectable
+on any certificate template alongside the built-in fonts. Uploaded fonts render through a
+separate PDF engine (tFPDF), which takes UTF-8 text, so an uploaded font that covers a script
+prints it. You don't need an uploaded font for Indian scripts or Arabic — see
+[Languages](#languages-and-non-latin-text).
 
 ## Email & Bulk Send Guide
 
@@ -326,6 +489,7 @@ and `includes/Public/verification.php`.
 | `[certificate_generator_student_search]` | Front-end search form for a student to look up their own certificate(s) by email. |
 | `[certificate_generator_teacher_search]` | Same lookup flow for teachers. |
 | `[certificate_generator_school_search]` | Same lookup flow for schools (by school name and place). |
+| `[certificate_generator_my_certificates]` | A recipient's own certificates, opened with an emailed sign-in link: download, verify & share, show or hide their name. See [My Certificates](#my-certificates-recipients). |
 | `[school_bulk_certificate_download]` | (Pro add-on) Lets a school download all of its certificates in bulk (ZIP) from the front end. |
 | `[certificate_generator_verify_certificate]` | Public certificate authenticity verification form — reachable via a certificate's QR code (`/verify-certificate/`); visitors can also search by serial number or email on the results page (`/result/`). |
 
@@ -358,9 +522,10 @@ a template.
 | `POST` | `/validate-key` | Bearer token | Validates an API key. |
 | `GET` | `/certificates-by-email` | Bearer token | Read-only lookup — does not regenerate certificates. |
 
-**`/verify/{serial}`** — public serial-number verification, **free**. Registered in
-`src/Services/SerialNumberService.php` (the legacy duplicate in
-`includes/Services/serial-generator.php` was removed — see [`CHANGELOG.md`](../CHANGELOG.md)).
+**`/verify/{code or serial}`** — public verification, **free**. A verification code gets the full
+answer; a serial alone gets a masked name. Registered in `src/Services/SerialNumberService.php`
+(the legacy duplicate in `includes/Services/serial-generator.php` is never called — see
+[`REST-API.md`](../dev/REST-API.md)).
 
 **`cg/v1/verify-license`** — Pro add-on, admin-only license check
 (`certificate-generator-pro/includes/payment-endpoints.php`).
@@ -413,14 +578,47 @@ See [Licensing & plans](#licensing--plans) below for the full plan matrix.
 | `certificate_generator_api_key` / `certificate_generator_api_key_enabled` | REST API key + enable flag |
 | `certificate_generator_keep_data_on_uninstall` | If false, uninstall drops all custom tables and deletes plugin options |
 | `certificate_generator_extra_fields_{cert_type_key}` | Per-certificate-type custom field registry (max 15 extra slots) |
+| `certificate_generator_verify_serial_full_details` | `1` shows full details (unmasked name) when verifying by serial number alone. Default `0` |
+| `certificate_generator_log_retention_days` | Days to keep email logs, sent queue rows and "verified" history events (weekly cleanup). Default 90 |
+| `certificate_generator_search_requires_link` | `1`: `[certificate_generator_student_search]` emails a sign-in link instead of showing certificates for any typed email. Default `0` |
+| `certificate_generator_linkedin_org_id` | Your LinkedIn organization ID (digits); "Add to LinkedIn Profile" then links to your organization's page. Default empty |
+| `certificate_generator_verify_page_id` | The verification page that QR codes and `{verify_link}` use. Set automatically and re-created daily if it's deleted |
 
 ### Required CSV columns
 
 **Bulk Import** requires: `student_name`, `email`, `school_name`, `certificate_type`,
-`issue_date` (teachers/schools use the equivalent name field). Sample files live in
-`doc/samples/` (`students.csv`, `teacher.csv`, `school.csv`, `certificates.csv`).
+`issue_date` (teachers use `teacher_name`; schools need `school_name`, `place`,
+`issue_date`, `certificate_type`). Optional: `phone`, `event_code`, `send_email`
+(`no`/`0`/`false` opts the row out of emails), and `photo_url` for students. Any other column is
+an extra field: saved with the record and, for students, registered as a template field for that
+row's certificate type. Ready-to-edit [sample files](#sample-files) for all four imports ship in
+`assets/samples/`, and each import tab offers **Download a sample CSV**.
 
 There is no row limit on import or export, on any plan.
+
+**How an import works.** **Bulk Import → Students / Teachers / Schools → Upload and check**
+reads the whole file and saves nothing yet. The check shows:
+
+- the file's format: comma, semicolon or tab separated (detected from the header line) and its
+  encoding. UTF-8 (with or without BOM), UTF-16 and Excel's Windows-1252 "CSV" are converted to
+  UTF-8; a file that still doesn't decode is refused with "save it as CSV UTF-8", so garbled
+  names are never saved;
+- **Imports as** — one dropdown per column. Headers are matched by name, ignoring case and
+  spaces ("Student Name" = `student_name`), then by common aliases (`Name`, `Email Address`,
+  `School`, `Date`, `Type`, `Mobile`, `City`, …). Unknown columns become extra fields (see
+  below). Pick a field by hand to override; Import stays disabled while a required column is
+  unmapped;
+- **Issue dates are written as** — day/month/year, month/day/year, or detect each date. It is
+  guessed from the file; when values like 03/04/2026 fit both, you must choose;
+- **Rows that match an existing record** — update it with the file's values, or leave it
+  unchanged;
+- the counts the import will produce (new, update existing, merge into an earlier row of the
+  file, skipped), every issue by CSV row number, names too wide for their template field even at
+  the smallest font size, and the first 5 rows as they will be stored.
+
+**Import** then runs the same code with writes on, so the result matches the check. Each tab has
+**Download a sample CSV**, built from the importer's own field list plus the extra fields your
+templates already use.
 
 **How rows are matched.** A CSV row updates an existing record instead of adding a new one
 when it is the same record:
@@ -443,13 +641,29 @@ as imported.)
 with its CSV row number, and the full list can be downloaded as a CSV. Rows are skipped when:
 - the name or `certificate_type` is empty;
 - the row has more values than the header (usually an unquoted comma);
-- the plan's row limit is reached. At the limit, re-imports still update existing rows.
+- you chose **Leave the record unchanged** and the row matches an existing record.
 
-A file that's too large for the server's time limit stops at a row boundary and says which
-row. Upload the same, unchanged file again and it continues from that row (for up to a
-day). An edited file is imported from the top; rows already imported are updated, not
-duplicated. Rows are written 500 at a time in one transaction each. 10,000 students take
-about 2–3 s on a local site.
+A file too large for the server's time limit stops at a row boundary; the page then continues
+from that row automatically (or click **Continue now**). The uploaded file is kept privately in
+`uploads/cg_certificates/private/` between the steps, deleted after the import, and removed by the
+daily cron after 2 hours if an import is abandoned. Rows are written 500 at a time in one
+transaction each. 10,000 students: check 0.7 s, import 2.1 s, re-import 4.8 s on a local site.
+
+Scripts can still post `submit_students` / `submit_teachers` / `submit_schools` with a file to
+import in one step without the check (`bin/bench-bulk-import.php` does).
+
+### Sample files
+
+Ready-to-edit samples ship with the plugin in `assets/samples/` (also linked from **Documentation → User Guide → Managing Students, Teachers & Schools** in wp-admin). Download one, replace the example rows with your own in Excel or Google Sheets (keep the header row), save as CSV and import it on the matching **Bulk Import** tab.
+
+| File | Import on | Columns |
+|---|---|---|
+| [`students.csv`](../../assets/samples/students.csv) | Students | `student_name`, `email`, `phone`, `school_name`, `issue_date`, `certificate_type`, `event_code`, `send_email`, `photo_url`, and `grade` as an example extra field |
+| [`teachers.csv`](../../assets/samples/teachers.csv) | Teachers | `teacher_name`, `email`, `phone`, `school_name`, `issue_date`, `certificate_type`, `event_code`, `send_email`, and `subject` as an extra field |
+| [`schools.csv`](../../assets/samples/schools.csv) | Schools | `school_name`, `place`, `issue_date`, `certificate_type`, `event_code`, `send_email` |
+| [`templates.csv`](../../assets/samples/templates.csv) | Certificates | `template_name`, `certificate_type`, `entity_type`, `event_date` (blank = any date), `template_url`, `orientation`, `page_size`, `font_size`, `font_color`, `font_style`, `qr_enabled`, `serial_number_display`, `template_field_count`, then per field `field_N_name` (what it shows), `field_N_position_x`/`_y` (mm from the top-left; x is the field's centre), `field_N_visible`, `field_N_width`, `field_N_alignment` (L, C, R) |
+
+The four files fit together: `templates.csv` has a template for every certificate type used in the other three. Import it first, after replacing each `template_url` with your own background image's URL (Media Library → Copy URL). Dates are day-month-year (`25-08-2026`); the files are UTF-8 with a BOM so Excel shows the Hindi name correctly. Each import tab also offers **Download a sample CSV**, generated from the importer's field list plus the extra fields your templates already use.
 
 ### Uninstall
 
@@ -469,7 +683,8 @@ created directly in the activation hook in `certificate-generator.php`.
 | `wp_cg_teachers` | Teacher records — same shape as students |
 | `wp_cg_schools` | School records — same shape as students |
 | `wp_cg_certificate_templates` | Template config: orientation, font, QR position/size, serial display, expiration rules, `field_config` JSON, status |
-| `wp_cg_certificates` | Issued certificates: recipient info, serial number, `pdf_path`/`pdf_url`, `certificate_data` JSON, status |
+| `wp_cg_certificates` | Issued certificates: recipient info, serial number, verification code, `show_name` (recipient's choice), `pdf_path`/`pdf_url`, `certificate_data` JSON, status, revision and layout snapshot |
+| `wp_cg_certificate_events` | Per-certificate history (issued, name corrected, revoked, reinstated, reissued, verified), no IP addresses |
 | `wp_cg_email_logs` | Per-send delivery records — feeds Email Logs and Analytics |
 | `wp_cg_email_queue` | Background email queue — feeds the bulk-send processor |
 | `wp_cg_student_certificates` / `wp_cg_teacher_certificates` | Join tables: students/teachers ↔ certificates |
@@ -528,7 +743,9 @@ Full detail: [`ARCHITECTURE.md`](../dev/ARCHITECTURE.md).
 - **Autoloading** — Composer's `vendor/autoload.php` (shipped in the release ZIP), with a
   hand-rolled `spl_autoload_register` fallback for `CertificateGenerator\` → `src/`.
 - **Bundled libraries**: `lib/fpdf/` (PDF rendering, all built-in fonts), `lib/tfpdf/` (renders
-  uploaded `.ttf` fonts), and `endroid/qr-code` in `vendor/` (QR images).
+  uploaded `.ttf` fonts), `endroid/qr-code` in `vendor/` (QR images), and `mpdf/mpdf` in `vendor/`
+  (certificates with non-Latin text, through `src/Services/MpdfCanvas.php`; fonts in
+  `assets/fonts/unicode`).
 - **Free / Pro split**: the free plugin exposes hooks (`certificate_generator_settings_tabs`, `cg_fonts_page_*`,
   `certificate_generator_feature_flags`, `certificate_generator_admin_menu_integrations`) and the Pro add-on plugs in through them.
   The LMS / WooCommerce integrations (`AbstractLmsListener` / `AbstractLmsMapper` plus one
@@ -568,7 +785,15 @@ if the email count is high, use the email backfill AJAX action.
 2. Confirm the WordPress uploads directory is writable.
 3. Confirm `lib/fpdf/fpdf.php` is present (bundled with the plugin).
 4. Enable `WP_DEBUG` / `WP_DEBUG_LOG` in `wp-config.php` and check `wp-content/debug.log` for
-   FPDF errors.
+   FPDF or mPDF errors. mPDF keeps its font cache in `uploads/cg-mpdf-tmp/`, which must be
+   writable.
+
+### Names print as "????"
+
+Fixed in 7.8.0: text outside Western European now renders through mPDF. If a name still shows
+boxes or question marks, check that `vendor/mpdf/` and `assets/fonts/unicode/` exist (they ship
+in the release ZIP) and that the PDF was generated after updating — cached PDFs re-render once
+because the render revision changed.
 
 ### ZIP file not attaching / download link missing
 
@@ -631,20 +856,24 @@ Yes, but Gmail requires an App Password. In WP Mail SMTP: choose Gmail as mailer
 `smtp.gmail.com`, port 587, and your App Password.
 
 **How do I change the certificate PDF design?**
-Edit the template in Templates — upload a new background and reposition fields. Future PDFs use
-the new design; already-generated PDFs are unchanged.
+Edit the template in Templates — upload a new background and reposition fields. Certificates
+issued afterwards use the new design; issued ones keep their snapshot. Use **Reissue** on a
+certificate's history to apply the new design to it.
 
 **What happens if an email fails to send?**
 The queue retries up to 3 times with exponential backoff, then marks the item `failed` and logs
 the error in Email Logs. Failed items can be reset from the queue management section.
 
 **How long are email logs kept?**
-90 days, auto-cleaned weekly (`certificate_generator_cleanup_email_logs()` in
-`includes/Email/log.php`).
+90 days by default, cleaned weekly together with sent queue rows and "verified" history events.
+Change it with the `certificate_generator_log_retention_days` option.
 
 **Can students verify their certificate online?**
-Yes — every certificate's QR code links to `/verify-certificate/`; visitors can also search by
-serial number or email on `/result/`.
+Yes — every certificate's QR code opens the verification page with its verification code and
+shows the full result. A serial number typed alone shows a masked name.
+
+**Which languages can certificates print?**
+Any — see [Languages and non-Latin text](#languages-and-non-latin-text).
 
 **Is the plugin multisite compatible?**
 Partially — designed for single-site use. Network activation works, but each site keeps its own

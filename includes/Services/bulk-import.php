@@ -93,23 +93,28 @@ class CertificateGenerator_Import_Writer {
 	private int $resume_from   = 0;
 	private bool $wrote     = false;
 	private bool $nested    = false;
+	private bool $dry_run;          // count outcomes only: no writes, no time limit, no resume state
+	private bool $update_existing;  // false: a row matching an existing record is skipped, not applied
 
-	public function __construct( string $table, array $identity, string $name_col ) {
-		$this->table     = $table;
-		$this->identity  = $identity;
-		$this->name_col  = $name_col;
-		$limit           = (int) ini_get( 'max_execution_time' );
-		$start           = (float) ( $_SERVER['REQUEST_TIME_FLOAT'] ?? microtime( true ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- cast to float
-		$this->deadline  = (float) apply_filters( 'certificate_generator_import_deadline', $limit > 0 ? $start + $limit - 10 : 0.0 );
+	public function __construct( string $table, array $identity, string $name_col, bool $dry_run = false, bool $update_existing = true ) {
+		$this->table           = $table;
+		$this->identity        = $identity;
+		$this->name_col        = $name_col;
+		$this->dry_run         = $dry_run;
+		$this->update_existing = $update_existing;
+		$limit                 = (int) ini_get( 'max_execution_time' );
+		$start                 = (float) ( $_SERVER['REQUEST_TIME_FLOAT'] ?? microtime( true ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- cast to float
+		// ponytail: a dry run of a huge file can still hit the PHP time limit; batch it like the import if previews of 50k+ rows matter.
+		$this->deadline        = $dry_run ? 0.0 : (float) apply_filters( 'certificate_generator_import_deadline', $limit > 0 ? $start + $limit - 10 : 0.0 );
 	}
 
-	/** Pick up where an earlier upload of this same file stopped (see class docblock). */
-	public function resume( string $file ): void {
+	/** Pick up where an earlier upload of this same file (and same $settings, e.g. the column mapping) stopped. */
+	public function resume( string $file, string $settings = '' ): void {
 		$hash = is_readable( $file ) ? (string) md5_file( $file ) : '';
 		if ( '' === $hash ) {
 			return;
 		}
-		$this->resume_key  = 'certificate_generator_import_resume_' . md5( $this->table . '|' . $hash );
+		$this->resume_key  = 'certificate_generator_import_resume_' . md5( $this->table . '|' . $hash . '|' . $settings );
 		$this->resume_from = (int) get_transient( $this->resume_key );
 	}
 
@@ -172,8 +177,10 @@ class CertificateGenerator_Import_Writer {
 			if ( $first && isset( $inserts[ $full ] ) ) {
 				$inserts[ $full ] = $row; // same record earlier in this chunk: newer values win
 			} elseif ( $keyed && ( $id = $this->claim( $existing, $row ) ) ) {
-				$updates[ $id ] = $row;
-				$outcome        = $outcome ?? 'updated';
+				if ( $this->update_existing ) {
+					$updates[ $id ] = $row;
+				}
+				$outcome = $outcome ?? ( $this->update_existing ? 'updated' : 'kept' );
 			} else {
 				$inserts[ $keyed ? $full : '#' . $line ] = $row;
 				$outcome                                 = $outcome ?? 'new';
@@ -185,20 +192,26 @@ class CertificateGenerator_Import_Writer {
 			$outcomes[] = array( $line, $name, $outcome, $first );
 		}
 
-		$this->begin();
-		$ok = ! $inserts || $this->insert_many( array_values( $inserts ) );
-		foreach ( $updates as $id => $row ) {
-			unset( $row['created_at'] ); // keep when the record was first imported
-			$ok = $ok && false !== $wpdb->update( $this->table, $row, array( 'id' => $id ) );
+		$ok = true;
+		if ( ! $this->dry_run ) {
+			$this->begin();
+			$ok = ! $inserts || $this->insert_many( array_values( $inserts ) );
+			foreach ( $updates as $id => $row ) {
+				unset( $row['created_at'] ); // keep when the record was first imported
+				$ok = $ok && false !== $wpdb->update( $this->table, $row, array( 'id' => $id ) );
+			}
+			$this->end( $ok );
 		}
 		$error = $ok ? '' : ( $wpdb->last_error ?: 'database error' );
-		$this->end( $ok );
 
 		foreach ( $outcomes as list( $line, $name, $outcome, $first ) ) {
 			++$this->counts['read'];
 			if ( ! $ok ) {
 				++$this->counts['failed'];
 				$this->issue( $line, $name, 'failed: ' . $error );
+			} elseif ( 'kept' === $outcome ) {
+				++$this->counts['skipped'];
+				$this->issue( $line, $name, 'skipped: matches an existing record, left unchanged' );
 			} else {
 				++$this->counts[ $outcome ];
 				if ( 'merged' === $outcome ) {
@@ -217,7 +230,7 @@ class CertificateGenerator_Import_Writer {
 	/** @return array{counts: array, issues: array, stopped_at: int} */
 	public function report(): array {
 		$this->flush();
-		if ( '' !== $this->resume_key ) {
+		if ( '' !== $this->resume_key && ! $this->dry_run ) {
 			if ( $this->stopped_at ) {
 				set_transient( $this->resume_key, $this->stopped_at, DAY_IN_SECONDS );
 			} else {
@@ -259,7 +272,7 @@ class CertificateGenerator_Import_Writer {
 		$cols = implode( ', ', array_unique( array_merge( array( 'id', 'certificate_type', 'issue_date' ), $this->identity ) ) );
 		$in   = implode( ',', array_fill( 0, max( 1, count( $vals ) ), '%s' ) );
 		$found = $vals
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders
 			? $wpdb->get_results( $wpdb->prepare( "SELECT $cols FROM {$this->table} WHERE $col IN ($in) ORDER BY id", ...$vals ), ARRAY_A )
 			: array();
 
@@ -267,7 +280,7 @@ class CertificateGenerator_Import_Writer {
 		$names = array_values( array_unique( array_map( fn( $r ) => (string) ( $r[1][ $this->name_col ] ?? '' ), array_filter( $rows, fn( $r ) => '' === (string) ( $r[1][ $col ] ?? '' ) ) ) ) );
 		if ( $names && $this->name_col !== $col ) {
 			$in_n  = implode( ',', array_fill( 0, count( $names ), '%s' ) );
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders
 			$found = array_merge( $found ?: array(), $wpdb->get_results( $wpdb->prepare( "SELECT $cols FROM {$this->table} WHERE ( $col IS NULL OR $col = '' ) AND {$this->name_col} IN ($in_n) ORDER BY id", ...$names ), ARRAY_A ) ?: array() );
 		}
 
@@ -341,7 +354,7 @@ function certificate_generator_import_warn_row( CertificateGenerator_Import_Writ
  * The import summary: what happened to every row, the first 100 issues, and all of them as
  * a downloadable CSV (built in the page — nothing is stored on the server).
  */
-function certificate_generator_import_render_report( string $entity, array $report, string $extra_note = '' ): void {
+function certificate_generator_import_render_report( string $entity, array $report, string $extra_note = '', string $stopped_note = '' ): void {
 	$c     = $report['counts'];
 	$clean = 0 === $c['merged'] + $c['skipped'] + $c['failed'] && ! $report['stopped_at'];
 	$saved = $c['new'] + $c['updated'];
@@ -382,741 +395,803 @@ function certificate_generator_import_render_report( string $entity, array $repo
 	if ( $report['stopped_at'] ) {
 		echo '<p><strong>' . esc_html(
 			sprintf(
-				/* translators: %d: CSV row number */
-				__( 'Stopped at row %d to stay within the server time limit. Upload the same file again to continue from this row.', 'certificate-generator' ),
-				$report['stopped_at']
+				/* translators: 1: CSV row number, 2: what happens next */
+				__( 'Stopped at row %1$d to stay within the server time limit. %2$s', 'certificate-generator' ),
+				$report['stopped_at'],
+				'' !== $stopped_note ? $stopped_note : __( 'Upload the same file again to continue from this row.', 'certificate-generator' )
 			)
 		) . '</strong></p>';
 	}
-
-	if ( $report['issues'] ) {
-		$csv = fopen( 'php://temp', 'r+' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
-		fputcsv( $csv, array( 'row', 'name', 'issue' ) );
-		foreach ( $report['issues'] as $issue ) {
-			fputcsv( $csv, $issue );
-		}
-		rewind( $csv );
-		$data = base64_encode( (string) stream_get_contents( $csv ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
-		fclose( $csv ); // phpcs:ignore WordPress.WP.AlternativeFunctions
-
-		echo '<p><a class="button" download="import-issues.csv" href="data:text/csv;base64,' . esc_attr( $data ) . '">'
-			. esc_html(
-				sprintf(
-					/* translators: %d: number of issues */
-					__( 'Download all %d issues (CSV)', 'certificate-generator' ),
-					count( $report['issues'] )
-				)
-			) . '</a></p>';
-
-		echo '<div class="cg-table-wrap cg-import-issues"><table class="widefat striped cg-table"><thead><tr><th class="num">'
-			. esc_html__( 'Row', 'certificate-generator' ) . '</th><th>' . esc_html__( 'Name', 'certificate-generator' ) . '</th><th>'
-			. esc_html__( 'What happened', 'certificate-generator' ) . '</th></tr></thead><tbody>';
-		foreach ( array_slice( $report['issues'], 0, 100 ) as $issue ) {
-			echo '<tr><td class="num">' . (int) $issue[0] . '</td><td>' . esc_html( $issue[1] ) . '</td><td>' . esc_html( $issue[2] ) . '</td></tr>';
-		}
-		echo '</tbody></table></div>';
-		if ( count( $report['issues'] ) > 100 ) {
-			echo '<p class="description">' . esc_html__( 'Showing the first 100 — download the CSV for the full list.', 'certificate-generator' ) . '</p>';
-		}
-	}
+	certificate_generator_import_render_issues( $report['issues'] );
 	echo '</div>';
 }
 
-function certificate_generator_bulk_import_students() {
-	// Display the import form first so it stays visible after an import (success or error).
-	certificate_generator_ui_card_open( 'Upload students CSV', array( 'icon' => 'upload' ) );
-	echo '<form method="post" enctype="multipart/form-data" data-cg-busy>';
-	wp_nonce_field( 'bulk_import_students_nonce', '_wpnonce_bulk_import' );
-	echo '<table class="form-table">';
-	echo '<tr><th><label for="students_csv">Upload CSV File</label></th>';
-	echo '<td><input type="file" name="students_csv" id="students_csv" accept=".csv" required /></td></tr>';
-	echo '</table>';
-	echo '<p class="cg-hint">' . esc_html__( 'Large files are imported in passes: if the server time limit is hit, upload the same file again to continue.', 'certificate-generator' ) . '</p>';
-	echo '<p class="submit"><input type="submit" name="submit_students" value="Import Students" class="button button-primary" /></p>';
-	echo '</form>';
-	certificate_generator_ui_card_close();
+/** The first $limit row issues as a table, and all of them as a downloadable CSV (built in the page — nothing stored). */
+function certificate_generator_import_render_issues( array $issues, int $limit = 100 ): void {
+	if ( ! $issues ) {
+		return;
+	}
+	$csv = fopen( 'php://temp', 'r+' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+	fwrite( $csv, "\xEF\xBB\xBF" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- BOM so Excel reads names as UTF-8
+	certificate_generator_fputcsv( $csv, array( 'row', 'name', 'issue' ) );
+	foreach ( $issues as $issue ) {
+		certificate_generator_fputcsv( $csv, $issue );
+	}
+	rewind( $csv );
+	$data = base64_encode( (string) stream_get_contents( $csv ) ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+	fclose( $csv ); // phpcs:ignore WordPress.WP.AlternativeFunctions
 
-	// Check for file upload and nonce validation
-	if ( isset( $_POST['submit_students'] ) && isset( $_FILES['students_csv'] ) ) {
-		if ( check_admin_referer( 'bulk_import_students_nonce', '_wpnonce_bulk_import' ) ) {
-			if ( ! current_user_can( 'manage_options' ) ) {
-				wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
+	echo '<p><a class="button" download="import-issues.csv" href="data:text/csv;base64,' . esc_attr( $data ) . '">'
+		. esc_html(
+			sprintf(
+				/* translators: %d: number of issues */
+				__( 'Download all %d issues (CSV)', 'certificate-generator' ),
+				count( $issues )
+			)
+		) . '</a></p>';
+
+	echo '<div class="cg-table-wrap cg-import-issues"><table class="widefat striped cg-table"><thead><tr><th class="num">'
+		. esc_html__( 'Row', 'certificate-generator' ) . '</th><th>' . esc_html__( 'Name', 'certificate-generator' ) . '</th><th>'
+		. esc_html__( 'What happened', 'certificate-generator' ) . '</th></tr></thead><tbody>';
+	foreach ( array_slice( $issues, 0, $limit ) as $issue ) {
+		echo '<tr><td class="num">' . (int) $issue[0] . '</td><td>' . esc_html( $issue[1] ) . '</td><td>' . esc_html( $issue[2] ) . '</td></tr>';
+	}
+	echo '</tbody></table></div>';
+	if ( count( $issues ) > $limit ) {
+		/* translators: %d: rows shown */
+		echo '<p class="description">' . esc_html( sprintf( __( 'Showing the first %d — download the CSV for the full list.', 'certificate-generator' ), $limit ) ) . '</p>';
+	}
+}
+
+/**
+ * What differs between the three record imports; everything else runs through one pipeline
+ * (certificate_generator_import_run). `aliases` are other header names people use for a
+ * column, matched after certificate_generator_import_norm_header().
+ */
+function certificate_generator_import_entities(): array {
+	$common = array(
+		'issue_date'       => array( 'date', 'issued_on', 'issue', 'date_of_issue', 'certificate_date' ),
+		'certificate_type' => array( 'type', 'certificate', 'cert_type', 'award', 'category' ),
+	);
+	$person = fn( string $name_col, array $name_aliases ) => array(
+		'identity' => array( 'email', $name_col, 'school_name' ),
+		'name'     => $name_col,
+		'required' => array( $name_col, 'email', 'school_name', 'issue_date', 'certificate_type' ),
+		'optional' => array( 'phone', 'event_code', 'send_email', 'status', 'year' ),
+		'aliases'  => $common + array(
+			$name_col     => $name_aliases,
+			'email'       => array( 'email_address', 'e_mail', 'mail', 'email_id' ),
+			'school_name' => array( 'school', 'institution', 'institute', 'college', 'organisation', 'organization' ),
+			'phone'       => array( 'phone_number', 'mobile', 'mobile_number', 'contact', 'contact_number' ),
+		),
+		'school'   => true,
+	);
+
+	$students                         = $person( 'student_name', array( 'name', 'student', 'full_name', 'participant', 'participant_name', 'recipient' ) );
+	$students['optional'][]           = 'photo_url';
+	$students['aliases']['photo_url'] = array( 'photo', 'image', 'picture' );
+	$students['register_fields']      = true; // extra columns become template fields for the row's certificate type
+
+	return array(
+		'students' => $students + array(
+			'table' => 'students',
+			'label' => __( 'students', 'certificate-generator' ),
+		),
+		'teachers' => $person( 'teacher_name', array( 'name', 'teacher', 'full_name', 'faculty', 'staff_name' ) ) + array(
+			'table' => 'teachers',
+			'label' => __( 'teachers', 'certificate-generator' ),
+		),
+		'schools'  => array(
+			'table'    => 'schools',
+			'label'    => __( 'schools', 'certificate-generator' ),
+			// Same record = school name + certificate type + issue date; a type-less school row
+			// the students/teachers import auto-created is claimed instead of duplicated.
+			'identity' => array( 'school_name' ),
+			'name'     => 'school_name',
+			'required' => array( 'school_name', 'place', 'issue_date', 'certificate_type' ),
+			'optional' => array( 'event_code', 'send_email', 'status', 'year' ),
+			'aliases'  => $common + array(
+				'school_name' => array( 'school', 'institution', 'institute', 'college', 'name' ),
+				'place'       => array( 'city', 'location', 'town' ),
+			),
+			'school'   => false,
+		),
+	);
+}
+
+/** "Student Name" / "student-name " → "student_name" (hyphens kept: existing extra-field slugs use them). */
+function certificate_generator_import_norm_header( string $header ): string {
+	return trim( (string) preg_replace( '/[^a-z0-9\-]+/', '_', strtolower( trim( $header ) ) ), '_' );
+}
+
+/**
+ * CSV column index => what it imports as: a field key, an extra-field slug, or '' (not imported).
+ * Exact names win over aliases; a column the user mapped by hand ($override: '' = automatic,
+ * '__ignore', '__extra' or a field key) wins over both, and frees that field from any other column.
+ */
+function certificate_generator_import_map( array $cfg, array $header, array $override = array() ): array {
+	$known  = array_merge( $cfg['required'], $cfg['optional'] );
+	$norm   = array_map( fn( $h ) => certificate_generator_import_norm_header( (string) $h ), $header );
+	$map    = array_fill_keys( array_keys( $header ), null );
+	$taken  = array();
+	$assign = function ( int $i, string $target ) use ( &$map, &$taken ) {
+		if ( '' !== $target && isset( $taken[ $target ] ) ) {
+			$map[ $taken[ $target ] ] = '';
+		}
+		$map[ $i ] = $target;
+		if ( '' !== $target ) {
+			$taken[ $target ] = $i;
+		}
+	};
+
+	foreach ( $norm as $i => $n ) {
+		if ( in_array( $n, $known, true ) && ! isset( $taken[ $n ] ) ) {
+			$assign( $i, $n );
+		}
+	}
+	foreach ( $norm as $i => $n ) {
+		if ( null !== $map[ $i ] ) {
+			continue;
+		}
+		foreach ( $cfg['aliases'] as $field => $aliases ) {
+			if ( ! isset( $taken[ $field ] ) && in_array( $n, $aliases, true ) ) {
+				$assign( $i, $field );
+				continue 2;
 			}
-			$file          = $_FILES['students_csv']['tmp_name']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- temp path set by PHP, not by the request; nonce and capability checked above
-			$file_error    = (int) ( $_FILES['students_csv']['error'] ?? UPLOAD_ERR_NO_FILE );
-			$import_source = sanitize_file_name( $_FILES['students_csv']['name'] ?? '' );
+		}
+		// Unknown header: an extra field under its own name, as before. A repeated header is dropped.
+		$map[ $i ] = ( '' === $n || isset( $taken[ $n ] ) || in_array( $n, $known, true ) ) ? '' : $n;
+		if ( '' !== $map[ $i ] ) {
+			$taken[ $n ] = $i;
+		}
+	}
+	foreach ( $override as $i => $choice ) {
+		$i = (int) $i;
+		if ( ! array_key_exists( $i, $map ) || '' === $choice ) {
+			continue;
+		}
+		if ( '__ignore' === $choice ) {
+			$map[ $i ] = '';
+		} elseif ( '__extra' === $choice ) {
+			$assign( $i, in_array( $norm[ $i ], $known, true ) ? '' : $norm[ $i ] );
+		} elseif ( in_array( $choice, $known, true ) ) {
+			$assign( $i, $choice );
+		}
+	}
+	return array_map( 'strval', $map );
+}
 
-			// Error handling for file upload
-			if ( $file_error !== UPLOAD_ERR_OK ) {
-				certificate_generator_ui_notice( 'error', 'File upload error. Please try again.', false );
-				return;
-			}
+/**
+ * Open a CSV upload as a UTF-8 stream: BOM stripped; UTF-16 and Windows-1252 (Excel's plain
+ * "CSV" on Windows) converted; delimiter (comma, semicolon or tab) detected from the header line.
+ * Text that still doesn't decode stops the import — it never saves garbled names.
+ *
+ * @return array{handle: resource, delimiter: string, encoding: string}|string Error message.
+ */
+function certificate_generator_import_open( string $file ) {
+	$raw = is_readable( $file ) ? (string) file_get_contents( $file ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local upload
+	if ( '' === trim( $raw ) ) {
+		return __( 'CSV file is empty or invalid.', 'certificate-generator' );
+	}
+	$encoding = 'UTF-8';
+	if ( str_starts_with( $raw, "\xFF\xFE" ) || str_starts_with( $raw, "\xFE\xFF" ) ) {
+		$encoding = 'UTF-16';
+		$raw      = (string) mb_convert_encoding( substr( $raw, 2 ), 'UTF-8', str_starts_with( $raw, "\xFF\xFE" ) ? 'UTF-16LE' : 'UTF-16BE' );
+	} elseif ( str_starts_with( $raw, "﻿" ) ) {
+		$raw = substr( $raw, 3 );
+	} elseif ( ! mb_check_encoding( $raw, 'UTF-8' ) ) {
+		$encoding = 'Windows-1252';
+		$raw      = (string) mb_convert_encoding( $raw, 'UTF-8', 'Windows-1252' );
+	}
+	if ( preg_match( '/\x{FFFD}|[\x00-\x08\x0B\x0C\x0E-\x1F]/u', $raw ) ) {
+		return __( "Couldn't read this file's text encoding. In Excel, use Save As → \"CSV UTF-8 (Comma delimited)\" and upload that file.", 'certificate-generator' );
+	}
 
-			if ( ( $handle = fopen( $file, 'r' ) ) !== false ) {
-				// Read and strip BOM if present (UTF-8 BOM: EF BB BF)
-				$bom = fread( $handle, 3 );
-				if ( $bom !== "\xEF\xBB\xBF" ) {
-					// No BOM found, rewind to beginning
-					rewind( $handle );
-				}
+	preg_match( '/^.*\S.*$/m', $raw, $first );
+	$line   = (string) preg_replace( '/"[^"]*"/', '', $first[0] ?? '' );
+	$counts = array(
+		','  => substr_count( $line, ',' ),
+		';'  => substr_count( $line, ';' ),
+		"\t" => substr_count( $line, "\t" ),
+	);
+	$delimiter = max( $counts ) > 0 ? (string) array_search( max( $counts ), $counts, true ) : ',';
 
-				// Read the first row as the header, skip empty lines
-				$header      = false;
-				$header_line = 0; // CSV row of the header, so data rows report the row a spreadsheet shows
-				while ( ( $row = fgetcsv( $handle, 0, ',' ) ) !== false ) {
-					++$header_line;
-					// Skip empty rows (rows with only null or empty values)
-					if ( array_filter(
-						$row,
-						function ( $val ) {
-							return $val !== null && $val !== ''; }
-					) ) {
-						$header = $row;
-						break;
-					}
-				}
+	$handle = fopen( 'php://temp', 'r+' );
+	fwrite( $handle, $raw ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
+	rewind( $handle );
+	return array(
+		'handle'    => $handle,
+		'delimiter' => $delimiter,
+		'encoding'  => $encoding,
+	);
+}
 
-				if ( $header === false ) {
-					certificate_generator_ui_notice( 'error', 'CSV file is empty or invalid.', false );
-					fclose( $handle );
-					return;
-				}
+/** @return array{0: array, 1: int} The first non-empty row (trimmed) and its CSV row number. */
+function certificate_generator_import_read_header( $handle, string $delimiter ): array {
+	$line = 0;
+	while ( ( $row = fgetcsv( $handle, 0, $delimiter ) ) !== false ) {
+		++$line;
+		if ( array_filter( $row, fn( $v ) => null !== $v && '' !== $v ) ) {
+			return array( array_map( fn( $v ) => trim( (string) $v ), $row ), $line );
+		}
+	}
+	return array( array(), $line );
+}
 
-				// Trim whitespace and normalize header keys (preserve underscores — sanitize_key strips them!)
-				$header      = array_map(
-					function ( $val ) {
-						return trim( (string) $val );
-					},
-					$header
-				);
-				$header_keys = array_map(
-					function ( $key ) {
-						return strtolower( preg_replace( '/[^a-z0-9_\-]/', '', $key ) );
-					},
-					$header
-				);
+/**
+ * Day/month order for dates like 03/04/2026, read from the file's values: 'dmy' or 'mdy' when
+ * some value proves it (a part above 12), '' when the values fit both, 'auto' when no value has
+ * that shape (ISO dates, "March 3, 2026", …).
+ */
+function certificate_generator_import_guess_date_order( array $values ): string {
+	$dmy       = false;
+	$mdy       = false;
+	$ambiguous = false;
+	foreach ( $values as $v ) {
+		if ( ! preg_match( '/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-]\d{4}$/', trim( (string) $v ), $m ) ) {
+			continue;
+		}
+		if ( (int) $m[1] > 12 ) {
+			$dmy = true;
+		} elseif ( (int) $m[2] > 12 ) {
+			$mdy = true;
+		} else {
+			$ambiguous = true;
+		}
+	}
+	if ( $dmy !== $mdy ) {
+		return $dmy ? 'dmy' : 'mdy';
+	}
+	return ( $ambiguous || $dmy ) ? '' : 'auto';
+}
 
-				// Check only for missing required fields — never reject extra columns
-				$required_fields = array( 'student_name', 'email', 'school_name', 'issue_date', 'certificate_type' );
-				$known_optional  = array( 'status', 'send_email', 'phone', 'year', 'event_code', 'photo_url' ); // system columns not registered as PDF field slots
-				$missing_fields  = array_diff( $required_fields, $header_keys );
-				$extra_columns   = array_values( array_filter( array_diff( $header_keys, array_merge( $required_fields, $known_optional ) ) ) );
+/**
+ * A CSV date as Y-m-d. $order ('dmy'|'mdy') decides values like 03/04/2026; 'auto' and every
+ * other shape use DateHelper::to_storage() as before. Null when it can't be read.
+ */
+function certificate_generator_import_date( string $raw, string $order = 'auto' ): ?string {
+	if ( '' === $raw ) {
+		return null;
+	}
+	$formats = array(
+		'dmy' => '!j/n/Y',
+		'mdy' => '!n/j/Y',
+	);
+	if ( isset( $formats[ $order ] ) && preg_match( '/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}$/', $raw ) ) {
+		$dt     = DateTime::createFromFormat( $formats[ $order ], str_replace( array( '-', '.' ), '/', $raw ) );
+		$errors = DateTime::getLastErrors();
+		return ( $dt && ( ! $errors || 0 === $errors['warning_count'] + $errors['error_count'] ) ) ? $dt->format( 'Y-m-d' ) : null;
+	}
+	return class_exists( '\CertificateGenerator\Helpers\DateHelper' ) ? \CertificateGenerator\Helpers\DateHelper::to_storage( $raw ) : null;
+}
 
-				if ( ! empty( $missing_fields ) ) {
-					$error_msg  = '<strong>Invalid CSV format.</strong><br><br>';
-					$error_msg .= '<strong>Missing required fields:</strong> ' . esc_html( implode( ', ', $missing_fields ) ) . '<br>';
-					$error_msg .= '<br><strong>Required fields:</strong> ' . implode( ', ', $required_fields );
-					certificate_generator_ui_notice( 'error', $error_msg, false );
-					fclose( $handle );
-					return;
-				}
+/** Id of the school a student/teacher row names, created on a real import (cached per run). */
+function certificate_generator_import_school_id( string $school, bool $dry_run, array &$ctx ): ?int {
+	if ( array_key_exists( $school, $ctx['schools'] ) ) {
+		return $ctx['schools'][ $school ];
+	}
+	global $wpdb;
+	$table = \CertificateGenerator\Database\CustomTables::instance()->get_table( 'schools' );
+	$id    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $table WHERE school_name = %s LIMIT 1", $school ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $id && ! $dry_run ) {
+		$wpdb->insert(
+			$table,
+			array(
+				'school_name' => $school,
+				'status'      => 'active',
+				'created_at'  => current_time( 'mysql' ),
+			)
+		);
+		$id = (int) $wpdb->insert_id;
+	}
+	$ctx['schools'][ $school ] = $id ?: null;
+	return $ctx['schools'][ $school ];
+}
 
-				if ( ! empty( $extra_columns ) ) {
-					certificate_generator_ui_notice( 'info', '<strong>Extra fields detected:</strong> ' . esc_html( implode( ', ', $extra_columns ) ) . ' — these will be auto-registered for each row\'s certificate type.' );
-				}
+/** One CSV row as the table row to write, or null after telling the writer why it was skipped. */
+function certificate_generator_import_build_row( string $entity, array $cfg, array $row, array $extras, array $args, array &$ctx, CertificateGenerator_Import_Writer $writer, int $line ): ?array {
+	$name_col = $cfg['name'];
+	$name     = sanitize_text_field( $row[ $name_col ] ?? '' );
+	$type     = sanitize_text_field( $row['certificate_type'] ?? '' );
+	if ( '' === $name || '' === $type ) {
+		$writer->skip( $line, $name, ( '' === $name ? $name_col : 'certificate_type' ) . ' is empty' );
+		return null;
+	}
+	$dry_run = ! empty( $args['dry_run'] );
 
-				// Process each row. $line is the CSV row number (header included), as a spreadsheet shows it.
-				if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
-					certificate_generator_debug_log( '[CertGen] certificate_generator_bulk_import_students: CustomTables class not found — nothing imported.' );
-					certificate_generator_ui_notice( 'error', 'Student table unavailable — nothing was imported.', false );
-					fclose( $handle );
-					return;
-				}
-				$tables              = \CertificateGenerator\Database\CustomTables::instance();
-				$school_table        = $tables->get_table( 'schools' );
-				$writer              = new CertificateGenerator_Import_Writer( $tables->get_table( 'students' ), array( 'email', 'student_name', 'school_name' ), 'student_name' );
-				$writer->resume( $file );
-				$line                = $header_line;
-				$registered_per_type = array(); // track [cert_type_key => [slugs]] to avoid redundant DB writes
-				$school_id_cache     = array(); // school_name => id, avoids a SELECT+possible INSERT per row when many students share a school
-
-				while ( ( $data = fgetcsv( $handle, 0, ',' ) ) !== false ) {
-					++$line;
-					if ( $writer->done_earlier( $line ) ) {
-						continue;
-					}
-
-					// Skip empty rows
-					if ( ! array_filter(
-						$data,
-						function ( $val ) {
-							return $val !== null && $val !== ''; }
-					) ) {
-						continue;
-					}
-
-					$student_data = certificate_generator_import_read_row( $data, $header_keys );
-					if ( is_string( $student_data ) ) {
-						$writer->skip( $line, (string) ( $data[0] ?? '' ), $student_data );
-						continue;
-					}
-					$student_name = sanitize_text_field( $student_data['student_name'] );
-					$cert_type    = sanitize_text_field( $student_data['certificate_type'] );
-					if ( '' === $student_name || '' === $cert_type ) {
-						$writer->skip( $line, $student_name, ( '' === $student_name ? 'student_name' : 'certificate_type' ) . ' is empty' );
-						continue;
-					}
-
-					// Register extra fields for this certificate type (runs once per type+slug)
-					if ( ! empty( $extra_columns ) && class_exists( 'CertificateGenerator_Field_Schema' ) ) {
-						$type_key = CertificateGenerator_Field_Schema::cert_type_to_key( $cert_type );
-						foreach ( $extra_columns as $slug ) {
-							if ( ! isset( $registered_per_type[ $type_key ][ $slug ] ) ) {
-								$ok                                        = CertificateGenerator_Field_Schema::register_field( $cert_type, $slug );
-								$registered_per_type[ $type_key ][ $slug ] = $ok ? 'registered' : 'data_only';
-							}
-						}
-					}
-
-					$school_name = sanitize_text_field( $student_data['school_name'] );
-
-					// Build extra fields from extra columns
-					$extra_fields = array();
-					if ( ! empty( $extra_columns ) ) {
-						foreach ( $extra_columns as $slug ) {
-							$val = $student_data[ $slug ] ?? '';
-							if ( $val !== '' ) {
-								$extra_fields[ $slug ] = sanitize_text_field( $val );
-							}
-						}
-					}
-
-					// Accept both 'phone' (SQL export) and 'phone_number' (legacy export)
-					$phone = sanitize_text_field( $student_data['phone'] ?? $student_data['phone_number'] ?? '' );
-
-					// Ensure school exists in SQL table (cached — many rows share the same school)
-					if ( isset( $school_id_cache[ $school_name ] ) ) {
-						$school_id = $school_id_cache[ $school_name ];
-					} else {
-						$school_id = $GLOBALS['wpdb']->get_var(
-							$GLOBALS['wpdb']->prepare(
-								"SELECT id FROM $school_table WHERE school_name = %s LIMIT 1",
-								$school_name
-							)
-						);
-						if ( ! $school_id ) {
-							$GLOBALS['wpdb']->insert(
-								$school_table,
-								array(
-									'school_name' => $school_name,
-									'status'      => 'active',
-									'created_at'  => current_time( 'mysql' ),
-								)
-							);
-							$school_id = $GLOBALS['wpdb']->insert_id;
-						}
-						$school_id_cache[ $school_name ] = $school_id;
-					}
-
-					$_issue_raw    = sanitize_text_field( $student_data['issue_date'] );
-					$_issue_stored = class_exists( '\CertificateGenerator\Helpers\DateHelper' )
-						? ( \CertificateGenerator\Helpers\DateHelper::to_storage( $_issue_raw ) ?? $_issue_raw )
-						: $_issue_raw;
-
-					// send_email: optional CSV column. false/0/no → 0 (opt-out), anything else → 1 (default).
-					$_se_raw    = strtolower( trim( $student_data['send_email'] ?? '1' ) );
-					$send_email = in_array( $_se_raw, array( 'false', '0', 'no' ), true ) ? 0 : 1;
-
-					$insert_data = array(
-						'student_name'     => $student_name,
-						'email'            => sanitize_email( $student_data['email'] ),
-						'phone'            => $phone,
-						'school_id'        => $school_id,
-						'school_name'      => $school_name,
-						'event_id'         => certificate_generator_resolve_event_id( $student_data['event_code'] ?? '' ),
-						'certificate_type' => $cert_type,
-						'issue_date'       => $_issue_stored ?: null,
-						'year'             => function_exists( 'certificate_generator_year_from_issue_date' ) ? certificate_generator_year_from_issue_date( $_issue_stored ) : null,
-						'status'           => 'active',
-						'photo_url'        => ! empty( $student_data['photo_url'] ) ? esc_url_raw( $student_data['photo_url'] ) : null,
-						'send_email'       => $send_email,
-						'import_source'    => $import_source,
-						'created_at'       => current_time( 'mysql' ),
-						'updated_at'       => current_time( 'mysql' ),
-					);
-					if ( ! empty( $extra_fields ) ) {
-						$insert_data['extra_fields'] = wp_json_encode( $extra_fields );
-					}
-					certificate_generator_import_warn_row( $writer, $line, $student_name, $student_data['email'], $insert_data['email'], $_issue_raw, $_issue_stored );
-
-					// Same record = email + name + school + certificate type + issue date (see
-					// CertificateGenerator_Import_Writer); rows without an email are always new.
-					if ( ! $writer->add( $line, $insert_data ) ) {
-						break;
-					}
-				}
-				fclose( $handle );
-				$report = $writer->report();
-
-				$extra_note = '';
-				if ( ! empty( $extra_columns ) && class_exists( 'CertificateGenerator_Field_Schema' ) ) {
-					$registered_slugs = array();
-					$data_only_slugs  = array();
-					foreach ( $registered_per_type as $type_data ) {
-						foreach ( $type_data as $slug => $status ) {
-							if ( $status === 'registered' && ! in_array( $slug, $registered_slugs, true ) ) {
-								$registered_slugs[] = $slug;
-							} elseif ( $status === 'data_only' && ! in_array( $slug, $data_only_slugs, true ) ) {
-								$data_only_slugs[] = $slug;
-							}
-						}
-					}
-					if ( ! empty( $registered_slugs ) ) {
-						$extra_note .= ' Extra fields registered for template: ' . implode( ', ', $registered_slugs ) . '.';
-					}
-					if ( ! empty( $data_only_slugs ) ) {
-						$extra_note .= ' Additional fields saved (data only, beyond template limit): ' . implode( ', ', $data_only_slugs ) . '.';
-					}
-				}
-				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
-					certificate_generator_flush_filter_caches();
-				}
-				certificate_generator_import_render_report( 'students', $report, $extra_note );
-			} else {
-				certificate_generator_ui_notice( 'error', 'Unable to open the file. Please check the file and try again.', false );
+	$extra = array();
+	foreach ( $extras as $slug ) {
+		if ( '' !== ( $row[ $slug ] ?? '' ) ) {
+			$extra[ $slug ] = sanitize_text_field( $row[ $slug ] );
+		}
+		if ( ! $dry_run && ! empty( $cfg['register_fields'] ) && class_exists( 'CertificateGenerator_Field_Schema' ) ) {
+			$type_key = CertificateGenerator_Field_Schema::cert_type_to_key( $type );
+			if ( ! isset( $ctx['registered'][ $type_key ][ $slug ] ) ) {
+				$ctx['registered'][ $type_key ][ $slug ] = CertificateGenerator_Field_Schema::register_field( $type, $slug ) ? 'registered' : 'data_only';
 			}
 		}
 	}
 
+	$raw_date = sanitize_text_field( $row['issue_date'] ?? '' );
+	$date     = certificate_generator_import_date( $raw_date, $args['date_order'] ?? 'auto' ) ?? $raw_date;
+	$send     = strtolower( trim( $row['send_email'] ?? '1' ) ); // false/0/no opts out; anything else (or no column) sends
+	$data     = array(
+		$name_col          => $name,
+		'event_id'         => certificate_generator_resolve_event_id( $row['event_code'] ?? '' ),
+		'certificate_type' => $type,
+		'issue_date'       => $date ?: null,
+		'year'             => function_exists( 'certificate_generator_year_from_issue_date' ) ? certificate_generator_year_from_issue_date( $date ) : null,
+		'status'           => 'active',
+		'send_email'       => in_array( $send, array( 'false', '0', 'no' ), true ) ? 0 : 1,
+		'import_source'    => $args['source'] ?? '',
+		'created_at'       => current_time( 'mysql' ),
+		'updated_at'       => current_time( 'mysql' ),
+	);
+	if ( $cfg['school'] ) {
+		$school              = $args['school_lock'] ?? sanitize_text_field( $row['school_name'] ?? '' );
+		$data['email']       = sanitize_email( $row['email'] ?? '' );
+		$data['phone']       = sanitize_text_field( $row['phone'] ?? '' );
+		$data['school_id']   = certificate_generator_import_school_id( $school, $dry_run, $ctx );
+		$data['school_name'] = $school;
+		certificate_generator_import_warn_row( $writer, $line, $name, $row['email'] ?? '', $data['email'], $raw_date, $date );
+	} else {
+		$data['city'] = sanitize_text_field( $row['place'] ?? '' );
+		certificate_generator_import_warn_row( $writer, $line, $name, '', '', $raw_date, $date );
+	}
+	if ( 'students' === $entity ) {
+		$data['photo_url'] = ! empty( $row['photo_url'] ) ? esc_url_raw( $row['photo_url'] ) : null;
+	}
+	if ( $extra ) {
+		$data['extra_fields'] = wp_json_encode( $extra );
+	}
+	return $data;
 }
 
+/**
+ * Import one CSV file of students, teachers or schools — or, with dry_run, run the same code
+ * without writing, so the preview's counts are the import's counts.
+ *
+ * @param array $args map (column => choice, see certificate_generator_import_map), date_order
+ *                    ('auto'|'dmy'|'mdy'), dry_run, update_existing (default true), source.
+ * @return array|string Error message, or: map, header, missing, extras, delimiter, encoding,
+ *                      report (null when required columns are missing), preview (first 5 rows),
+ *                      dates (every issue_date value), registered.
+ */
+function certificate_generator_import_run( string $entity, string $file, array $args = array() ) {
+	$cfg = certificate_generator_import_entities()[ $entity ];
 
+	// A School Coordinator's rows all go to their school: the school column isn't needed and is ignored.
+	$school_lock = function_exists( 'certificate_generator_user_school' ) ? certificate_generator_user_school() : null;
+	if ( null !== $school_lock ) {
+		if ( '' === $school_lock ) {
+			return __( 'No school is assigned to your account yet. Ask an administrator to set one on your user profile.', 'certificate-generator' );
+		}
+		if ( empty( $cfg['school'] ) ) {
+			return __( 'Only administrators can import schools.', 'certificate-generator' );
+		}
+		$cfg['required']     = array_values( array_diff( $cfg['required'], array( 'school_name' ) ) );
+		$args['school_lock'] = $school_lock;
+	}
+
+	$opened = certificate_generator_import_open( $file );
+	if ( is_string( $opened ) ) {
+		return $opened;
+	}
+	$handle = $opened['handle'];
+	list( $header, $line ) = certificate_generator_import_read_header( $handle, $opened['delimiter'] );
+	if ( ! $header ) {
+		fclose( $handle );
+		return __( 'CSV file is empty or invalid.', 'certificate-generator' );
+	}
+	$map    = certificate_generator_import_map( $cfg, $header, $args['map'] ?? array() );
+	$known  = array_merge( $cfg['required'], $cfg['optional'] );
+	$result = array(
+		'map'       => $map,
+		'header'    => $header,
+		'missing'   => array_values( array_diff( $cfg['required'], $map ) ),
+		'extras'    => array_values( array_filter( array_diff( $map, $known ) ) ),
+		'delimiter' => $opened['delimiter'],
+		'encoding'  => $opened['encoding'],
+		'report'    => null,
+		'preview'   => array(),
+		'dates'     => array(),
+		'long'      => array(), // dry run: [line, name] of names too wide for their template field
+	);
+	if ( $result['missing'] ) {
+		// Nothing can be imported yet; still read the dates so the check step can ask for their order.
+		while ( in_array( 'issue_date', $map, true ) && ( $data = fgetcsv( $handle, 0, $opened['delimiter'] ) ) !== false ) {
+			$row = certificate_generator_import_read_row( $data, $map );
+			if ( is_array( $row ) ) {
+				$result['dates'][] = $row['issue_date'];
+			}
+		}
+		fclose( $handle );
+		return $result;
+	}
+	if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
+		fclose( $handle );
+		return __( 'The plugin tables are unavailable — nothing was imported.', 'certificate-generator' );
+	}
+
+	$dry_run = ! empty( $args['dry_run'] );
+	$writer  = new CertificateGenerator_Import_Writer(
+		\CertificateGenerator\Database\CustomTables::instance()->get_table( $cfg['table'] ),
+		$cfg['identity'],
+		$cfg['name'],
+		$dry_run,
+		$args['update_existing'] ?? true
+	);
+	if ( ! $dry_run ) {
+		$writer->resume( $file, (string) wp_json_encode( array( $map, $args['date_order'] ?? 'auto', $args['update_existing'] ?? true ) ) );
+	}
+	$ctx = array(
+		'schools'    => array(),
+		'registered' => array(),
+	);
+	while ( ( $data = fgetcsv( $handle, 0, $opened['delimiter'] ) ) !== false ) {
+		++$line;
+		if ( $writer->done_earlier( $line ) || ! array_filter( $data, fn( $v ) => null !== $v && '' !== $v ) ) {
+			continue;
+		}
+		$row = certificate_generator_import_read_row( $data, $map );
+		if ( is_string( $row ) ) {
+			$writer->skip( $line, (string) ( $data[0] ?? '' ), $row );
+			continue;
+		}
+		unset( $row[''] );
+		$result['dates'][] = $row['issue_date'] ?? '';
+		$insert            = certificate_generator_import_build_row( $entity, $cfg, $row, $result['extras'], $args, $ctx, $writer, $line );
+		if ( null === $insert ) {
+			continue;
+		}
+		if ( count( $result['preview'] ) < 5 ) {
+			$result['preview'][] = $insert;
+		}
+		if ( $dry_run && class_exists( '\CertificateGenerator\Services\PreSendCheck' )
+			&& \CertificateGenerator\Services\PreSendCheck::name_too_long( $insert[ $cfg['name'] ], $insert['certificate_type'], (string) $insert['issue_date'], $entity ) ) {
+			$result['long'][] = array( $line, $insert[ $cfg['name'] ] );
+		}
+		if ( ! $writer->add( $line, $insert ) ) {
+			break;
+		}
+	}
+	fclose( $handle );
+	$result['report']     = $writer->report();
+	$result['registered'] = $ctx['registered'];
+	if ( ! $dry_run && function_exists( 'certificate_generator_flush_filter_caches' ) ) {
+		certificate_generator_flush_filter_caches();
+	}
+	return $result;
+}
+
+/** " Extra fields registered for template: …" for the students report. */
+function certificate_generator_import_extra_note( array $registered ): string {
+	$by_status = array(
+		'registered' => array(),
+		'data_only'  => array(),
+	);
+	foreach ( $registered as $type_fields ) {
+		foreach ( $type_fields as $slug => $status ) {
+			$by_status[ $status ][ $slug ] = $slug;
+		}
+	}
+	$note = '';
+	if ( $by_status['registered'] ) {
+		$note .= ' Extra fields registered for template: ' . implode( ', ', $by_status['registered'] ) . '.';
+	}
+	if ( $by_status['data_only'] ) {
+		$note .= ' Additional fields saved (data only, beyond template limit): ' . implode( ', ', $by_status['data_only'] ) . '.';
+	}
+	return $note;
+}
+
+/**
+ * Sample CSV for a record type as a data: URL — built from the same field lists the importer
+ * checks, plus the extra fields templates already use, so it can't drift from the importer.
+ */
+function certificate_generator_import_sample_csv_url( string $entity ): string {
+	$cfg     = certificate_generator_import_entities()[ $entity ];
+	$example = array(
+		'student_name'     => 'Asha Verma',
+		'teacher_name'     => 'Ravi Kumar',
+		'email'            => 'asha@example.com',
+		'school_name'      => 'Green Valley School',
+		'place'            => 'Pune',
+		'issue_date'       => '25-08-2026',
+		'certificate_type' => 'Participation',
+		'phone'            => '98765 43210',
+		'event_code'       => '',
+		'send_email'       => 'yes',
+		'photo_url'        => '',
+	);
+	$columns = array_values( array_diff( array_merge( $cfg['required'], $cfg['optional'] ), array( 'status', 'year' ) ) );
+	if ( ! empty( $cfg['register_fields'] ) && class_exists( 'CertificateGenerator_Field_Schema' ) ) {
+		foreach ( CertificateGenerator_Field_Schema::get_all_registered_types() as $type ) {
+			$columns = array_merge( $columns, array_diff( (array) $type['fields'], $columns ) );
+		}
+	}
+	$csv = fopen( 'php://temp', 'r+' );
+	fwrite( $csv, "﻿" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- BOM so Excel opens it as UTF-8
+	certificate_generator_fputcsv( $csv, $columns );
+	certificate_generator_fputcsv( $csv, array_map( fn( $c ) => $example[ $c ] ?? '', $columns ) );
+	rewind( $csv );
+	$data = (string) stream_get_contents( $csv );
+	fclose( $csv );
+	return 'data:text/csv;base64,' . base64_encode( $data ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+}
+
+/** Private path of an uploaded file kept between the preview and the import; '' for an id that isn't this user's. */
+function certificate_generator_import_job_path( string $job ): string {
+	if ( ! preg_match( '/^import-' . get_current_user_id() . '-[a-f0-9]{32}$/', $job ) ) {
+		return '';
+	}
+	return certificate_generator_private_zip_dir() . '/' . $job . '.csv';
+}
+
+/** Keep the upload for the preview → import steps. The daily cron deletes ones left after 2 hours. */
+function certificate_generator_import_store_upload( string $tmp ): string {
+	$job  = 'import-' . get_current_user_id() . '-' . bin2hex( random_bytes( 16 ) );
+	$path = certificate_generator_import_job_path( $job );
+	// $tmp is PHP's own upload temp path ($_FILES tmp_name), never request data.
+	$ok = copy( $tmp, $path );
+	return $ok ? $job : '';
+}
+
+/** The import page for students, teachers or schools: upload → check (mapping + dry run) → import. */
+function certificate_generator_import_page( string $entity ): void {
+	$cfg   = certificate_generator_import_entities()[ $entity ];
+	$nonce = "bulk_import_{$entity}_nonce";
+	$field = "{$entity}_csv";
+
+	certificate_generator_ui_card_open( sprintf( 'Upload %s CSV', $entity ), array( 'icon' => 'upload' ) );
+	echo '<form method="post" enctype="multipart/form-data" data-cg-busy>';
+	wp_nonce_field( $nonce, '_wpnonce_bulk_import' );
+	echo '<table class="form-table"><tr><th><label for="' . esc_attr( $field ) . '">' . esc_html__( 'Upload CSV File', 'certificate-generator' ) . '</label></th>';
+	echo '<td><input type="file" name="' . esc_attr( $field ) . '" id="' . esc_attr( $field ) . '" accept=".csv,.txt" required />';
+	echo ' <a class="button-link" download="' . esc_attr( "sample-{$entity}.csv" ) . '" href="' . esc_attr( certificate_generator_import_sample_csv_url( $entity ) ) . '">' . esc_html__( 'Download a sample CSV', 'certificate-generator' ) . '</a></td></tr></table>';
+	echo '<p class="cg-hint">' . esc_html__( 'Comma, semicolon or tab separated; UTF-8 or Excel\'s Windows encoding. You\'ll see how the columns map and what will change before anything is saved.', 'certificate-generator' ) . '</p>';
+	$school_lock = function_exists( 'certificate_generator_user_school' ) ? certificate_generator_user_school() : null;
+	if ( null !== $school_lock && '' !== $school_lock ) {
+		/* translators: %s: school name */
+		echo '<p class="cg-hint"><strong>' . esc_html( sprintf( __( 'Every row is saved to %s.', 'certificate-generator' ), $school_lock ) ) . '</strong></p>';
+	}
+	echo '<p class="submit"><input type="submit" name="' . esc_attr( "preview_{$entity}" ) . '" value="' . esc_attr__( 'Upload and check', 'certificate-generator' ) . '" class="button button-primary" /></p>';
+	echo '</form>';
+	certificate_generator_ui_card_close();
+
+	// phpcs:disable WordPress.Security.NonceVerification.Missing -- checked by check_admin_referer() before any use below
+	$direct  = isset( $_POST[ "submit_{$entity}" ] ); // one-step upload + import (scripts, bin/bench-bulk-import.php)
+	$preview = isset( $_POST[ "preview_{$entity}" ] );
+	$import  = isset( $_POST[ "import_{$entity}" ] );
+	if ( ! $direct && ! $preview && ! $import ) {
+		return;
+	}
+	check_admin_referer( $nonce, '_wpnonce_bulk_import' );
+	if ( ! current_user_can( 'certificate_generator_issue' ) ) {
+		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
+	}
+
+	$upload = $_FILES[ $field ] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- tmp_name is set by PHP; the name is sanitized below
+	$job    = sanitize_text_field( wp_unslash( $_POST['cg_import_job'] ?? '' ) );
+	$source = sanitize_file_name( wp_unslash( $_POST['cg_import_source'] ?? '' ) );
+	if ( $upload && UPLOAD_ERR_NO_FILE !== (int) $upload['error'] ) {
+		if ( UPLOAD_ERR_OK !== (int) $upload['error'] ) {
+			certificate_generator_ui_notice( 'error', 'File upload error. Please try again.', false );
+			return;
+		}
+		$source = sanitize_file_name( $upload['name'] ?? '' );
+		$job    = '';
+	}
+	$args = array(
+		'map'             => array_map( 'sanitize_key', (array) wp_unslash( $_POST['cg_map'] ?? array() ) ), // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized per value
+		'date_order'      => sanitize_key( wp_unslash( $_POST['cg_date_order'] ?? '' ) ),
+		'update_existing' => 'keep' !== sanitize_key( wp_unslash( $_POST['cg_existing'] ?? 'update' ) ),
+		'source'          => $source,
+	);
+	// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+	if ( $direct ) {
+		$args['date_order'] = 'auto';
+		$file               = (string) ( $upload['tmp_name'] ?? '' );
+	} else {
+		if ( '' === $job && $upload ) {
+			$job = certificate_generator_import_store_upload( (string) $upload['tmp_name'] );
+		}
+		$file = certificate_generator_import_job_path( $job );
+		if ( '' === $file || ! is_readable( $file ) ) {
+			certificate_generator_ui_notice( 'error', __( 'That upload has expired — please choose the file again.', 'certificate-generator' ), false );
+			return;
+		}
+	}
+
+	if ( $preview ) {
+		certificate_generator_import_render_check( $entity, $cfg, $job, $args, certificate_generator_import_run( $entity, $file, array( 'dry_run' => true ) + $args ) );
+		return;
+	}
+
+	$result = certificate_generator_import_run( $entity, $file, $args );
+	if ( is_string( $result ) || $result['missing'] ) {
+		$message = is_string( $result ) ? $result : '<strong>Invalid CSV format.</strong><br><br><strong>Missing required fields:</strong> ' . esc_html( implode( ', ', $result['missing'] ) ) . '<br><br><strong>Required fields:</strong> ' . implode( ', ', $cfg['required'] );
+		certificate_generator_ui_notice( 'error', is_string( $result ) ? esc_html( $message ) : $message, false );
+		return;
+	}
+	if ( $result['extras'] ) {
+		certificate_generator_ui_notice( 'info', '<strong>Extra fields detected:</strong> ' . esc_html( implode( ', ', $result['extras'] ) ) . ' — ' . ( empty( $cfg['register_fields'] ) ? 'these will be saved to extra_fields for each record.' : 'these will be auto-registered for each row\'s certificate type.' ) );
+	}
+	$stopped = (int) $result['report']['stopped_at'];
+	certificate_generator_import_render_report( $cfg['label'], $result['report'], certificate_generator_import_extra_note( $result['registered'] ?? array() ), $import && $stopped ? __( 'Continuing automatically…', 'certificate-generator' ) : '' );
+
+	if ( $import && $stopped ) {
+		// ponytail: one page load per pass (the writer stops before the time limit); an AJAX progress bar can replace this auto-submit if passes feel slow.
+		echo '<form method="post" id="cg-import-continue" data-cg-busy>';
+		wp_nonce_field( $nonce, '_wpnonce_bulk_import' );
+		certificate_generator_import_hidden_args( $job, $args );
+		echo '<input type="hidden" name="' . esc_attr( "import_{$entity}" ) . '" value="1" />';
+		echo '<p><button class="button">' . esc_html__( 'Continue now', 'certificate-generator' ) . '</button></p></form>';
+		echo '<script>setTimeout(function(){document.getElementById("cg-import-continue").submit();},800);</script>';
+	} elseif ( $import ) {
+		wp_delete_file( $file );
+	}
+}
+
+/** Hidden fields that carry the upload and the user's choices from one step to the next. */
+function certificate_generator_import_hidden_args( string $job, array $args ): void {
+	echo '<input type="hidden" name="cg_import_job" value="' . esc_attr( $job ) . '" />';
+	echo '<input type="hidden" name="cg_import_source" value="' . esc_attr( $args['source'] ) . '" />';
+	echo '<input type="hidden" name="cg_date_order" value="' . esc_attr( $args['date_order'] ) . '" />';
+	echo '<input type="hidden" name="cg_existing" value="' . ( $args['update_existing'] ? 'update' : 'keep' ) . '" />';
+	foreach ( $args['map'] as $i => $choice ) {
+		echo '<input type="hidden" name="cg_map[' . (int) $i . ']" value="' . esc_attr( $choice ) . '" />';
+	}
+}
+
+/** The check step: how each column maps, the date order, duplicates, and the dry-run counts. */
+function certificate_generator_import_render_check( string $entity, array $cfg, string $job, array $args, $result ): void {
+	if ( is_string( $result ) ) {
+		certificate_generator_ui_notice( 'error', esc_html( $result ), false );
+		return;
+	}
+	$known      = array_merge( $cfg['required'], $cfg['optional'] );
+	$guess      = certificate_generator_import_guess_date_order( $result['dates'] );
+	$date_order = $args['date_order'] ?: ( '' === $guess ? '' : $guess );
+	$report     = $result['report'];
+	$delimiters = array(
+		','  => __( 'comma', 'certificate-generator' ),
+		';'  => __( 'semicolon', 'certificate-generator' ),
+		"\t" => __( 'tab', 'certificate-generator' ),
+	);
+	$first_row  = $result['preview'][0] ?? array();
+
+	certificate_generator_ui_card_open( __( 'Check the import', 'certificate-generator' ), array( 'icon' => 'yes-alt' ) );
+	echo '<p class="cg-hint">' . esc_html(
+		sprintf(
+			/* translators: 1: file name, 2: delimiter name, 3: encoding, 4: column count */
+			__( '%1$s — %2$s separated, %3$s, %4$d columns.', 'certificate-generator' ),
+			$args['source'],
+			$delimiters[ $result['delimiter'] ],
+			$result['encoding'],
+			count( $result['header'] )
+		)
+	) . ( 'UTF-8' !== $result['encoding'] ? ' ' . esc_html__( 'Converted to UTF-8.', 'certificate-generator' ) : '' ) . '</p>';
+
+	echo '<form method="post" data-cg-busy>';
+	wp_nonce_field( "bulk_import_{$entity}_nonce", '_wpnonce_bulk_import' );
+	echo '<input type="hidden" name="cg_import_job" value="' . esc_attr( $job ) . '" />';
+	echo '<input type="hidden" name="cg_import_source" value="' . esc_attr( $args['source'] ) . '" />';
+
+	echo '<div class="cg-table-wrap"><table class="widefat striped cg-table cg-import-map"><thead><tr><th>' . esc_html__( 'Column in your file', 'certificate-generator' ) . '</th><th>' . esc_html__( 'Imports as', 'certificate-generator' ) . '</th></tr></thead><tbody>';
+	foreach ( $result['header'] as $i => $h ) {
+		$target = $result['map'][ $i ];
+		echo '<tr><td><strong>' . esc_html( '' === $h ? '(blank)' : $h ) . '</strong></td><td><select name="cg_map[' . (int) $i . ']" aria-label="' . esc_attr( sprintf( 'Imports %s as', $h ) ) . '">';
+		foreach ( $known as $key ) {
+			$label = $key . ( in_array( $key, $cfg['required'], true ) ? ' *' : '' );
+			echo '<option value="' . esc_attr( $key ) . '"' . selected( $target, $key, false ) . '>' . esc_html( $label ) . '</option>';
+		}
+		$slug = certificate_generator_import_norm_header( $h );
+		if ( '' !== $slug && ! in_array( $slug, $known, true ) ) {
+			echo '<option value="__extra"' . selected( $target, $slug, false ) . '>' . esc_html( sprintf( 'Extra field (%s)', $slug ) ) . '</option>';
+		}
+		echo '<option value="__ignore"' . selected( $target, '', false ) . '>' . esc_html__( "Don't import", 'certificate-generator' ) . '</option>';
+		echo '</select></td></tr>';
+	}
+	echo '</tbody></table></div>';
+
+	if ( $result['missing'] ) {
+		certificate_generator_ui_notice( 'error', '<strong>' . esc_html__( 'Required columns not mapped:', 'certificate-generator' ) . '</strong> ' . esc_html( implode( ', ', $result['missing'] ) ) . '. ' . esc_html__( 'Pick the column that holds each one above, then check again.', 'certificate-generator' ), false );
+	}
+
+	$needs_date = '' === $date_order;
+	echo '<table class="form-table"><tr><th><label for="cg_date_order">' . esc_html__( 'Issue dates are written as', 'certificate-generator' ) . '</label></th><td><select name="cg_date_order" id="cg_date_order">';
+	if ( $needs_date ) {
+		echo '<option value="">' . esc_html__( '— choose —', 'certificate-generator' ) . '</option>';
+	}
+	foreach (
+		array(
+			'dmy'  => __( 'Day / month / year (25/08/2026)', 'certificate-generator' ),
+			'mdy'  => __( 'Month / day / year (08/25/2026)', 'certificate-generator' ),
+			'auto' => __( 'Detect each date (ISO 2026-08-25, "25 August 2026", …)', 'certificate-generator' ),
+		) as $value => $label
+	) {
+		echo '<option value="' . esc_attr( $value ) . '"' . selected( $date_order, $value, false ) . '>' . esc_html( $label ) . '</option>';
+	}
+	echo '</select>';
+	if ( $needs_date ) {
+		echo '<p class="description cg-text-warning">' . esc_html__( 'Dates like 03/04/2026 could be 3 April or 4 March. Choose the order your file uses.', 'certificate-generator' ) . '</p>';
+	}
+	echo '</td></tr><tr><th>' . esc_html__( 'Rows that match an existing record', 'certificate-generator' ) . '</th><td>';
+	echo '<label><input type="radio" name="cg_existing" value="update"' . checked( $args['update_existing'], true, false ) . '> ' . esc_html__( 'Update the record with the file\'s values', 'certificate-generator' ) . '</label><br>';
+	echo '<label><input type="radio" name="cg_existing" value="keep"' . checked( $args['update_existing'], false, false ) . '> ' . esc_html__( 'Leave the record unchanged', 'certificate-generator' ) . '</label>';
+	echo '<p class="description">' . esc_html( sprintf( 'A row matches when its %s, certificate type and issue date are the same.', implode( ' + ', $cfg['identity'] ) ) ) . '</p></td></tr></table>';
+
+	if ( $report ) {
+		$c = $report['counts'];
+		echo '<div class="notice notice-info inline"><p><strong>' . esc_html(
+			sprintf(
+				/* translators: 1: rows, 2: new, 3: updated, 4: merged, 5: skipped */
+				__( '%1$d rows: %2$d new, %3$d update existing records, %4$d merge into an earlier row of this file, %5$d will be skipped.', 'certificate-generator' ),
+				$c['read'],
+				$c['new'],
+				$c['updated'],
+				$c['merged'],
+				$c['skipped']
+			)
+		) . '</strong> ' . esc_html__( 'Nothing has been saved yet.', 'certificate-generator' ) . '</p></div>';
+		certificate_generator_import_render_issues( $report['issues'], 20 );
+		if ( $result['long'] ) {
+			certificate_generator_ui_notice(
+				'warning',
+				esc_html(
+					sprintf(
+						/* translators: 1: number of names, 2: example rows */
+						__( '%1$d names are too long for their template field even at the smallest font size, so they will wrap onto a second line: %2$s', 'certificate-generator' ),
+						count( $result['long'] ),
+						implode( ', ', array_map( fn( $l ) => sprintf( 'row %d (%s)', $l[0], $l[1] ), array_slice( $result['long'], 0, 5 ) ) ) . ( count( $result['long'] ) > 5 ? ', …' : '' )
+					)
+				),
+				false
+			);
+		}
+
+		if ( $result['preview'] ) {
+			$cols = array_keys( $first_row );
+			$cols = array_values( array_diff( $cols, array( 'event_id', 'school_id', 'year', 'status', 'import_source', 'created_at', 'updated_at' ) ) );
+			echo '<h3>' . esc_html__( 'First rows as they will be saved', 'certificate-generator' ) . '</h3><div class="cg-table-wrap"><table class="widefat striped cg-table"><thead><tr>';
+			foreach ( $cols as $col ) {
+				echo '<th>' . esc_html( $col ) . '</th>';
+			}
+			echo '</tr></thead><tbody>';
+			foreach ( $result['preview'] as $row ) {
+				echo '<tr>';
+				foreach ( $cols as $col ) {
+					echo '<td>' . esc_html( (string) ( $row[ $col ] ?? '' ) ) . '</td>';
+				}
+				echo '</tr>';
+			}
+			echo '</tbody></table></div>';
+		}
+	}
+
+	$blocked = $result['missing'] || $needs_date;
+	echo '<p class="submit"><input type="submit" name="' . esc_attr( "preview_{$entity}" ) . '" value="' . esc_attr__( 'Check again', 'certificate-generator' ) . '" class="button" /> ';
+	echo '<input type="submit" name="' . esc_attr( "import_{$entity}" ) . '" value="' . esc_attr( sprintf( 'Import %d rows', $report ? $report['counts']['new'] + $report['counts']['updated'] : 0 ) ) . '" class="button button-primary"' . disabled( $blocked, true, false ) . ' /></p>';
+	if ( $needs_date && ! $result['missing'] ) {
+		echo '<p class="description">' . esc_html__( 'Choose the date order, then check again to enable Import.', 'certificate-generator' ) . '</p>';
+	}
+	echo '</form>';
+	certificate_generator_ui_card_close();
+}
+
+function certificate_generator_bulk_import_students() {
+	certificate_generator_import_page( 'students' );
+}
 
 function certificate_generator_bulk_import_teachers() {
-	// Display the import form first so it stays visible after an import (success or error).
-	certificate_generator_ui_card_open( 'Upload teachers CSV', array( 'icon' => 'upload' ) );
-	echo '<form method="post" enctype="multipart/form-data" data-cg-busy>';
-	wp_nonce_field( 'bulk_import_teachers_nonce', '_wpnonce_bulk_import' );
-	echo '<table class="form-table">';
-	echo '<tr><th><label for="teachers_csv">Upload CSV File</label></th>';
-	echo '<td><input type="file" name="teachers_csv" id="teachers_csv" accept=".csv" required /></td></tr>';
-	echo '</table>';
-	echo '<p class="cg-hint">' . esc_html__( 'Large files are imported in passes: if the server time limit is hit, upload the same file again to continue.', 'certificate-generator' ) . '</p>';
-	echo '<p class="submit"><input type="submit" name="submit_teachers" value="Import Teachers" class="button button-primary" /></p>';
-	echo '</form>';
-	certificate_generator_ui_card_close();
-
-	// Check for file upload and nonce validation
-	if ( isset( $_POST['submit_teachers'] ) && isset( $_FILES['teachers_csv'] ) ) {
-		if ( check_admin_referer( 'bulk_import_teachers_nonce', '_wpnonce_bulk_import' ) ) {
-			if ( ! current_user_can( 'manage_options' ) ) {
-				wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
-			}
-			$file          = $_FILES['teachers_csv']['tmp_name']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- temp path set by PHP, not by the request; nonce and capability checked above
-			$file_error    = (int) ( $_FILES['teachers_csv']['error'] ?? UPLOAD_ERR_NO_FILE );
-			$import_source = sanitize_file_name( $_FILES['teachers_csv']['name'] ?? '' );
-
-			// Error handling for file upload
-			if ( $file_error !== UPLOAD_ERR_OK ) {
-				certificate_generator_ui_notice( 'error', 'File upload error. Please try again.', false );
-				return;
-			}
-
-			if ( ( $handle = fopen( $file, 'r' ) ) !== false ) {
-				// Read and strip BOM if present (UTF-8 BOM: EF BB BF)
-				$bom = fread( $handle, 3 );
-				if ( $bom !== "\xEF\xBB\xBF" ) {
-					// No BOM found, rewind to beginning
-					rewind( $handle );
-				}
-
-				// Read the first row as the header, skip empty lines
-				$header      = false;
-				$header_line = 0; // CSV row of the header, so data rows report the row a spreadsheet shows
-				while ( ( $row = fgetcsv( $handle, 0, ',' ) ) !== false ) {
-					++$header_line;
-					// Skip empty rows (rows with only null or empty values)
-					if ( array_filter(
-						$row,
-						function ( $val ) {
-							return $val !== null && $val !== ''; }
-					) ) {
-						$header = $row;
-						break;
-					}
-				}
-
-				if ( $header === false ) {
-					certificate_generator_ui_notice( 'error', 'CSV file is empty or invalid.', false );
-					fclose( $handle );
-					return;
-				}
-
-				// Trim whitespace from all header values, handle null values
-				$header      = array_map(
-					function ( $val ) {
-						return trim( (string) $val );
-					},
-					$header
-				);
-				$header_keys = array_map(
-					function ( $key ) {
-						return strtolower( preg_replace( '/[^a-z0-9_\-]/', '', $key ) );
-					},
-					$header
-				);
-
-				// Validate headers match the required fields
-				$required_fields = array(
-					'teacher_name',
-					'email',
-					'school_name',
-					'issue_date',
-					'certificate_type',
-				);
-
-				// Check only for missing required fields — never reject extra columns
-				$known_optional = array( 'status', 'send_email', 'phone', 'phone_number', 'year', 'event_code' ); // system columns not registered as PDF field slots
-				$missing_fields = array_diff( $required_fields, $header_keys );
-				$extra_columns  = array_values( array_filter( array_diff( $header_keys, array_merge( $required_fields, $known_optional ) ) ) );
-
-				if ( ! empty( $missing_fields ) ) {
-					$error_msg  = '<strong>Invalid CSV format.</strong><br><br>';
-					$error_msg .= '<strong>Missing required fields:</strong> ' . esc_html( implode( ', ', $missing_fields ) ) . '<br>';
-					$error_msg .= '<br><strong>Required fields:</strong> ' . implode( ', ', $required_fields );
-					certificate_generator_ui_notice( 'error', $error_msg, false );
-					fclose( $handle );
-					return;
-				}
-
-				if ( ! empty( $extra_columns ) ) {
-					certificate_generator_ui_notice( 'info', '<strong>Extra fields detected:</strong> ' . esc_html( implode( ', ', $extra_columns ) ) . ' — these will be saved to extra_fields for each teacher.' );
-				}
-
-				// Process each row. $line is the CSV row number (header included), as a spreadsheet shows it.
-				if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
-					certificate_generator_debug_log( '[CertGen] certificate_generator_bulk_import_teachers: CustomTables class not found — nothing imported.' );
-					certificate_generator_ui_notice( 'error', 'Teacher table unavailable — nothing was imported.', false );
-					fclose( $handle );
-					return;
-				}
-				$tables          = \CertificateGenerator\Database\CustomTables::instance();
-				$school_table    = $tables->get_table( 'schools' );
-				$writer          = new CertificateGenerator_Import_Writer( $tables->get_table( 'teachers' ), array( 'email', 'teacher_name', 'school_name' ), 'teacher_name' );
-				$writer->resume( $file );
-				$line            = $header_line;
-				$school_id_cache = array(); // school_name => id, avoids a SELECT+possible INSERT per row when many teachers share a school
-				while ( ( $data = fgetcsv( $handle, 0, ',' ) ) !== false ) {
-					++$line;
-					if ( $writer->done_earlier( $line ) ) {
-						continue;
-					}
-
-					// Skip empty rows
-					if ( ! array_filter(
-						$data,
-						function ( $val ) {
-							return $val !== null && $val !== ''; }
-					) ) {
-						continue;
-					}
-
-					$teacher_data = certificate_generator_import_read_row( $data, $header_keys );
-					if ( is_string( $teacher_data ) ) {
-						$writer->skip( $line, (string) ( $data[0] ?? '' ), $teacher_data );
-						continue;
-					}
-					$teacher_name = sanitize_text_field( $teacher_data['teacher_name'] );
-					$cert_type    = sanitize_text_field( $teacher_data['certificate_type'] );
-					if ( '' === $teacher_name || '' === $cert_type ) {
-						$writer->skip( $line, $teacher_name, ( '' === $teacher_name ? 'teacher_name' : 'certificate_type' ) . ' is empty' );
-						continue;
-					}
-
-					$school_name = sanitize_text_field( $teacher_data['school_name'] );
-
-					$_t_issue_raw    = sanitize_text_field( $teacher_data['issue_date'] );
-					$_t_issue_stored = class_exists( '\CertificateGenerator\Helpers\DateHelper' )
-						? ( \CertificateGenerator\Helpers\DateHelper::to_storage( $_t_issue_raw ) ?? $_t_issue_raw )
-						: $_t_issue_raw;
-
-					// Ensure school exists (cached — many rows share the same school)
-					if ( isset( $school_id_cache[ $school_name ] ) ) {
-						$school_id = $school_id_cache[ $school_name ];
-					} else {
-						$school_id = $GLOBALS['wpdb']->get_var(
-							$GLOBALS['wpdb']->prepare(
-								"SELECT id FROM $school_table WHERE school_name = %s LIMIT 1",
-								$school_name
-							)
-						);
-						if ( ! $school_id ) {
-							$GLOBALS['wpdb']->insert(
-								$school_table,
-								array(
-									'school_name' => $school_name,
-									'status'      => 'active',
-									'created_at'  => current_time( 'mysql' ),
-								)
-							);
-							$school_id = $GLOBALS['wpdb']->insert_id;
-						}
-						$school_id_cache[ $school_name ] = $school_id;
-					}
-
-					// Build extra fields from extra columns
-					$extra_fields = array();
-					if ( ! empty( $extra_columns ) ) {
-						foreach ( $extra_columns as $slug ) {
-							$val = $teacher_data[ $slug ] ?? '';
-							if ( $val !== '' ) {
-								$extra_fields[ $slug ] = sanitize_text_field( $val );
-							}
-						}
-					}
-
-					// Accept both 'phone' (SQL export) and 'phone_number' (legacy export)
-					$phone = sanitize_text_field( $teacher_data['phone'] ?? $teacher_data['phone_number'] ?? '' );
-
-					// send_email: optional CSV column. false/0/no → 0 (opt-out), anything else → 1 (default).
-					$_se_raw_t    = strtolower( trim( $teacher_data['send_email'] ?? '1' ) );
-					$send_email_t = in_array( $_se_raw_t, array( 'false', '0', 'no' ), true ) ? 0 : 1;
-
-					$insert_data = array(
-						'teacher_name'     => $teacher_name,
-						'email'            => sanitize_email( $teacher_data['email'] ),
-						'phone'            => $phone,
-						'school_id'        => $school_id,
-						'school_name'      => $school_name,
-						'event_id'         => certificate_generator_resolve_event_id( $teacher_data['event_code'] ?? '' ),
-						'certificate_type' => $cert_type,
-						'issue_date'       => $_t_issue_stored ?: null,
-						'year'             => function_exists( 'certificate_generator_year_from_issue_date' ) ? certificate_generator_year_from_issue_date( $_t_issue_stored ) : null,
-						'status'           => 'active',
-						'send_email'       => $send_email_t,
-						'import_source'    => $import_source,
-						'created_at'       => current_time( 'mysql' ),
-						'updated_at'       => current_time( 'mysql' ),
-					);
-					if ( ! empty( $extra_fields ) ) {
-						$insert_data['extra_fields'] = wp_json_encode( $extra_fields );
-					}
-					certificate_generator_import_warn_row( $writer, $line, $teacher_name, $teacher_data['email'], $insert_data['email'], $_t_issue_raw, $_t_issue_stored );
-
-					// Same record = email + name + school + certificate type + issue date; rows
-					// without an email are always new.
-					if ( ! $writer->add( $line, $insert_data ) ) {
-						break;
-					}
-				}
-				fclose( $handle );
-				$report = $writer->report();
-
-				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
-					certificate_generator_flush_filter_caches();
-				}
-				certificate_generator_import_render_report( 'teachers', $report );
-			} else {
-				certificate_generator_ui_notice( 'error', 'Unable to open the file. Please check the file and try again.', false );
-			}
-		}
-	}
-
+	certificate_generator_import_page( 'teachers' );
 }
-
-
-
 
 function certificate_generator_bulk_import_schools() {
-	// Display the import form first so it stays visible after an import (success or error).
-	certificate_generator_ui_card_open( 'Upload schools CSV', array( 'icon' => 'upload' ) );
-	echo '<form method="post" enctype="multipart/form-data" data-cg-busy>';
-	wp_nonce_field( 'bulk_import_schools_nonce', '_wpnonce_bulk_import' );
-	echo '<table class="form-table">';
-	echo '<tr><th><label for="schools_csv">Upload CSV File</label></th>';
-	echo '<td><input type="file" name="schools_csv" id="schools_csv" accept=".csv" required /></td></tr>';
-	echo '</table>';
-	echo '<p class="cg-hint">' . esc_html__( 'Large files are imported in passes: if the server time limit is hit, upload the same file again to continue.', 'certificate-generator' ) . '</p>';
-	echo '<p class="submit"><input type="submit" name="submit_schools" value="Import Schools" class="button button-primary" /></p>';
-	echo '</form>';
-	certificate_generator_ui_card_close();
-
-	// Check for file upload and nonce validation
-	if ( isset( $_POST['submit_schools'] ) && isset( $_FILES['schools_csv'] ) ) {
-		if ( check_admin_referer( 'bulk_import_schools_nonce', '_wpnonce_bulk_import' ) ) {
-			if ( ! current_user_can( 'manage_options' ) ) {
-				wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
-			}
-			$file          = $_FILES['schools_csv']['tmp_name']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- temp path set by PHP, not by the request; nonce and capability checked above
-			$file_error    = (int) ( $_FILES['schools_csv']['error'] ?? UPLOAD_ERR_NO_FILE );
-			$import_source = sanitize_file_name( $_FILES['schools_csv']['name'] ?? '' );
-
-			// Error handling for file upload
-			if ( $file_error !== UPLOAD_ERR_OK ) {
-				certificate_generator_ui_notice( 'error', 'File upload error. Please try again.', false );
-				return;
-			}
-
-			if ( ( $handle = fopen( $file, 'r' ) ) !== false ) {
-				// Read and strip BOM if present (UTF-8 BOM: EF BB BF)
-				$bom = fread( $handle, 3 );
-				if ( $bom !== "\xEF\xBB\xBF" ) {
-					// No BOM found, rewind to beginning
-					rewind( $handle );
-				}
-
-				// Read the first row as the header, skip empty lines
-				$header      = false;
-				$header_line = 0; // CSV row of the header, so data rows report the row a spreadsheet shows
-				while ( ( $row = fgetcsv( $handle, 0, ',' ) ) !== false ) {
-					++$header_line;
-					// Skip empty rows (rows with only null or empty values)
-					if ( array_filter(
-						$row,
-						function ( $val ) {
-							return $val !== null && $val !== ''; }
-					) ) {
-						$header = $row;
-						break;
-					}
-				}
-
-				if ( $header === false ) {
-					certificate_generator_ui_notice( 'error', 'CSV file is empty or invalid.', false );
-					fclose( $handle );
-					return;
-				}
-
-				// Trim whitespace from all header values, handle null values
-				$header      = array_map(
-					function ( $val ) {
-						return trim( (string) $val );
-					},
-					$header
-				);
-				$header_keys = array_map(
-					function ( $key ) {
-						return strtolower( preg_replace( '/[^a-z0-9_\-]/', '', $key ) );
-					},
-					$header
-				);
-
-				// Validate headers — accept 'place' (current export) or 'city' (old SQL export) for the city field
-				$has_place       = in_array( 'place', $header_keys, true );
-				$has_city        = in_array( 'city', $header_keys, true );
-				$required_fields = array(
-					'school_name',
-					( $has_place || ! $has_city ) ? 'place' : 'city',
-					'issue_date',
-					'certificate_type',
-				);
-
-				// Check only for missing required fields — never reject extra columns
-				// Also treat the unused city/place alias as an allowed extra.
-				$known_optional = array( 'status', 'send_email', 'year', 'event_code', $has_place ? 'city' : 'place' );
-				$missing_fields = array_diff( $required_fields, $header_keys );
-				$extra_columns  = array_values( array_filter( array_diff( $header_keys, array_merge( $required_fields, $known_optional ) ) ) );
-
-				if ( ! empty( $missing_fields ) ) {
-					$error_msg  = '<strong>Invalid CSV format.</strong><br><br>';
-					$error_msg .= '<strong>Missing required fields:</strong> ' . esc_html( implode( ', ', $missing_fields ) ) . '<br>';
-					$error_msg .= '<br><strong>Required fields:</strong> ' . implode( ', ', $required_fields );
-					certificate_generator_ui_notice( 'error', $error_msg, false );
-					fclose( $handle );
-					return;
-				}
-
-				if ( ! empty( $extra_columns ) ) {
-					certificate_generator_ui_notice( 'info', '<strong>Extra fields detected:</strong> ' . esc_html( implode( ', ', $extra_columns ) ) . ' — these will be saved to extra_fields for each school.' );
-				}
-
-				// Process each row. $line is the CSV row number (header included), as a spreadsheet shows it.
-				if ( ! class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
-					certificate_generator_debug_log( '[CertGen] certificate_generator_bulk_import_schools: CustomTables class not found — nothing imported.' );
-					certificate_generator_ui_notice( 'error', 'School table unavailable — nothing was imported.', false );
-					fclose( $handle );
-					return;
-				}
-				// Same record = school name + certificate type + issue date; a type-less school row
-				// the students/teachers import auto-created is claimed instead of duplicated.
-				$writer = new CertificateGenerator_Import_Writer( \CertificateGenerator\Database\CustomTables::instance()->get_table( 'schools' ), array( 'school_name' ), 'school_name' );
-				$writer->resume( $file );
-				$line   = $header_line;
-				while ( ( $data = fgetcsv( $handle, 0, ',' ) ) !== false ) {
-					++$line;
-					if ( $writer->done_earlier( $line ) ) {
-						continue;
-					}
-
-					// Skip empty rows
-					if ( ! array_filter(
-						$data,
-						function ( $val ) {
-							return $val !== null && $val !== ''; }
-					) ) {
-						continue;
-					}
-
-					$school_data = certificate_generator_import_read_row( $data, $header_keys );
-					if ( is_string( $school_data ) ) {
-						$writer->skip( $line, (string) ( $data[0] ?? '' ), $school_data );
-						continue;
-					}
-					$school_name = sanitize_text_field( $school_data['school_name'] );
-					$cert_type   = sanitize_text_field( $school_data['certificate_type'] );
-					if ( '' === $school_name || '' === $cert_type ) {
-						$writer->skip( $line, $school_name, ( '' === $school_name ? 'school_name' : 'certificate_type' ) . ' is empty' );
-						continue;
-					}
-
-					$_s_issue_raw    = sanitize_text_field( $school_data['issue_date'] );
-					$_s_issue_stored = class_exists( '\CertificateGenerator\Helpers\DateHelper' )
-						? ( \CertificateGenerator\Helpers\DateHelper::to_storage( $_s_issue_raw ) ?? $_s_issue_raw )
-						: $_s_issue_raw;
-
-					// Build extra fields from extra columns
-					$extra_fields = array();
-					if ( ! empty( $extra_columns ) ) {
-						foreach ( $extra_columns as $slug ) {
-							$val = $school_data[ $slug ] ?? '';
-							if ( $val !== '' ) {
-								$extra_fields[ $slug ] = sanitize_text_field( $val );
-							}
-						}
-					}
-
-					// send_email: optional CSV column. false/0/no → 0 (opt-out), anything else → 1 (default).
-					$_se_raw_s    = strtolower( trim( $school_data['send_email'] ?? '1' ) );
-					$send_email_s = in_array( $_se_raw_s, array( 'false', '0', 'no' ), true ) ? 0 : 1;
-
-					$insert_data = array(
-						'school_name'      => $school_name,
-						'city'             => sanitize_text_field( $school_data['place'] ?? $school_data['city'] ?? '' ),
-						'event_id'         => certificate_generator_resolve_event_id( $school_data['event_code'] ?? '' ),
-						'certificate_type' => $cert_type,
-						'issue_date'       => $_s_issue_stored ?: null,
-						'year'             => function_exists( 'certificate_generator_year_from_issue_date' ) ? certificate_generator_year_from_issue_date( $_s_issue_stored ) : null,
-						'status'           => 'active',
-						'send_email'       => $send_email_s,
-						'import_source'    => $import_source,
-						'created_at'       => current_time( 'mysql' ),
-						'updated_at'       => current_time( 'mysql' ),
-					);
-					if ( ! empty( $extra_fields ) ) {
-						$insert_data['extra_fields'] = wp_json_encode( $extra_fields );
-					}
-					certificate_generator_import_warn_row( $writer, $line, $school_name, '', '', $_s_issue_raw, $_s_issue_stored );
-
-					if ( ! $writer->add( $line, $insert_data ) ) {
-						break;
-					}
-				}
-				fclose( $handle );
-				$report = $writer->report();
-
-				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
-					certificate_generator_flush_filter_caches();
-				}
-				certificate_generator_import_render_report( 'schools', $report );
-			} else {
-				certificate_generator_ui_notice( 'error', 'Unable to open the file. Please check the file and try again.', false );
-			}
-		}
-	}
-
+	certificate_generator_import_page( 'schools' );
 }
-
-
 
 
 function certificate_generator_bulk_import_certificates() {
@@ -1126,7 +1201,9 @@ function certificate_generator_bulk_import_certificates() {
 	wp_nonce_field( 'bulk_import_certificates_nonce', '_wpnonce_bulk_import' );
 	echo '<table class="form-table">';
 	echo '<tr><th><label for="certificates_csv">Upload CSV File</label></th>';
-	echo '<td><input type="file" name="certificates_csv" id="certificates_csv" accept=".csv" required /></td></tr>';
+	echo '<td><input type="file" name="certificates_csv" id="certificates_csv" accept=".csv" required />';
+	echo ' <a class="button-link" download href="' . esc_url( CERTIFICATE_GENERATOR_URL . 'assets/samples/templates.csv' ) . '">' . esc_html__( 'Download a sample CSV', 'certificate-generator' ) . '</a></td></tr>';
+	echo '<tr><td colspan="2"><p class="cg-hint">' . esc_html__( 'One row per template. Replace template_url with the address of your background image (Media Library → copy URL). field_N_name says what each field shows (student_name, teacher_name, school_name, place, issue_date, certificate_type or any extra CSV field); positions are in mm from the top-left corner.', 'certificate-generator' ) . '</p></td></tr>';
 	echo '</table>';
 	echo '<p class="submit"><input type="submit" name="submit_certificates" value="Import Certificates" class="button button-primary" /></p>';
 	echo '</form>';
@@ -1135,11 +1212,11 @@ function certificate_generator_bulk_import_certificates() {
 	// Check for file upload and nonce validation
 	if ( isset( $_POST['submit_certificates'] ) && isset( $_FILES['certificates_csv'] ) ) {
 		if ( check_admin_referer( 'bulk_import_certificates_nonce', '_wpnonce_bulk_import' ) ) {
-			if ( ! current_user_can( 'manage_options' ) ) {
+			if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
 				wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), 403 );
 			}
 			$file       = $_FILES['certificates_csv']['tmp_name']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- temp path set by PHP, not by the request; nonce and capability checked above
-			$file_error = (int) ( $_FILES['certificates_csv']['error'] ?? UPLOAD_ERR_NO_FILE );
+			$file_error = absint( $_FILES['certificates_csv']['error'] ?? UPLOAD_ERR_NO_FILE );
 
 			// Error handling for file upload
 			if ( $file_error !== UPLOAD_ERR_OK ) {
@@ -1150,7 +1227,7 @@ function certificate_generator_bulk_import_certificates() {
 			if ( ( $handle = fopen( $file, 'r' ) ) !== false ) {
 				// Read and strip BOM if present (UTF-8 BOM: EF BB BF)
 				$bom = fread( $handle, 3 );
-				if ( $bom !== "\xEF\xBB\xBF" ) {
+				if ( $bom !== "﻿" ) {
 					// No BOM found, rewind to beginning
 					rewind( $handle );
 				}
@@ -1233,6 +1310,10 @@ function certificate_generator_bulk_import_certificates() {
 					foreach ( array( 'position_x', 'position_y', 'visible', 'width', 'height', 'alignment' ) as $prop ) {
 						$optional_field_columns[] = "field_{$i}_{$prop}";
 					}
+				}
+				// What each slot shows (student_name, school_name, issue_date, …), as the template editor saves it.
+				for ( $i = 1; $i <= $max_fields; $i++ ) {
+					$optional_field_columns[] = "field_{$i}_name";
 				}
 
 				// Only error on missing required fields; extra field_N columns are allowed
@@ -1350,6 +1431,9 @@ function certificate_generator_bulk_import_certificates() {
 						$extra_fields_json[ "field_{$i}_alignment" ]  = in_array( $alignment, array( 'L', 'C', 'R' ), true ) ? $alignment : 'C';
 						$height_input                                 = $certificate_data[ "field_{$i}_height" ] ?? '';
 						$extra_fields_json[ "field_{$i}_height" ]     = $height_input !== '' && is_numeric( $height_input ) ? floatval( $height_input ) : '';
+						if ( '' !== ( $certificate_data[ "field_{$i}_name" ] ?? '' ) ) {
+							$extra_fields_json[ "field_{$i}_name" ] = sanitize_key( $certificate_data[ "field_{$i}_name" ] );
+						}
 					}
 
 					// ── Write to SQL table ───────────────────────────────────

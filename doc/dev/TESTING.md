@@ -11,6 +11,19 @@ composer install   # PHP test/analysis tooling
 npm install         # Playwright, only needed for E2E
 ```
 
+**Composer behind an antivirus that scans HTTPS (e.g. Norton):** Composer fails with
+"curl error 60 … unable to get local issuer certificate", because the antivirus re-signs HTTPS
+with its own root certificate, which Windows trusts but PHP doesn't. Export the Windows trusted
+roots to a PEM file once and point Composer at it:
+
+```powershell
+$certs = @(Get-ChildItem Cert:\LocalMachine\Root) + @(Get-ChildItem Cert:\CurrentUser\Root)
+$certs | ForEach-Object { "-----BEGIN CERTIFICATE-----`n" + [Convert]::ToBase64String($_.RawData, 'InsertLineBreaks') + "`n-----END CERTIFICATE-----" } | Set-Content winroots.pem
+```
+
+then run Composer with `COMPOSER_CAFILE=path/to/winroots.pem`. `composer zip` runs
+`composer install --no-dev` too, so it needs the same.
+
 **If `composer`/`php` aren't on your PATH (common on Local by Flywheel / Windows):** either use Local's **Site Shell** (right-click the site → *Open Site Shell*, which has PHP/Composer/WP-CLI already configured), or call the bundled binaries directly. Example for this machine:
 
 ```bash
@@ -58,7 +71,12 @@ composer phpcs     # WordPress-Extra coding standard
 
 Before a release, also run WordPress.org's **Plugin Check** on the built ZIP (`composer zip`):
 copy it to a test site's `wp-content/plugins/certificate-generator/`, leave it inactive, and run
-`wp plugin check certificate-generator`. The target is 0 errors.
+`wp plugin check certificate-generator`. The target is 0 errors (7.8.0: 0 errors; the remaining
+warnings are direct-database-query and caching notices). Remove the copy and Plugin Check
+afterwards — they slow wp-admin and break the E2E suite.
+
+The release ZIP is about 5 MB since 7.8.0 (mPDF code plus the fonts in `assets/fonts/unicode`);
+`bin/build-zip.ps1` drops mPDF's own 88 MB `ttfonts/`.
 
 Both need `composer install` to have pulled in their packages (they're `require-dev`, not bundled).
 
@@ -97,6 +115,9 @@ npx playwright test
 Notes:
 - `CG_E2E_LOGIN_PATH` — override if the login page has been moved (defaults to `/wp-login.php`). For example, if your site's login lives at `/gema-login`: add `CG_E2E_LOGIN_PATH="/gema-login"`.
 - Bulk import/export has no row limit on any plan, so the bulk-import spec runs on a plain free install.
+- Specs worth knowing: `09-verify` (verification codes, masked serial lookups, rate limit), `10-revoke` (revoke / reinstate / history; reissue and snapshots are covered by `tests/Integration/TemplateSnapshotTest.php`), `15-field-fonts` (per-field fonts, custom text), `16-bulk-import` (the check step: mapping, date order, counts, then import), `17-unicode-names` (Hindi, Tamil, Urdu and mixed names rendered through mPDF; saves each PNG as a test attachment and asks the vision judge).
+- `03-templates`' preview test fails while `$visual_debug = true` in `certificate-search.php` (the PDF starts with the debug box). That is expected; don't change the flag.
+- `11-bulk-send` has failed intermittently in full runs and passed when run alone.
 - On Windows Git Bash, a leading `/` in an env var can get mangled into a filesystem path (e.g. `/gema-login` → `C:/Program Files/Git/gema-login`). If you hit that, prefix the command with `MSYS_NO_PATHCONV=1`.
 - This suite logs in and creates/imports real data on whatever site `CG_E2E_BASE_URL` points at — never point it at a shared or production site. Clean up any rows it creates (e.g. in `wp_cg_students`) afterward if you ran it against a real site rather than a disposable one.
 

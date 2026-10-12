@@ -47,7 +47,7 @@ When touching PDF/ZIP/data-access code, check `Config.php` first to know which i
 
 ## Autoloading and logging
 
-- `certificate-generator.php` loads Composer's `vendor/autoload.php` (shipped in the release ZIP; it also brings `endroid/qr-code`) and falls back to a hand-rolled `spl_autoload_register` that maps `CertificateGenerator\Foo\Bar` → `src/Foo/Bar.php`.
+- `certificate-generator.php` loads Composer's `vendor/autoload.php` (shipped in the release ZIP; it also brings `endroid/qr-code` and `mpdf/mpdf`) and falls back to a hand-rolled `spl_autoload_register` that maps `CertificateGenerator\Foo\Bar` → `src/Foo/Bar.php`.
 - All logging goes through `certificate_generator_debug_log()` (`includes/Core/debug-log.php`), which writes only when `WP_DEBUG` is on, so live sites never log recipient data.
 
 ## Directory structure (free plugin)
@@ -66,10 +66,10 @@ Certificate-Generator-V7.5/
 │   ├── Cron/                   # jobs.php (WP-Cron tasks, renewal reminders)
 │   ├── Database/               # migrator.php + one-off migration-*.php scripts
 │   ├── Email/                  # functions.php (send logic), log.php, queue.php, rate-limiter.php
-│   ├── Public/                 # student-template.php, verification.php ([certificate_generator_verify_certificate])
+│   ├── Public/                 # verification.php ([certificate_generator_verify_certificate])
 │   ├── Services/               # certificate-search.php (PDF pipeline + search shortcodes),
-│   │                           #   bulk-import/export/download, bulk-email-sender, background-processor,
-│   │                           #   serial-generator, qr-generator
+│   │                           #   bulk-import (one pipeline + check step)/export/download, bulk-email-sender,
+│   │                           #   background-processor, certificate-events (history), serial-generator, qr-generator
 │   └── legacy-shims.php        # @deprecated v8 bridge to src/
 ├── src/                        # PSR-4 CertificateGenerator\ OOP architecture
 │   ├── Admin/                  # TestCertificate.php ("Email me a test certificate"),
@@ -81,16 +81,18 @@ Certificate-Generator-V7.5/
 │   ├── Email/                  # Mailer.php, EmailResender.php, Transport/ (WpMail, Smtp, Sender, Mandrill)
 │   ├── Helpers/                # DateHelper.php
 │   ├── Listeners/              # LogEmail, Analytics, InvalidateStatusCache, BadgeGeneration
-│   ├── Services/               # PdfGenerator, PngGenerator, ZipService, QRCodeService, SerialNumberService,
+│   ├── Services/               # PdfGenerator, PngGenerator, MpdfCanvas (non-Latin text), ZipService,
+│   │                           #   QRCodeService, SerialNumberService (verify), VerificationCodeService,
 │   │                           #   EmailService, EmailStatusService, PreSendCheck, SettingsService,
 │   │                           #   FieldManager, BadgeGenerator
 │   └── Exception/, Interfaces/, Logging/, Models/, Traits/
 ├── lib/
 │   ├── fpdf/                   # FPDF — PDF engine for every built-in font (+ font/ metric files, OFL/Apache)
 │   └── tfpdf/                  # tFPDF — renders uploaded .ttf fonts only
-├── vendor/                     # Composer: autoloader, endroid/qr-code (QR images)
-├── assets/                     # css/, js/, images/, templates/ (bundled backgrounds), vendor/chart.js
-├── templates/single-students.php  # front-end student certificate page
+├── vendor/                     # Composer: autoloader, endroid/qr-code (QR images), mpdf/mpdf (non-Latin PDFs;
+│                               #   its own ttfonts/ is dropped from the release ZIP)
+├── assets/                     # css/, js/, images/, templates/ (bundled backgrounds), vendor/chart.js,
+│                               #   fonts/unicode/ (FreeSerif, Lohit Telugu/Kannada, Noto Sans Oriya + licences)
 ├── doc/                        # developer docs (not in the release ZIP)
 └── tests/                      # PHPUnit + Playwright E2E (not in the release ZIP)
 ```
@@ -100,7 +102,9 @@ The Pro add-on's layout is in its own `README.md` (`certificate-generator-pro/RE
 ## Bundled third-party libraries
 
 - `lib/fpdf/fpdf.php` — [FPDF](http://www.fpdf.org/), the PDF engine. `includes/Services/certificate-search.php` subclasses it (adds `Circle()`, `Ellipse()`, alpha transparency) and implements the rendering pipeline (`certificate_generator_generate_pdf_impl()`, `certificate_generator_generate_pdf_with_data_impl()`, template selection). The built-in fonts are open-licensed (`lib/fpdf/font/FONTS-LICENSE.txt`).
-- `lib/tfpdf/` — [tFPDF](https://github.com/Setasign/tFPDF), a Unicode-capable FPDF fork, used **only** for uploaded `.ttf` fonts (`wp_cg_custom_fonts`). Built-in fonts keep using `lib/fpdf/`.
+- `lib/tfpdf/` — [tFPDF](https://github.com/Setasign/tFPDF), a Unicode-capable FPDF fork, used **only** for uploaded `.ttf` fonts (`wp_cg_custom_fonts`). Built-in fonts keep using `lib/fpdf/`. Text goes to it as UTF-8 while a TTF font is current (`certificate_generator_pdf_text()`); tFPDF does no OpenType shaping, so it can't join Indian scripts or Arabic.
+- `mpdf/mpdf` (Composer, GPL-2.0) — used only for certificates whose text has a character outside Latin-1 (`certificate_generator_unicode_canvas()` in `certificate-search.php`). `src/Services/MpdfCanvas.php` puts it behind the slice of FPDF's API the renderers call (`AddPage`, `Image`, `SetFont`, `SetFontSize`, `GetStringWidth`, `Text`, `Output`; everything else passes through), so both renderers, fit-to-width and wrapping are unchanged. `Text()` splits each line into script runs: Latin runs use the field font's TTF (`CertificateGenerator_FontManager::get_ttf_path_for_gd()`, which maps FPDF core fonts to Arimo/Tinos), other runs use `assets/fonts/unicode` (current Noto builds use OpenType lookups mPDF 8.3 can't read). Widths are measured after shaping. Font metric cache: `uploads/cg-mpdf-tmp/`. `bin/build-zip.ps1` deletes `vendor/mpdf/mpdf/ttfonts` (88 MB). `PngGenerator` hands back the PDF for Indic/Arabic text, because GD can't shape it. Text goes to it as UTF-8 while a TTF font is current (`certificate_generator_pdf_text()`); tFPDF does no OpenType shaping, so it can't join Indian scripts or Arabic.
+- `mpdf/mpdf` (Composer, GPL-2.0) — used only for certificates whose text has a character outside Latin-1 (`certificate_generator_unicode_canvas()` in `certificate-search.php`). `src/Services/MpdfCanvas.php` puts it behind the slice of FPDF's API the renderers call (`AddPage`, `Image`, `SetFont`, `SetFontSize`, `GetStringWidth`, `Text`, `Output`; everything else passes through), so both renderers, fit-to-width and wrapping are unchanged. `Text()` splits each line into script runs: Latin runs use the field font's TTF (`CertificateGenerator_FontManager::get_ttf_path_for_gd()`, which maps FPDF core fonts to Arimo/Tinos), other runs use `assets/fonts/unicode` (current Noto builds use OpenType lookups mPDF 8.3 can't read). Widths are measured after shaping. Font metric cache: `uploads/cg-mpdf-tmp/`. `bin/build-zip.ps1` deletes `vendor/mpdf/mpdf/ttfonts` (88 MB). `PngGenerator` hands back the PDF for Indic/Arabic text, because GD can't shape it.
 - `endroid/qr-code` (Composer, in `vendor/`) — QR images, wrapped by `src/Services/QRCodeService.php` and `includes/Services/qr-generator.php`. There is no external QR service fallback.
 - `assets/vendor/chart.js/` — Chart.js for the Analytics page, bundled locally (no CDN).
 
@@ -118,8 +122,10 @@ Both bundled PDF libraries are exempt from the WordPress coding-standard checks 
 | 6 | `includes/Core/post-types.php` (~2,500 lines) | Legacy meta boxes, ACF field groups, CPT↔SQL sync |
 | 7 | `includes/Admin/settings.php` (~2,300 lines) | Settings UI — email/SMTP, email templates, Features; `certificate_generator_settings_tabs` for add-on tabs |
 | 8 | `includes/Email/functions.php` + `src/Email/Mailer.php` | Send logic and the Mailer/Transport abstraction |
-| 9 | `src/Services/SerialNumberService.php` | Public `/verify/{serial}` REST route |
-| 10 | `certificate-generator-pro/` | Pro add-on: license, REST API, integrations, font upload, bulk ZIP |
+| 9 | `src/Services/SerialNumberService.php` + `VerificationCodeService.php` | Public `/verify/{code or serial}` REST route; verification codes |
+| 10 | `includes/Services/bulk-import.php` | `certificate_generator_import_entities()` (per-entity config) + `certificate_generator_import_run()` (the one import pipeline, dry run = the check step) + `CertificateGenerator_Import_Writer` |
+| 11 | `src/Services/MpdfCanvas.php` | mPDF behind FPDF's API, for non-Latin text |
+| 12 | `certificate-generator-pro/` | Pro add-on: license, REST API, integrations, font upload, bulk ZIP |
 
 ## Known cleanup items
 

@@ -53,7 +53,7 @@ function certificate_generator_email_logs_page() {
 		<?php
 		$has_filters  = $post_type_filter || $status_filter || $search || $date_from || $date_to;
 		$failed_count = class_exists( '\CertificateGenerator\Email\EmailResender' ) ? count( \CertificateGenerator\Email\EmailResender::still_failed() ) : 0;
-		$header_btns  = '<a href="' . esc_url( wp_nonce_url( admin_url( 'admin.php?page=certificate-email-logs&action=export' ), 'export_logs' ) ) . '" class="button">' . esc_html__( 'Export CSV', 'certificate-generator' ) . '</a>';
+		$header_btns  = '<a href="' . esc_url( wp_nonce_url( admin_url( 'admin.php?page=certificate-email-logs&action=export' ), 'certificate_generator_export_logs' ) ) . '" class="button">' . esc_html__( 'Export CSV', 'certificate-generator' ) . '</a>';
 		if ( $failed_count ) {
 			$header_btns .= ' <button type="button" class="button button-primary" id="cg-resend-all-failed" data-cg-confirm-label="' . esc_attr__( 'Resend', 'certificate-generator' ) . '" data-cg-confirm="' . esc_attr(
 				/* translators: %d: number of failed emails */
@@ -278,7 +278,10 @@ function certificate_generator_email_logs_page() {
 add_action( 'admin_init', 'certificate_generator_handle_export_logs' );
 function certificate_generator_handle_export_logs() {
 	if ( isset( $_GET['action'] ) && $_GET['action'] === 'export' && isset( $_GET['page'] ) && $_GET['page'] === 'certificate-email-logs' ) {
-		check_admin_referer( 'export_logs' );
+		check_admin_referer( 'certificate_generator_export_logs' );
+		if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
+			wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ), '', array( 'response' => 403 ) );
+		}
 
 		// Get all logs for export
 		$logs_data = certificate_generator_get_email_logs(
@@ -302,7 +305,7 @@ function certificate_generator_handle_export_logs() {
 		$output = fopen( 'php://output', 'w' );
 
 		// CSV headers
-		fputcsv(
+		certificate_generator_fputcsv(
 			$output,
 			array(
 				'Date',
@@ -318,7 +321,7 @@ function certificate_generator_handle_export_logs() {
 
 		// CSV data
 		foreach ( $logs as $log ) {
-			fputcsv(
+			certificate_generator_fputcsv(
 				$output,
 				array(
 					$log->sent_at,
@@ -353,6 +356,7 @@ function certificate_generator_delete_email_logs( $log_ids ) {
 	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	return $wpdb->query(
 		$wpdb->prepare(
+			// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 			"DELETE FROM $table_name WHERE id IN ($placeholders)",
 			$log_ids
 		)

@@ -11,11 +11,15 @@ const path = require('path');
 const base = require('@playwright/test');
 const { STATE, AUTH_DIR } = require('./global-setup');
 
-const PLUGIN_RE = /Certificate-Generator-V7\.5/i;
+// Either plugin's folder, or the text domain WordPress names in its notices.
+const PLUGIN_RE = /certificate-generator/i;
 
 function debugLogPath() {
 	try { return JSON.parse(fs.readFileSync(STATE, 'utf8')).debug_log; } catch { return null; }
 }
+
+/** A debug.log line without its timestamp and HTML, so repeats of one message compare equal. */
+const logMessage = (l) => l.replace(/^\[[^\]]+\]\s*/, '').replace(/<[^>]+>/g, '').trim();
 
 function watch(p, dialogs, jsErrors) {
 	p.on('dialog', (d) => { dialogs.push({ type: d.type(), message: d.message() }); d.accept().catch(() => {}); });
@@ -45,6 +49,7 @@ const test = base.test.extend({
 	},
 
 	// Fails the test if it caused new plugin warnings/fatals or plugin JS errors.
+	// New plugin notices don't fail it; they're recorded as 'php-notice' annotations, which the report lists under Warnings.
 	_guards: [async ({ jsErrors }, use, testInfo) => {
 		const log = debugLogPath();
 		const start = log && fs.existsSync(log) ? fs.statSync(log).size : 0;
@@ -57,8 +62,11 @@ const test = base.test.extend({
 				const buf = Buffer.alloc(Math.min(size - start, 2_000_000));
 				fs.readSync(fd, buf, 0, buf.length, start);
 				fs.closeSync(fd);
-				const bad = buf.toString('utf8').split('\n')
-					.filter((l) => /PHP (Fatal|Warning|Parse error|Deprecated)|WordPress database error/i.test(l) && PLUGIN_RE.test(l));
+				const lines = buf.toString('utf8').split('\n').filter((l) => PLUGIN_RE.test(l));
+				const bad = lines.filter((l) => /PHP (Fatal|Warning|Parse error|Deprecated)|WordPress database error/i.test(l));
+				for (const n of new Set(lines.filter((l) => /PHP Notice/i.test(l)).map(logMessage))) {
+					testInfo.annotations.push({ type: 'php-notice', description: n });
+				}
 				if (bad.length) {
 					testInfo.attachments.push({ name: 'debug.log', contentType: 'text/plain', body: Buffer.from(bad.join('\n')) });
 					base.expect.soft(bad, 'new plugin errors in debug.log').toEqual([]);

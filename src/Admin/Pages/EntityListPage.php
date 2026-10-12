@@ -48,7 +48,7 @@ abstract class EntityListPage {
 
 	/** Register the list screen; early actions (single delete, CSV export) run on its load- hook, before output. */
 	protected function add_list_page( string $page_title, string $menu_title ): void {
-		$hook = add_submenu_page( 'cg-dashboard', $page_title, $menu_title, 'manage_options', $this->slug, array( $this, 'render_list' ) );
+		$hook = add_submenu_page( 'cg-dashboard', $page_title, $menu_title, $this->caps()[0], $this->slug, array( $this, 'render_list' ) );
 		if ( $hook ) {
 			add_action( 'load-' . $hook, array( $this, 'handle_early_actions' ) );
 		}
@@ -62,7 +62,7 @@ abstract class EntityListPage {
 	}
 
 	public function handle_early_actions(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( $this->caps()[1] ) ) {
 			return;
 		}
 		global $wpdb;
@@ -72,7 +72,8 @@ abstract class EntityListPage {
 		// Single-row delete link.
 		if ( sanitize_text_field( wp_unslash( $_GET['action'] ?? '' ) ) === 'delete' && ! empty( $_GET['id'] ) ) {
 			$id = absint( $_GET['id'] );
-			if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'cg_delete_' . $c['singular'] . '_single_' . $id ) ) {
+			if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'cg_delete_' . $c['singular'] . '_single_' . $id )
+				&& $this->ids_in_scope( array( $id ) ) ) {
 				$wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
 				wp_safe_redirect( add_query_arg( 'cg_msg', 'deleted', $this->list_url( $this->filters() ) ) );
 				exit;
@@ -89,6 +90,47 @@ abstract class EntityListPage {
 		}
 	}
 
+	// ── Capabilities and school scope ────────────────────────────────────────
+
+	/**
+	 * [see the list, act on rows]. Students and teachers are what School Coordinators work
+	 * with (limited to their school); schools and templates stay with admins.
+	 */
+	protected function caps(): array {
+		switch ( $this->table_key ) {
+			case 'students':
+			case 'teachers':
+				return array( 'certificate_generator_view', 'certificate_generator_issue' );
+			case 'certificate_templates':
+				return array( 'certificate_generator_manage_templates', 'certificate_generator_manage_templates' );
+			default:
+				return array( 'certificate_generator_manage_settings', 'certificate_generator_manage_settings' );
+		}
+	}
+
+	/** @return array{0:string,1:array} School condition for this table (alias e.), or ['', []] when the user isn't limited. */
+	protected function scope( string $alias = 'e.' ): array {
+		if ( ! function_exists( 'certificate_generator_school_scope_sql' ) || ! in_array( $this->table_key, self::ENTITY_TABLES, true ) ) {
+			return array( '', array() );
+		}
+		return certificate_generator_school_scope_sql( $alias . 'school_name' );
+	}
+
+	/** Only the ids the current user may act on. */
+	private function ids_in_scope( array $ids ): array {
+		global $wpdb;
+		[ $scope, $params ] = $this->scope( '' );
+		if ( '' === $scope || ! $ids ) {
+			return $ids;
+		}
+		$kept = array();
+		foreach ( array_chunk( $ids, 500 ) as $chunk ) {
+			$in   = implode( ',', array_map( 'intval', $chunk ) );
+			$kept = array_merge( $kept, array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM ' . $this->table() . " WHERE id IN ($in) AND $scope", ...$params ) ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders -- ids cast to int; table from $wpdb->prefix; $scope built by certificate_generator_school_scope_sql()
+		}
+		return $kept;
+	}
+
 	// ── Filters / query ──────────────────────────────────────────────────────
 
 	protected function table(): string {
@@ -99,10 +141,11 @@ abstract class EntityListPage {
 	protected function filters(): array {
 		$c = $this->config();
 		$f = array(
+			// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 			's'            => sanitize_text_field( wp_unslash( $_GET['s'] ?? '' ) ),
 			'event_filter' => absint( $_GET['event_filter'] ?? 0 ),
-			'date_from'    => $this->valid_date( wp_unslash( $_GET['date_from'] ?? '' ) ),
-			'date_to'      => $this->valid_date( wp_unslash( $_GET['date_to'] ?? '' ) ),
+			'date_from'    => $this->valid_date( sanitize_text_field( wp_unslash( $_GET['date_from'] ?? '' ) ) ),
+			'date_to'      => $this->valid_date( sanitize_text_field( wp_unslash( $_GET['date_to'] ?? '' ) ) ),
 			'tpl_match'    => sanitize_key( $_GET['tpl_match'] ?? '' ),
 			'email_status' => sanitize_key( $_GET['email_status'] ?? '' ),
 			'usage'        => sanitize_key( $_GET['usage'] ?? '' ),
@@ -114,6 +157,7 @@ abstract class EntityListPage {
 		$f['orderby']  = in_array( $_GET['orderby'] ?? '', $sortable, true ) ? sanitize_key( $_GET['orderby'] ) : 'created_at';
 		$f['order']    = strtoupper( (string) sanitize_text_field( wp_unslash( $_GET['order'] ?? 'DESC' ) ) ) === 'ASC' ? 'ASC' : 'DESC';
 		$f['paged']    = max( 1, (int) ( absint( wp_unslash( $_GET['paged'] ?? 1 ) ) ) );
+			// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		return $f;
 	}
 
@@ -186,6 +230,12 @@ abstract class EntityListPage {
 			if ( $sql ) {
 				$where[] = $sql;
 			}
+		}
+
+		[ $scope, $scope_params ] = $this->scope();
+		if ( '' !== $scope ) {
+			$where[] = $scope;
+			$params  = array_merge( $params, $scope_params );
 		}
 
 		return array( implode( ' AND ', $where ), $params );
@@ -267,7 +317,9 @@ abstract class EntityListPage {
 		if ( ! $this->has_column( $col ) ) {
 			return array();
 		}
-		return $wpdb->get_col( 'SELECT DISTINCT ' . $col . ' FROM ' . $this->table() . " WHERE $col IS NOT NULL AND $col != '' ORDER BY $col" ) ?: array(); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
+		[ $scope, $params ] = $this->scope( '' );
+		$sql                = 'SELECT DISTINCT ' . $col . ' FROM ' . $this->table() . " WHERE $col IS NOT NULL AND $col != ''" . ( '' !== $scope ? " AND $scope" : '' ) . " ORDER BY $col";
+		return $wpdb->get_col( $params ? $wpdb->prepare( $sql, ...$params ) : $sql ) ?: array(); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	}
 
 	private function events(): array {
@@ -320,7 +372,7 @@ abstract class EntityListPage {
 			$sql                = 'SELECT e.id FROM ' . $this->table() . " e WHERE $where";
 			return array_map( 'intval', $params ? $wpdb->get_col( $wpdb->prepare( $sql, ...$params ) ) : $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		}
-		return array_values( array_filter( array_map( 'absint', (array) ( $_POST[ $this->config()['ids_field'] ] ?? array() ) ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
+		return $this->ids_in_scope( array_values( array_filter( array_map( 'absint', (array) ( $_POST[ $this->config()['ids_field'] ] ?? array() ) ) ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
 	}
 
 	/** Run a statement against ids in chunks; returns total affected rows. */
@@ -335,7 +387,7 @@ abstract class EntityListPage {
 	private function rows_by_ids( array $ids ): array {
 		global $wpdb;
 		$rows = array();
-		foreach ( array_chunk( $ids, 500 ) as $chunk ) {
+		foreach ( array_chunk( $this->ids_in_scope( $ids ), 500 ) as $chunk ) {
 			$rows = array_merge( $rows, $wpdb->get_results( 'SELECT * FROM ' . $this->table() . ' WHERE id IN (' . implode( ',', array_map( 'intval', $chunk ) ) . ') ORDER BY id', ARRAY_A ) ?: array() ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		}
 		return $rows;
@@ -343,7 +395,7 @@ abstract class EntityListPage {
 
 	/** @return array{0:string,1:string} message + notice type. */
 	protected function handle_bulk(): array {
-		if ( ! $this->verify_bulk_nonce() ) {
+		if ( ! $this->verify_bulk_nonce() || ! current_user_can( $this->caps()[1] ) ) {
 			return array( '', '' );
 		}
 		global $wpdb;
@@ -352,7 +404,7 @@ abstract class EntityListPage {
 		$action = sanitize_key( $_POST['bulk_action'] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
 		$label  = $c['singular'] . '(s)';
 
-		if ( $action === 'empty_all' && ! empty( $c['can_empty'] ) ) {
+		if ( $action === 'empty_all' && ! empty( $c['can_empty'] ) && current_user_can( 'certificate_generator_manage_settings' ) ) {
 			if ( sanitize_text_field( wp_unslash( $_POST['empty_confirm'] ?? '' ) ) !== 'DELETE' ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
 				return array( 'Type DELETE to confirm emptying the table.', 'error' );
 			}
@@ -377,7 +429,7 @@ abstract class EntityListPage {
 				}
 				$set    = implode( ', ', array_map( static fn( $col ) => "`$col` = %s", array_keys( $data ) ) );
 				$values = array_values( $data );
-				$n      = $this->for_ids( $ids, static fn( $in ) => $wpdb->query( $wpdb->prepare( "UPDATE $table SET $set WHERE id IN ($in)", ...$values ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL
+				$n      = $this->for_ids( $ids, static fn( $in ) => $wpdb->query( $wpdb->prepare( "UPDATE $table SET $set WHERE id IN ($in)", ...$values ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL, WordPress.DB.PreparedSQLPlaceholders
 				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
 					certificate_generator_flush_filter_caches();
 				}
@@ -400,6 +452,9 @@ abstract class EntityListPage {
 		$c    = $this->config();
 		$data = array();
 		foreach ( $c['bulk_fields'] as $col => $type ) {
+			if ( 'school_name' === $col && '' !== $this->scope()[0] ) {
+				continue; // a School Coordinator can't move records to another school
+			}
 			$key = $type === 'event' ? 'bulk_event_id' : 'bulk_' . $col;
 			$raw = sanitize_text_field( wp_unslash( $_POST[ $key ] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
 			if ( ! is_string( $raw ) || $raw === '' ) {
@@ -518,7 +573,7 @@ abstract class EntityListPage {
 	/** Copy templates to a new event date — builds next event's set from this one's. */
 	private function bulk_duplicate_templates( array $ids ): array {
 		global $wpdb;
-		$date   = $this->valid_date( wp_unslash( $_POST['bulk_new_event_date'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
+		$date   = $this->valid_date( sanitize_text_field( wp_unslash( $_POST['bulk_new_event_date'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
 		$status = sanitize_key( $_POST['bulk_new_status'] ?? 'draft' ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_bulk_nonce() ran first
 		if ( $date === '' ) {
 			return array( 'Choose the new event date.', 'warning' );
@@ -604,7 +659,7 @@ abstract class EntityListPage {
 		header( 'Pragma: no-cache' );
 		header( 'Expires: 0' );
 		$out = fopen( 'php://output', 'w' );
-		fputcsv( $out, array_merge( $columns, $extra ) );
+		certificate_generator_fputcsv( $out, array_merge( $columns, $extra ) );
 		foreach ( $rows as $r ) {
 			$x    = json_decode( (string) ( $r['extra_fields'] ?? '' ), true ) ?: array();
 			$line = array();
@@ -626,7 +681,7 @@ abstract class EntityListPage {
 			foreach ( $extra as $k ) {
 				$line[] = $x[ $k ] ?? '';
 			}
-			fputcsv( $out, $line );
+			certificate_generator_fputcsv( $out, $line );
 		}
 		fclose( $out ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closes a php://output / php://temp stream
 	}
@@ -636,11 +691,11 @@ abstract class EntityListPage {
 	public function send_email_ajax(): void {
 		$c = $this->config();
 		check_ajax_referer( 'cg_' . $c['singular'] . '_send_email', 'nonce' );
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( $this->caps()[1] ) ) {
 			wp_send_json_error( array( 'message' => 'Insufficient permissions.' ) );
 		}
 		$id = absint( $_POST['id'] ?? 0 );
-		if ( ! $id ) {
+		if ( ! $id || ! $this->ids_in_scope( array( $id ) ) ) {
 			wp_send_json_error( array( 'message' => 'Invalid ' . $c['singular'] . ' ID.' ) );
 		}
 		global $wpdb;
@@ -668,14 +723,14 @@ abstract class EntityListPage {
 	// ── Rendering ────────────────────────────────────────────────────────────
 
 	public function render_list(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( $this->caps()[0] ) ) {
 			wp_die( 'Insufficient permissions' );
 		}
 		global $wpdb;
 		$c = $this->config();
 
 		[ $message, $notice ] = $this->handle_bulk();
-		if ( ! $message && sanitize_text_field( wp_unslash( $_GET['cg_msg'] ?? '' ) ) === 'deleted' ) {
+		if ( ! $message && sanitize_text_field( wp_unslash( $_GET['cg_msg'] ?? '' ) ) === 'deleted' ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only GET parameter, no state change
 			[ $message, $notice ] = array( ucfirst( $c['singular'] ) . ' deleted.', 'success' );
 		}
 
@@ -689,6 +744,7 @@ abstract class EntityListPage {
 		$f['paged']         = min( $f['paged'], $total_pages );
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$rows               = $wpdb->get_results(
+			// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders -- IN() placeholders are generated one per value
 			$wpdb->prepare(
 				"SELECT e.* FROM $table e WHERE $where ORDER BY e.`{$f['orderby']}` {$f['order']} LIMIT %d OFFSET %d",
 				...array_merge( $params, array( $per_page, ( $f['paged'] - 1 ) * $per_page ) )
@@ -1007,7 +1063,8 @@ abstract class EntityListPage {
 			return $d ? esc_html( $d->format( 'd-m-Y' ) ) : '—';
 		}
 		if ( $col === 'serial_number' ) {
-			return '<code>' . esc_html( $val ) . '</code>';
+			// Links to the certificate's history (and revoke/reinstate) on the Revoke page.
+			return $val === '' ? '—' : '<a href="' . esc_url( admin_url( 'admin.php?page=cg-revoke-certificate&serial=' . rawurlencode( $val ) ) ) . '" title="' . esc_attr__( 'History', 'certificate-generator' ) . '"><code>' . esc_html( $val ) . '</code></a>';
 		}
 		if ( $col === 'status' || $col === 'entity_type' || $col === 'orientation' ) {
 			return esc_html( ucfirst( $val ) );

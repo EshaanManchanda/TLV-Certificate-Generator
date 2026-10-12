@@ -79,6 +79,11 @@ test.describe('§03 Templates (Design)', () => {
 
 	test('preview: PDF opens with PREVIEW-SERIAL and does not consume real serials', async ({ page, context }, testInfo) => {
 		test.skip(!ids.jan, 'needs templates from the previous step');
+		// New templates don't print the serial; turn it on so the placeholder shows.
+		await page.goto(adminUrl('cg-template-edit', { id: String(ids.jan) }));
+		await page.check('#serial_number_display');
+		await page.locator('#cg-template-form button.button-primary').first().click();
+		await expect(page.locator('body')).toContainText('Template updated.');
 		const before = withSerialCount();
 		const buf = await preview(page, context, ids.jan);
 		expect(await pdfText(buf)).toContain('PREVIEW-SERIAL');
@@ -102,7 +107,8 @@ test.describe('§03 Templates (Design)', () => {
 		test.skip(!ids.mar, 'needs templates');
 		await page.goto(adminUrl('cg-template-edit', { id: String(ids.mar) }));
 		const labels = await page.locator('#font_style_list option').evaluateAll((o) => o.map((x) => /** @type {HTMLOptionElement} */ (x).value));
-		const label = labels.find((l) => /italianno/i.test(l)) || labels.find((l) => !/helvetica|arial|times|courier/i.test(l));
+		// A script font, so the visual judge can tell it from a fallback; any non-core font otherwise.
+		const label = labels.find((l) => /italianno|pacifico|lobster|script/i.test(l)) || labels.find((l) => !/helvetica|arial|times|courier/i.test(l));
 		test.skip(!label, 'no decorative font available');
 		await page.fill('#font_style_search', /** @type {string} */ (label));
 		await page.locator('#font_style_search').dispatchEvent('change');
@@ -111,6 +117,9 @@ test.describe('§03 Templates (Design)', () => {
 		await expect(page.locator('body')).toContainText('Template updated.');
 		const buf = await preview(page, context, ids.mar);
 		expect(await pdfText(buf)).toMatch(/Sample/);
+		// The chosen font is embedded, not swapped for a core PDF font.
+		const fonts = [...buf.toString('latin1').matchAll(/\/BaseFont\s*\/([\w+-]+)/g)].map((m) => m[1]);
+		expect(fonts.some((f) => !/^(Helvetica|Times|Courier|Symbol|ZapfDingbats)/i.test(f)), `embedded fonts: ${fonts.join(', ')}`).toBeTruthy();
 		await judge(testInfo, await pdfToPng(context, buf), `Is the name text on this certificate rendered in a decorative script/handwriting font (like ${label}) and NOT as empty boxes, question marks or a plain fallback font?`);
 	});
 

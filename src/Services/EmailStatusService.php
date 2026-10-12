@@ -154,7 +154,7 @@ class EmailStatusService {
 
 		$log_rows = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders
 				"SELECT recipient_email, status, error_message, sent_at AS created_at FROM $log_table WHERE recipient_email IN ($ph) ORDER BY sent_at DESC",
 				...$emails
 			),
@@ -163,7 +163,7 @@ class EmailStatusService {
 
 		$queue_rows = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders
 				"SELECT recipient_email, status, error_message, attempts, updated_at FROM $queue_table WHERE recipient_email IN ($ph) ORDER BY updated_at DESC",
 				...$emails
 			),

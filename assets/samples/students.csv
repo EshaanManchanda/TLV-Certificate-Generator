@@ -1,0 +1,5 @@
+﻿student_name,email,phone,school_name,issue_date,certificate_type,event_code,send_email,photo_url,grade
+Asha Verma,asha.verma@example.com,98765 43210,Green Valley School,25-08-2026,Participation,,yes,,A
+Rohan Mehta,rohan.mehta@example.com,,Green Valley School,25-08-2026,Winner,,yes,,A+
+प्रिया शर्मा,priya.sharma@example.com,,Green Valley School,25-08-2026,Participation,,yes,,B
+Fatima Khan,fatima.khan@example.com,,Sunrise Public School,25-08-2026,Participation,,no,,A

@@ -28,7 +28,7 @@ function certificate_generator_render_contact_page() {
 }
 
 function certificate_generator_render_external_form_page( $title, $description, $form_url, $button_label ) {
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 		wp_die( esc_html__( 'Insufficient permissions.', 'certificate-generator' ) );
 	}
 	?>

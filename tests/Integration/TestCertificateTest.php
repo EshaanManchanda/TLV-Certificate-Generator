@@ -25,6 +25,6 @@ class TestCertificateTest extends WP_UnitTestCase {
 		$this->assertNotContains( 'Certificate records in custom table', $labels );
 
 		update_option( TestCertificate::DONE_OPTION, 1 );
-		$this->assertTrue( certificate_generator_setup_steps( 1, 0, false )[1]['done'] );
+		$this->assertTrue( array_column( certificate_generator_setup_steps( 1, 0, false ), 'done', 'label' )['Email yourself a test certificate'] );
 	}
 }

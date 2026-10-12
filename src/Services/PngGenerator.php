@@ -17,16 +17,44 @@ namespace CertificateGenerator\Services;
  * unlike the position math, so it's duplicated rather than forcing a riskier
  * refactor of the production PDF path just for this.
  *
- * ponytail: FPDF/tFPDF and GD's imagettftext() don't measure/wrap text
- * identically, so output won't be pixel-identical to the PDF at the same
- * field width — same positions, good-enough layout, not pixel-perfect parity.
+ * Text uses the PDF's fit-to-width, wrapping and placement, measured with GD.
+ * ponytail: GD and FPDF measure glyphs slightly differently, so line breaks can still differ
+ * by a word at the edge of a field; not pixel-perfect parity.
  * Generated on-demand only, not persisted (no png_path column/tracking).
  */
 class PngGenerator {
 
 	private const DPI = 300;
 
+	/**
+	 * GD's font size for a size in points. GD renders at 96 dpi, so passing points scaled to
+	 * DPI/72 drew text a third too large.
+	 */
+	public static function gd_size( float $pt ): float {
+		return $pt * self::DPI / 96;
+	}
+
+	/**
+	 * Width in mm through GD, with the two FPDF methods certificate_generator_fit_font_size() and
+	 * certificate_generator_wrap_text() call, so the PNG fits and wraps text as the PDF does.
+	 */
+	private static function text_measure( string $ttf, float $pt, float $px_per_mm ): object {
+		return new class( $ttf, $pt, $px_per_mm ) {
+			public function __construct( private string $ttf, private float $pt, private float $px_per_mm ) {}
+
+			public function SetFontSize( $pt ): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName -- FPDF's method name
+				$this->pt = (float) $pt;
+			}
+
+			public function GetStringWidth( $text ): float { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName -- FPDF's method name
+				$box = imagettfbbox( PngGenerator::gd_size( $this->pt ), 0, $this->ttf, (string) $text );
+				return $box ? abs( $box[2] - $box[0] ) / $this->px_per_mm : 0.0;
+			}
+		};
+	}
+
 	public static function generate( $post_id, array $fields, $student_data = null ): ?string {
+		$requested_fields = $fields;
 		if ( ! function_exists( 'imagecreatefrompng' ) ) {
 			return null; // GD extension not available
 		}
@@ -144,6 +172,15 @@ class PngGenerator {
 			}
 			$post_data[ $field_name ] = $value;
 		}
+		$post_data = \certificate_generator_fill_custom_text( $post_data, $field_positions, array_merge( $use_table_data ? $student_data : array(), $post_data ) );
+
+		// GD draws letter by letter: Indic and Arabic text would lose its conjuncts and joins. Give the PDF instead.
+		if ( MpdfCanvas::needs_shaping( array_intersect_key( $post_data, $field_positions ) ) && function_exists( 'certificate_generator_generate_certificate_pdf' ) ) {
+			imagedestroy( $canvas );
+			\certificate_generator_debug_log( "PngGenerator: post $post_id has text that needs shaping — returning the PDF instead of a PNG." );
+			$pdf = \certificate_generator_generate_certificate_pdf( $post_id, $requested_fields, $student_data );
+			return is_string( $pdf ) && '' !== $pdf ? $pdf : null;
+		}
 
 		$text_color = self::allocate_hex_color( $canvas, $font_color );
 		$ttf_path   = \CertificateGenerator_FontManager::getInstance()->get_ttf_path_for_gd( $font_style );
@@ -178,25 +215,27 @@ class PngGenerator {
 				continue;
 			}
 
-			$text = (string) ( $post_data[ $field ] ?? '' );
-			if ( $text === '' || ! $ttf_path ) {
+			$text = \certificate_generator_transform_text( $position, (string) ( $post_data[ $field ] ?? '' ) );
+			// Per-field font, size and colour, falling back to the template's (same rules as the PDF).
+			$field_ttf   = ( $position['font_style'] ?? '' ) !== '' ? \CertificateGenerator_FontManager::getInstance()->get_ttf_path_for_gd( $position['font_style'] ) : $ttf_path;
+			$field_ttf   = $field_ttf ? $field_ttf : $ttf_path;
+			$field_color = \sanitize_hex_color( (string) ( $position['font_color'] ?? '' ) ) ? self::allocate_hex_color( $canvas, $position['font_color'] ) : $text_color;
+			if ( $text === '' || ! $field_ttf ) {
 				continue;
 			}
 
-			$size_px = $font_size * ( self::DPI / 72 ); // font_size is in points, same unit FPDF uses
-			$box     = imagettfbbox( $size_px, 0, $ttf_path, $text );
-			$text_w  = abs( $box[2] - $box[0] );
-
-			$align   = strtoupper( (string) ( $position['align'] ?? 'C' ) );
-			$field_w = (float) $position['width'] * $px_per_mm;
-			$draw_x  = $px_x;
-			if ( $align === 'C' ) {
-				$draw_x = $px_x + max( 0, ( $field_w - $text_w ) / 2 );
-			} elseif ( $align === 'R' ) {
-				$draw_x = $px_x + max( 0, $field_w - $text_w );
+			// The PDF's own fit, wrap and placement, measured with GD: X is the field's centre,
+			// each line is centred on Y (certificate_generator_line_baselines()).
+			$pt            = is_numeric( $position['font_size'] ?? '' ) ? (float) $position['font_size'] : (float) $font_size;
+			$field_w       = (float) $position['width'];
+			$measure       = self::text_measure( $field_ttf, $pt, $px_per_mm );
+			$fit           = \certificate_generator_fit_font_size( $measure, $pt, $text, $field_w );
+			$lines         = $measure->GetStringWidth( $text ) > $field_w ? \certificate_generator_wrap_text( $measure, $text, $field_w ) : array( $text );
+			[ $baselines ] = \certificate_generator_line_baselines( $y, $fit, count( $lines ) );
+			foreach ( $lines as $i => $line ) {
+				$line_x = \certificate_generator_calculate_x_position( $x, $measure->GetStringWidth( $line ), $field_w, (string) ( $position['align'] ?? 'C' ) );
+				imagettftext( $canvas, self::gd_size( $fit ), 0, (int) round( $line_x * $px_per_mm ), (int) round( $baselines[ $i ] * $px_per_mm ), $field_color, $field_ttf, $line );
 			}
-
-			imagettftext( $canvas, $size_px, 0, (int) $draw_x, (int) ( $px_y + $size_px ), $text_color, $ttf_path, $text );
 		}
 
 		// QR code — reuse the same PNG the PDF path draws, no separate QR system.
@@ -218,7 +257,7 @@ class PngGenerator {
 
 			if ( $serial && ( $tmpl_meta['serial_number_display'][0] ?? '' ) === '1' && $ttf_path ) {
 				$sn_text    = 'Serial: ' . $serial;
-				$sn_size_px = (float) ( $tmpl_meta['serial_number_font_size'][0] ?? 10 ) * ( self::DPI / 72 );
+				$sn_size_px = self::gd_size( (float) ( $tmpl_meta['serial_number_font_size'][0] ?? 10 ) );
 				$sn_box     = imagettfbbox( $sn_size_px, 0, $ttf_path, $sn_text );
 				$sn_width   = abs( $sn_box[2] - $sn_box[0] );
 				$sn_x       = ( (float) ( $tmpl_meta['serial_number_position_x'][0] ?? 105 ) * $px_per_mm ) - ( $sn_width / 2 );

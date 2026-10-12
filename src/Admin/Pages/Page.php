@@ -11,7 +11,7 @@ abstract class Page {
 	protected string $slug;
 	protected string $title;
 	protected string $parent_slug = 'cg-dashboard';
-	protected string $capability  = 'manage_options';
+	protected string $capability  = 'certificate_generator_manage_settings';
 
 	public function __construct( string $slug, string $title ) {
 		$this->slug  = $slug;

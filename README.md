@@ -1,8 +1,8 @@
 # Certificate Generator
 
-A WordPress plugin for issuing certificates in bulk to students, teachers and schools: template-based PDF generation, CSV import/export, email delivery with a queue and templates, QR-code verification, serial numbers and analytics. **No limits, and nothing locked.**
+A WordPress plugin for issuing certificates in bulk to students, teachers and schools: template-based PDF generation in any language, CSV import with a check step, email delivery with a queue and templates, QR-code verification with unguessable codes, certificate history, reissue, serial numbers and analytics. **No limits, and nothing locked.**
 
-- **Version:** 7.6.0 (see [`doc/CHANGELOG.md`](doc/CHANGELOG.md))
+- **Version:** 7.8.0 (see [`doc/CHANGELOG.md`](doc/CHANGELOG.md))
 - **Requires:** WordPress 6.0+, PHP 8.2+
 - **Tested up to:** WordPress 7.1
 - **License:** GPL-2.0-or-later ([`LICENSE.txt`](LICENSE.txt))
@@ -16,26 +16,33 @@ This repository is the **free plugin** (WordPress.org). It has no usage limits, 
 
 | Free (this plugin) | Pro add-on ($3.5/mo or $35/yr) |
 |---|---|
-| Certificate templates, PDF generation, 27 built-in fonts | Everything in Free, plus: |
-| Students / teachers / schools, CSV import & export | LMS auto-issue: Tutor LMS, LearnDash, LifterLMS, LearnPress, Sensei |
+| Certificate templates, PDF generation, 27 built-in fonts, names in any language | Everything in Free, plus: |
+| Students / teachers / schools, CSV import (with mapping and a check before saving) & export | LMS auto-issue: Tutor LMS, LearnDash, LifterLMS, LearnPress, Sensei |
 | Email sending (wp_mail, SMTP, Sender.net, Mandrill) and email templates | WooCommerce auto-issue on order completion |
 | Bulk send with background queue, rate limits, email logs, resend | "Issue to past completions" for every LMS |
-| QR verification, search shortcodes, LinkedIn "Add to Profile" | Custom font upload (`.ttf`) |
-| Serial numbers, revoke, analytics, badges, events, renewal reminders | REST API, school bulk ZIP shortcode, priority support |
+| QR verification with unguessable codes, search shortcodes, LinkedIn "Add to Profile" | Custom font upload (`.ttf`) |
+| Serial numbers, certificate history, revoke / reissue, analytics, badges, events, renewal reminders | REST API, school bulk ZIP shortcode, priority support |
+| School Coordinator role: a school's staff issue certificates for their own school only | |
 
 How the two plugins fit together: [`doc/dev/ARCHITECTURE.md`](doc/dev/ARCHITECTURE.md#free-plugin-and-pro-add-on). Business plan: everything in Pro on custom terms ([contact](mailto:techlovev@gmail.com)).
 
 ## Features (free)
 
-- **Certificate templates** — upload a background image (e.g. from Canva), drag-position fields, set font/size/colour per field. Long names shrink to fit.
-- **PDF generation** with the bundled [FPDF](lib/fpdf) engine and open-licensed fonts.
-- **QR-code verification** — every certificate gets a QR code linking to a public verification page (`[certificate_generator_verify_certificate]`).
-- **Serial numbers** — configurable format (`PREFIX-{YEAR}-{SEQ}`), bulk assignment for existing records, revoke and reinstate.
-- **Students / Teachers / Schools** — manual entry or CSV import/export, no row limits.
+- **Certificate templates** — upload a background image (e.g. from Canva), drag-position fields, give each field its own font, size, colour and UPPERCASE setting, and add custom-text fields that mix your words with `{field}` tags ("Awarded to {student_name}"). Long names shrink to fit.
+- **PDF generation** with the bundled [FPDF](lib/fpdf) engine and open-licensed fonts. Certificates with text outside Western European (Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu, Arabic, Ł, Cyrillic, …) switch automatically to [mPDF](https://github.com/mpdf/mpdf) with bundled fonts, so conjuncts join and Arabic connects.
+- **QR-code verification** — every certificate gets an unguessable 12-character verification code; its QR code opens the public verification page (`[certificate_generator_verify_certificate]`). Checking by serial number alone still works but masks the name.
+- **Certificate history, revoke and reissue** — every certificate keeps a history (issued, name corrected, revoked, reinstated, reissued, verified). Issued certificates keep the layout they were issued with; reissue applies a corrected template while keeping the serial and code, and the verify page shows "Corrected on …".
+- **Serial numbers** — configurable format (`PREFIX-{YEAR}-{SEQ}`), bulk assignment for existing records.
+- **Roles** — a **School Coordinator** role (the admin picks the school on the user's profile) can view, edit, import, download and email certificates for their own school's students and teachers only; templates, settings, revoke and analytics stay with admins. Four capabilities (`certificate_generator_view`, `_issue`, `_manage_templates`, `_manage_settings`) for role-editor plugins; admins have them all. See [Roles and School Coordinators](doc/guide/documentation.md#roles-and-school-coordinators) *(7.9.0, in progress)*.
+- **Students / Teachers / Schools** — manual entry or CSV import/export, no row limits. Imports are checked before anything is saved: column mapping (common header names are recognised), new / updated / duplicate / skipped counts, date order, comma / semicolon / tab and Excel's Windows encoding. Ready-to-edit samples for students, teachers, schools and templates ship in [`assets/samples/`](assets/samples/).
 - **Email** — your own SMTP, Sender.net or Mandrill (or WordPress's mail), per-type email templates with placeholders, CC/BCC.
 - **Bulk send** — filter by school, certificate type or import source; background queue; ZIP bundling when a recipient has several certificates; hourly rate limits; email logs with resend.
 - **Analytics** — delivery charts, expiration reports, recipient renewal reminders.
 - **Search shortcodes** — `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]` let recipients find and download their certificates.
+- **My Certificates** — `[certificate_generator_my_certificates]`: recipients sign in with an emailed link (no account needed) to download their certificates, share them and choose whether their name shows on the verify page. A setting makes the student search require the link too. See [My Certificates](doc/guide/documentation.md#my-certificates-recipients) *(7.9.0, in progress)*.
+- **Certificate register** — every issued certificate with its serial, verification code, school and status, filtered and downloaded as CSV or a printable PDF (non-Latin names included). School Coordinators see their own school *(7.9.0, in progress)*.
+- **Sharing** — the verify page offers LinkedIn Add to Profile (optionally linked to your LinkedIn organization), X, WhatsApp and copy link, and shared links get a preview card.
+- **Privacy tools** — WordPress's Export / Erase Personal Data cover the plugin's records; erased certificates are anonymised so printed ones still verify.
 - **Badges and image fields** — optional companion PNG badge; image fields for a signature or seal.
 
 The in-plugin **Certificate Generator → Documentation** page has the full interactive guide (Getting Started, User Guide, Email & Bulk Send, Troubleshooting, FAQ). [`doc/guide/documentation.md`](doc/guide/documentation.md) has the same content plus every developer reference in one file.
@@ -58,8 +65,8 @@ Works standalone — records live in the plugin's own `wp_cg_*` tables ([`doc/de
 | `includes/` | Legacy procedural code — still does most of the work (PDF generation, settings, email) |
 | `src/` | PSR-4 `CertificateGenerator\` OOP code — the migration target |
 | `lib/` | Bundled FPDF (PDF, built-in fonts) and tFPDF (uploaded `.ttf` fonts) |
-| `vendor/` | Composer autoloader and `endroid/qr-code` |
-| `assets/` | CSS, JS, images, bundled template backgrounds, Chart.js |
+| `vendor/` | Composer autoloader, `endroid/qr-code` and `mpdf/mpdf` (non-Latin certificates) |
+| `assets/` | CSS, JS, images, bundled template backgrounds, Chart.js, `fonts/unicode/` (fonts for Indian scripts and Arabic, with their licences) |
 | `templates/` | Front-end template (student certificate page) |
 | `doc/`, `tests/`, `bin/` | Developer docs, test suites, build scripts (not in the release ZIP) |
 
