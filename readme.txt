@@ -4,7 +4,7 @@ Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 7.8.0
+Stable tag: 7.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,18 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 
 == Changelog ==
 
+= 7.9.0 =
+* New: a School Coordinator role. An admin picks the coordinator's school on their user profile; they can view, edit, import, download and email certificates for that school's students and teachers only. Four capabilities for role-editor plugins; admins keep everything.
+* New: My Certificates page ([certificate_generator_my_certificates]). Recipients get an emailed sign-in link (no account needed) to download their certificates, share them, and choose whether their name shows when someone verifies a certificate. A setting makes the student search require the link too.
+* New: share buttons on the verify page (X, WhatsApp, copy link, alongside LinkedIn), link previews when a verify link is posted, and an optional LinkedIn organization ID.
+* New: Tools → Export / Erase Personal Data include this plugin's records. Erased certificates are anonymised, so printed ones still verify.
+* New: Certificate Register: every issued certificate with its serial, verification code, school, dates and status, filtered and downloaded as a spreadsheet or a printable PDF (non-Latin names included).
+* New: the verification page is created automatically and re-created if deleted. Before, a site without one got QR codes pointing at the home page.
+* New: the setup checklist covers the verification page and checking a certificate, and can be hidden and shown again.
+* Fix: text is now placed where the template editor shows it. It printed about a third of its height too high; long text wraps with even spacing. Check templates you moved up to compensate.
+* Fix: PNG downloads match the PDF (text was too large and shifted right).
+* Fix: less debug logging, and recipients' names and emails are no longer written to the debug log.
+
 = 7.8.0 =
 * New: reissue a certificate to correct it. It keeps its serial number and verification code, gets a new revision, and the verify page shows "Corrected on …". The reason is recorded in the certificate's history.
 * New: issued certificates keep a snapshot of their template layout and data, so editing a template later no longer changes certificates already issued.
@@ -125,6 +137,9 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
+
+= 7.9.0 =
+Text on certificates now sits exactly where the template editor shows it, slightly lower than before: check templates you nudged up to compensate. Adds a School Coordinator role, a My Certificates page, a certificate register and privacy tools.
 
 = 7.8.0 =
 Adds certificate reissue, per-field fonts and custom-text fields. Issued certificates now keep their layout when a template is edited later.

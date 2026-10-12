@@ -8,7 +8,7 @@ namespace CertificateGenerator\Core;
  */
 class Config {
 
-	public const VERSION           = '7.8.0';
+	public const VERSION           = '7.9.0';
 	public const DB_VERSION_OPTION = 'certificate_generator_db_version';
 	public const DB_TARGET_VERSION = '008';
 

@@ -4,7 +4,7 @@
 
 All notable changes to this plugin should be documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
-## 7.9.0 — unreleased (in progress)
+## 7.9.0 — 2026-10-12
 
 ### Added
 - **Capabilities** (`includes/Core/capabilities.php`): `certificate_generator_view`, `_issue`, `_manage_templates`, `_manage_settings`. Every user with `manage_options` has all four (a `user_has_cap` filter, nothing stored), so admins see no change; role editors can grant them to other roles. The plugin's ~100 `manage_options` checks now use them.
@@ -28,7 +28,7 @@ All notable changes to this plugin should be documented here. Format loosely fol
 - `certificate_generator_student_certificates_for_email()` takes an `$entity` (`students` or `teachers`) and returns each certificate's `serial_number`.
 - The unfiltered "send to every record" AJAX (`certificate_generator_start_bulk_send`, not used by the current Bulk Send page) is admin-only.
 
-## 7.8.0 — unreleased
+## 7.8.0 — not released on its own, shipped in 7.9.0
 
 ### Added
 - **Reissue** (Revoke page → History → Reissue): keeps the serial and verification code, bumps `revision`, records a `reissued` event with the reason; the verify result shows "Corrected on …". AJAX `certificate_generator_reissue_certificate` (`includes/Admin/revoke-certificate.php`).
