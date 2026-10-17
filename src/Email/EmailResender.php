@@ -10,7 +10,8 @@ namespace CertificateGenerator\Email;
  * certificate_generator_send_email() / certificate_generator_queue_email()
  * already take, so both paths reuse the normal send pipeline: same PDF,
  * same logging, same monthly cap. Rows logged with certificate_id 0 (LMS
- * auto-issue) have no anchor and must be resent from the recipient's record.
+ * auto-issue, sent through Mailer) resolve the address's anchor the way the
+ * student row's Send Email does, so they resend every certificate for that address.
  */
 class EmailResender {
 
@@ -24,8 +25,46 @@ class EmailResender {
 		return $wpdb->prefix . 'cert_email_logs';
 	}
 
+	/** wp_certificate_generator row id for this address (created if missing): send_email()/queue_email() key on it. */
+	public static function anchor_id( string $email, string $name, string $cert_type ): int {
+		global $wpdb;
+		$cg_table = $wpdb->prefix . 'certificate_generator';
+		$cg_id    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $cg_table WHERE email = %s ORDER BY id DESC LIMIT 1", $email ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( ! $cg_id ) {
+			$wpdb->insert(
+				$cg_table,
+				array(
+					'email'            => $email,
+					'student_name'     => $name,
+					'certificate_type' => $cert_type,
+					'issued_at'        => current_time( 'mysql' ),
+					'generated_via'    => 'manual',
+				)
+			);
+			$cg_id = (int) $wpdb->insert_id;
+		}
+		return $cg_id;
+	}
+
+	/**
+	 * The anchor to resend a log row from. An LMS row (certificate_id 0) uses its address's
+	 * student record; 0 when that address has no certificate any more.
+	 */
+	private static function anchor_for( int $certificate_id, string $email ): int {
+		if ( $certificate_id > 0 ) {
+			return $certificate_id;
+		}
+		global $wpdb;
+		$table   = \CertificateGenerator\Database\CustomTables::instance()->get_table( 'students' );
+		$student = is_email( $email )
+			? $wpdb->get_row( $wpdb->prepare( "SELECT student_name, certificate_type FROM $table WHERE email = %s ORDER BY id DESC LIMIT 1", $email ), ARRAY_A ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name comes from $wpdb->prefix
+			: null;
+		return $student ? self::anchor_id( $email, (string) $student['student_name'], (string) $student['certificate_type'] ) : 0;
+	}
+
 	/**
 	 * Failed sends that never succeeded afterwards, one per (certificate, address).
+	 * An LMS row (certificate_id 0) counts as done once any anchored send to its address succeeds.
 	 *
 	 * @return array<int,array{certificate_id:int,recipient_email:string,recipient_name:string}>
 	 */
@@ -37,10 +76,11 @@ class EmailResender {
 		$rows = $wpdb->get_results(
 			"SELECT l.certificate_id, l.recipient_email, MAX(l.recipient_name) AS recipient_name
 			   FROM $t l
-			  WHERE l.status = 'failed' AND l.certificate_id > 0 AND l.recipient_email <> ''
+			  WHERE l.status = 'failed' AND l.recipient_email <> ''
 			    AND NOT EXISTS (
 			        SELECT 1 FROM $t s
-			         WHERE s.status = 'sent' AND s.certificate_id = l.certificate_id
+			         WHERE s.status = 'sent' AND s.certificate_id > 0
+			           AND ( s.certificate_id = l.certificate_id OR l.certificate_id = 0 )
 			           AND s.recipient_email = l.recipient_email AND s.id > l.id )
 			  GROUP BY l.certificate_id, l.recipient_email",
 			ARRAY_A
@@ -63,8 +103,12 @@ class EmailResender {
 		}
 		$queued = 0;
 		foreach ( self::still_failed() as $row ) {
+			$anchor = self::anchor_for( $row['certificate_id'], $row['recipient_email'] );
+			if ( ! $anchor ) {
+				continue;
+			}
 			$ok = certificate_generator_queue_email(
-				$row['certificate_id'],
+				$anchor,
 				$row['recipient_email'],
 				array( 'priority' => 1, 'recipient_name' => $row['recipient_name'] )
 			);
@@ -87,20 +131,21 @@ class EmailResender {
 		if ( ! $log ) {
 			return array( 'ok' => false, 'message' => __( 'Log entry not found.', 'certificate-generator' ) );
 		}
-		if ( (int) $log->certificate_id <= 0 ) {
-			return array( 'ok' => false, 'message' => __( 'This email was sent by an LMS integration and has no certificate record to resend from. Use Send Email on the student\'s row instead.', 'certificate-generator' ) );
+		$anchor = self::anchor_for( (int) $log->certificate_id, (string) $log->recipient_email );
+		if ( ! $anchor ) {
+			return array( 'ok' => false, 'message' => __( 'No certificate is on record for this address any more, so there is nothing to resend.', 'certificate-generator' ) );
 		}
 		if ( ! function_exists( 'certificate_generator_send_email' ) ) {
 			return array( 'ok' => false, 'message' => __( 'Email send function unavailable.', 'certificate-generator' ) );
 		}
 
-		if ( certificate_generator_send_email( (int) $log->certificate_id ) ) {
+		if ( certificate_generator_send_email( $anchor ) ) {
 			return array( 'ok' => true, 'message' => __( 'Email sent.', 'certificate-generator' ) );
 		}
 
 		// send_email() logged the reason; surface it.
 		$reason = $wpdb->get_var(
-			$wpdb->prepare( "SELECT error_message FROM $t WHERE certificate_id = %d AND status = 'failed' ORDER BY id DESC LIMIT 1", (int) $log->certificate_id ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->prepare( "SELECT error_message FROM $t WHERE certificate_id = %d AND status = 'failed' ORDER BY id DESC LIMIT 1", $anchor ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		);
 		return array( 'ok' => false, 'message' => $reason ?: __( 'Send failed. Check your email settings.', 'certificate-generator' ) );
 	}

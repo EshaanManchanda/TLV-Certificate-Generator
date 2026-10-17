@@ -4,7 +4,7 @@ Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 7.9.0
+Stable tag: 7.9.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,11 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 
 == Changelog ==
 
+= 7.9.1 =
+* Fix: two students with the same name who finished on the same day could be given the same serial number.
+* Fix: Email Logs can resend a failed email sent by an LMS integration (the Pro add-on), one at a time or with "Resend all failed".
+* Fix: "View Certificate" in Email Logs opens the recipient on the Students page. It used to open an unrelated page.
+
 = 7.9.0 =
 * New: a School Coordinator role. An admin picks the coordinator's school on their user profile; they can view, edit, import, download and email certificates for that school's students and teachers only. Four capabilities for role-editor plugins; admins keep everything.
 * New: My Certificates page ([certificate_generator_my_certificates]). Recipients get an emailed sign-in link (no account needed) to download their certificates, share them, and choose whether their name shows when someone verifies a certificate. A setting makes the student search require the link too.
@@ -137,6 +142,9 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
+
+= 7.9.1 =
+Fixes a shared serial number for same-name students finishing on the same day, and resending failed LMS emails from Email Logs. Required by Certificate Generator Pro 1.5.0.
 
 = 7.9.0 =
 Text on certificates now sits exactly where the template editor shows it, slightly lower than before: check templates you nudged up to compensate. Adds a School Coordinator role, a My Certificates page, a certificate register and privacy tools.

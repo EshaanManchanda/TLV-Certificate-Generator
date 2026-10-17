@@ -172,11 +172,10 @@ function certificate_generator_email_logs_page() {
 									<?php endif; ?>
 								</td>
 								<td>
-									<a href="<?php echo esc_url( admin_url( 'post.php?post=' . $log->certificate_id . '&action=edit' ) ); ?>" class="button button-small"><?php esc_html_e( 'View Certificate', 'certificate-generator' ); ?></a>
-									<?php if ( $log->status === 'failed' && (int) $log->certificate_id > 0 ) : ?>
+									<?php // certificate_id is a wp_certificate_generator row (0 for LMS sends), not a post: find the recipient instead. ?>
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-students&s=' . rawurlencode( (string) $log->recipient_email ) ) ); ?>" class="button button-small"><?php esc_html_e( 'View Certificate', 'certificate-generator' ); ?></a>
+									<?php if ( $log->status === 'failed' ) : ?>
 										<button type="button" class="button button-small resend-email" data-log-id="<?php echo esc_attr( $log->id ); ?>"><?php esc_html_e( 'Resend', 'certificate-generator' ); ?></button>
-									<?php elseif ( $log->status === 'failed' ) : ?>
-										<span class="cg-hint"><?php esc_html_e( 'Resend from the student\'s row', 'certificate-generator' ); ?></span>
 									<?php endif; ?>
 								</td>
 							</tr>

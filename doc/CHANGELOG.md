@@ -4,6 +4,13 @@
 
 All notable changes to this plugin should be documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 7.9.1 — 2026-10-16
+
+### Fixed
+- **Serial numbers for namesakes** (`includes/Services/certificate-search.php`): when the caller passes `_template_id` (Pro's LMS auto-issue), the lookup no longer borrows the serial of another row with the same name and issue date, so two same-name students finishing the same day get their own serials. `recipient_type` is mapped to the column's ENUM (`student` / `teacher` / `other`) instead of the entity name.
+- **Resend LMS emails** (`src/Email/EmailResender.php`, `includes/Admin/email-logs.php`): rows logged with `certificate_id` 0 (LMS auto-issue, sent through `Mailer`) now show Resend and are included in "Resend all failed". They resolve the address's anchor (`EmailResender::anchor_id()`, shared with the student row's Send Email), so a resend sends every certificate that address has. An address with no certificate left says so instead.
+- **"View Certificate" in Email Logs** linked to `post.php?post=<certificate_id>`, but that id is a `wp_certificate_generator` row, not a post. It now opens `cg-students` searched by the recipient's email.
+
 ## 7.9.0 — 2026-10-12
 
 ### Added

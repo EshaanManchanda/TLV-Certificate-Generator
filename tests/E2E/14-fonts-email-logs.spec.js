@@ -23,18 +23,24 @@ test.describe('§14 Fonts page', () => {
 
 test.describe('§14 Email Logs resend', () => {
 	const EMAIL = 'resend@e2e.test';
+	const LMS_EMAIL = 'lms@e2e.test';
 	let anchor;
 
 	test.beforeAll(() => {
 		anchor = wp.seedCertificate({ student_name: 'E2E Resend', email: EMAIL, certificate_type: 'E2E Merit' });
 		wp.sql("INSERT INTO {p}cert_email_logs (certificate_id, recipient_email, recipient_name, certificate_type, status, error_message) VALUES (%d, %s, 'E2E Resend', 'E2E Merit', 'failed', 'E2E SMTP down')", Number(anchor), EMAIL);
-		wp.sql("INSERT INTO {p}cert_email_logs (certificate_id, recipient_email, recipient_name, certificate_type, status, error_message) VALUES (0, 'lms@e2e.test', 'E2E LMS', 'E2E Merit', 'failed', 'E2E SMTP down')");
+		// LMS auto-issue logs with certificate_id 0; resend resolves the address's student record.
+		wp.seedPerson('students', { name: 'E2E LMS', email: LMS_EMAIL, certificate_type: 'E2E Merit' });
+		wp.sql("INSERT INTO {p}cert_email_logs (certificate_id, recipient_email, recipient_name, certificate_type, status, error_message) VALUES (0, %s, 'E2E LMS', 'E2E Merit', 'failed', 'E2E SMTP down')", LMS_EMAIL);
 	});
 
-	test('failed rows offer Resend; LMS rows explain; Resend all failed queues', async ({ page }) => {
+	test('failed rows, LMS ones included, offer Resend; Resend all failed queues both', async ({ page }) => {
 		await page.goto(adminUrl('certificate-email-logs', { s: 'e2e.test' }));
 		await expect(page.locator(`tr:has-text("${EMAIL}") .resend-email`)).toBeVisible();
-		await expect(page.locator('tr:has-text("lms@e2e.test")')).toContainText("Resend from the student's row");
+		await expect(page.locator(`tr:has-text("${LMS_EMAIL}") .resend-email`)).toBeVisible();
+		// "View Certificate" opens the recipient on the Students page (certificate_id isn't a post, and is 0 for LMS rows).
+		const view = await page.locator(`tr:has-text("${LMS_EMAIL}")`).getByRole('link', { name: 'View Certificate' }).getAttribute('href');
+		expect(view).toContain('page=cg-students&s=lms%40e2e.test');
 
 		const all = page.locator('#cg-resend-all-failed');
 		await expect(all).toContainText('Resend all failed');
@@ -46,6 +52,8 @@ test.describe('§14 Email Logs resend', () => {
 
 		const queued = wp.sql("SELECT status FROM {p}cert_email_queue WHERE recipient_email = %s", EMAIL);
 		expect(queued.map((r) => r.status)).toEqual(['pending']);
+		const lmsQueued = wp.sql("SELECT status FROM {p}cert_email_queue WHERE recipient_email = %s", LMS_EMAIL);
+		expect(lmsQueued.map((r) => r.status)).toEqual(['pending']);
 	});
 
 	test('Export CSV downloads the logs', async ({ page }) => {

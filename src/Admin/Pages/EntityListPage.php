@@ -603,23 +603,7 @@ abstract class EntityListPage {
 
 	/** wp_certificate_generator row id for this email — certificate_generator_send_email()/queue key on it. */
 	protected function legacy_anchor_id( string $email, string $name, string $cert_type ): int {
-		global $wpdb;
-		$cg_table = $wpdb->prefix . 'certificate_generator';
-		$cg_id    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $cg_table WHERE email = %s ORDER BY id DESC LIMIT 1", $email ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		if ( ! $cg_id ) {
-			$wpdb->insert(
-				$cg_table,
-				array(
-					'email'            => $email,
-					'student_name'     => $name,
-					'certificate_type' => $cert_type,
-					'issued_at'        => current_time( 'mysql' ),
-					'generated_via'    => 'manual',
-				)
-			);
-			$cg_id = (int) $wpdb->insert_id;
-		}
-		return $cg_id;
+		return \CertificateGenerator\Email\EmailResender::anchor_id( $email, $name, $cert_type );
 	}
 
 	// ── CSV export ───────────────────────────────────────────────────────────

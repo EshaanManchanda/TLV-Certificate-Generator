@@ -1763,7 +1763,8 @@ function certificate_generator_insert_certificate_record( array $post_data, stri
 					'template_id'      => $template_id,
 					'recipient_name'   => $post_data['student_name'] ?? $post_data['teacher_name'] ?? $post_data['school_name'] ?? 'Unknown',
 					'recipient_email'  => $post_data['email'] ?? null,
-					'recipient_type'   => $post_data['recipient_type'] ?? 'student',
+					// Callers pass the entity (students / teachers / schools); the column is an ENUM.
+					'recipient_type'   => array( 'students' => 'student', 'student' => 'student', 'teachers' => 'teacher', 'teacher' => 'teacher' )[ $post_data['recipient_type'] ?? 'students' ] ?? 'other',
 					'certificate_type' => $cert_type,
 					'serial_number'    => $serial_number,
 					'verification_code' => certificate_generator_verification_code( $serial_number ),
@@ -2340,8 +2341,12 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 		// falling back to the fragile name+type match against the legacy table.
 		$serial_number = $use_table_data ? (string) ( $student_data['serial_number'] ?? '' ) : '';
 
-		// Reuse existing serial for the same student + certificate type
-		if ( empty( $serial_number ) && $name_for_lookup && $certificate_type ) {
+		// Reuse existing serial for the same student + certificate type. Not when the caller names
+		// the exact template (LMS / WooCommerce mappings): each of their rows is its own certificate,
+		// and a name + type + date match would hand it another row's serial (a namesake's, or the
+		// same learner's certificate from a different template).
+		$names_template = $use_table_data && ! empty( $student_data['_template_id'] );
+		if ( empty( $serial_number ) && ! $names_template && $name_for_lookup && $certificate_type ) {
 			$serial_number = certificate_generator_find_existing_serial( $name_for_lookup, $certificate_type, (string) $issue_date_iso );
 		}
 		if ( empty( $serial_number ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
