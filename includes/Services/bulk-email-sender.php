@@ -29,7 +29,8 @@ add_filter( 'cron_schedules', 'certificate_generator_add_cron_schedules' );
 function certificate_generator_add_cron_schedules( $schedules ) {
 	$schedules['certificate_generator_5min'] = array(
 		'interval' => 300, // 5 minutes
-		'display'  => __( 'Every 5 Minutes (Certificate Generator)', 'certificate-generator' ),
+		// Any plugin that schedules an event on plugins_loaded runs this filter before init, where __() logs a notice.
+		'display'  => did_action( 'init' ) ? __( 'Every 5 Minutes (Certificate Generator)', 'certificate-generator' ) : 'Every 5 Minutes (Certificate Generator)',
 	);
 	return $schedules;
 }

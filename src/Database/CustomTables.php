@@ -12,7 +12,7 @@ class CustomTables {
 	// Bump whenever a column/index is added to any create_*_table() method below,
 	// so existing installs get dbDelta() re-run (all_tables_exist() alone only
 	// catches a fully-missing table, never a stale column on an existing one).
-	private const SCHEMA_VERSION = '1.3.3';
+	private const SCHEMA_VERSION = '1.3.4';
 
 	private static ?CustomTables $instance = null;
 	private array $tables                  = array();
@@ -50,6 +50,7 @@ class CustomTables {
 			'email_templates'       => $prefix . 'email_templates',
 			'events'                => $prefix . 'events',
 			'certificate_events'    => $prefix . 'certificate_events',
+			'message_log'           => $prefix . 'message_log',
 		);
 	}
 
@@ -80,6 +81,7 @@ class CustomTables {
 		$this->create_email_templates_table();
 		$this->create_events_table();
 		$this->create_certificate_events_table();
+		$this->create_message_log_table();
 
 		update_option( 'certificate_generator_custom_tables_version', self::SCHEMA_VERSION );
 	}
@@ -659,6 +661,48 @@ class CustomTables {
             INDEX idx_serial (certificate_serial),
             INDEX idx_type (event_type),
             INDEX idx_created_at (created_at)
+        ) $charset_collate;";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
+	 * Outgoing messages other than certificate emails (WhatsApp messages, webhook deliveries),
+	 * one row per recipient and certificate, updated in place as it is retried and delivered.
+	 * The free plugin doesn't write it; it lives here so add-ons' delivery history survives
+	 * their deactivation. campaign/event are '' rather than NULL so the unique key holds: one row per
+	 * channel, event, certificate or recipient row, address and campaign.
+	 */
+	private function create_message_log_table(): void {
+		global $wpdb;
+		$table           = $this->tables['message_log'];
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            channel VARCHAR(20) NOT NULL,
+            event VARCHAR(50) NOT NULL DEFAULT '',
+            campaign VARCHAR(100) NOT NULL DEFAULT '',
+            certificate_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            recipient_table VARCHAR(20) NOT NULL DEFAULT '',
+            recipient_row_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            recipient_name VARCHAR(255) NOT NULL DEFAULT '',
+            to_address VARCHAR(255) NOT NULL,
+            provider VARCHAR(30) NOT NULL DEFAULT '',
+            provider_message_id VARCHAR(191) NOT NULL DEFAULT '',
+            status VARCHAR(20) NOT NULL DEFAULT 'queued',
+            error TEXT DEFAULT NULL,
+            payload LONGTEXT DEFAULT NULL,
+            attempts INT UNSIGNED NOT NULL DEFAULT 0,
+            next_attempt_at DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY uk_message (channel, event, certificate_id, recipient_table, recipient_row_id, to_address, campaign),
+            INDEX idx_due (status, next_attempt_at),
+            INDEX idx_provider_message (provider_message_id),
+            INDEX idx_campaign (campaign)
         ) $charset_collate;";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

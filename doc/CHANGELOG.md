@@ -4,6 +4,15 @@
 
 All notable changes to this plugin should be documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 7.9.2 — 2026-10-17
+
+### Added
+- **`wp_cg_message_log` table** (`src/Database/CustomTables.php`, schema 1.3.4): one row per outgoing WhatsApp message or webhook delivery, for add-ons (Certificate Generator Pro 1.7.0). The free plugin doesn't write it; uninstall drops it.
+- **`certificate_generator_certificate_generated` passes the certificate row id** as a 4th argument (0 when there is none), so listeners can find the recipient. Existing listeners with fewer arguments are unaffected.
+
+### Fixed
+- **"Translation loading … triggered too early" notice** (`includes/Services/bulk-email-sender.php`): the 5-minute cron schedule's label was translated whenever another plugin scheduled an event on `plugins_loaded`. It's now translated only after `init`.
+
 ## 7.9.1 — 2026-10-16
 
 ### Fixed

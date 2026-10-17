@@ -4,7 +4,7 @@ Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 7.9.1
+Stable tag: 7.9.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,10 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 
 == Changelog ==
 
+= 7.9.2 =
+* Fix: no more "translation loading triggered too early" notice when another plugin schedules a task early.
+* New: a delivery log table and a certificate id on the "certificate generated" hook, used by the Pro add-on's WhatsApp and webhooks.
+
 = 7.9.1 =
 * Fix: two students with the same name who finished on the same day could be given the same serial number.
 * Fix: Email Logs can resend a failed email sent by an LMS integration (the Pro add-on), one at a time or with "Resend all failed".
@@ -142,6 +146,9 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
+
+= 7.9.2 =
+Fixes an early-translation notice. Required by Certificate Generator Pro 1.7.0 (WhatsApp delivery, webhooks).
 
 = 7.9.1 =
 Fixes a shared serial number for same-name students finishing on the same day, and resending failed LMS emails from Email Logs. Required by Certificate Generator Pro 1.5.0.

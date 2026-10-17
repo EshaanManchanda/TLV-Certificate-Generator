@@ -2509,6 +2509,7 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 		update_post_meta( $post_id, 'certificate_file_path', $pdf_path );
 		update_post_meta( $post_id, 'certificate_file_url', $file_url );
 
+		$cert_row_id = 0; // the wp_cg_certificates row, when there is one
 		// Dual-write: update wp_cg_certificates with pdf_path + pdf_url
 		if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 			global $wpdb;
@@ -2553,7 +2554,8 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 		}
 
 		// Third argument: true only when this render issued a new serial ($serial_gen is set only when generate() ran).
-		do_action( 'certificate_generator_certificate_generated', $post_id, $pdf_path, null !== $serial_gen );
+		// Fourth: the wp_cg_certificates row id (0 when there is none), for listeners that need the recipient.
+		do_action( 'certificate_generator_certificate_generated', $post_id, $pdf_path, null !== $serial_gen, (int) $cert_row_id );
 
 		return $file_url;
 	} catch ( Exception $e ) {
