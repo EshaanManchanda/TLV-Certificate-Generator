@@ -25,7 +25,7 @@ class QRCodeService {
 	}
 
 	public function generate_data( array $cert_data, string $serial_number ): string {
-		$verify_url = home_url( '/wp-json/certificate-generator/v1/verify/' . $serial_number );
+		$verify_url = rest_url( 'certificate-generator/v1/verify/' . rawurlencode( $serial_number ) );
 
 		return wp_json_encode(
 			array(

@@ -178,8 +178,8 @@ add_action( 'admin_menu', 'certificate_generator_add_compatibility_page' );
 function certificate_generator_add_compatibility_page() {
 	add_submenu_page(
 		'tools.php',
-		'Certificate Generator - Compatibility Check',
-		'Cert Gen Compatibility',
+		'Certificate Generator - Diagnostics',
+		'Cert Gen Diagnostics',
 		'certificate_generator_manage_settings',
 		'cert-gen-compatibility-check',
 		'certificate_generator_compatibility_page'
@@ -205,11 +205,29 @@ function certificate_generator_compatibility_page() {
 	<div class="wrap">
 		<?php
 		certificate_generator_ui_page_header(
-			'Certificate Generator — Server Compatibility',
-			'Checks this server against what the plugin needs (PHP version, extensions, memory, limits) and suggests fixes.',
+			'Certificate Generator — Diagnostics',
+			'Checks the plugin (folders, libraries, database, scheduled tasks, email queue, bulk jobs) and this server, and says how to fix what fails.',
 			'<a href="' . esc_url( wp_nonce_url( admin_url( 'tools.php?page=cert-gen-compatibility-check&refresh=1' ), 'refresh_check' ) ) . '" class="button button-primary">Refresh Check</a>'
 		);
 		?>
+
+		<?php certificate_generator_ui_card_open( 'Plugin checks', array( 'icon' => 'yes-alt' ) ); ?>
+			<div class="cg-table-wrap">
+			<table class="widefat cg-table">
+				<thead><tr><th>Check</th><th>Status</th><th>Value</th><th>How to fix</th></tr></thead>
+				<tbody>
+				<?php foreach ( certificate_generator_diagnostics() as $check ) : ?>
+					<tr>
+						<td><strong><?php echo esc_html( $check['label'] ); ?></strong></td>
+						<td><?php echo certificate_generator_ui_badge( ucfirst( $check['status'] ), array( 'pass' => 'good', 'warn' => 'warn', 'fail' => 'bad' )[ $check['status'] ] ); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside ?></td>
+						<td><?php echo esc_html( $check['value'] ); ?></td>
+						<td><?php echo esc_html( $check['fix'] ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+			</div>
+		<?php certificate_generator_ui_card_close(); ?>
 
 		<?php if ( $compatibility ) : ?>
 			<?php
@@ -388,4 +406,82 @@ function certificate_generator_show_custom_messages() {
 		}
 	}
 }
-?>
+
+/**
+ * Plugin checks for Tools → Certificate Generator Diagnostics and `wp certificate-generator
+ * diagnostics`: each is {key, label, status: pass|warn|fail, value, fix}. A non-pass check
+ * always says what to change.
+ *
+ * @return array<int,array{key:string,label:string,status:string,value:string,fix:string}>
+ */
+function certificate_generator_diagnostics(): array {
+	global $wpdb;
+	$checks = array();
+	$add    = static function ( string $key, string $label, string $status, string $value, string $fix = '' ) use ( &$checks ): void {
+		$fix      = 'pass' === $status ? '' : $fix;
+		$checks[] = compact( 'key', 'label', 'status', 'value', 'fix' );
+	};
+
+	// Folders.
+	$dir = function_exists( 'certificate_generator_certificates_dir' ) ? certificate_generator_certificates_dir() : '';
+	$add( 'certificates_dir', 'Certificates folder writable', '' !== $dir && wp_is_writable( $dir ) ? 'pass' : 'fail', $dir, 'Make this folder writable by the web server (permissions 755, owned by the PHP user), or check that wp-content/uploads is writable.' );
+	$uploads = wp_upload_dir();
+	$add( 'uploads_dir', 'Uploads folder writable', wp_is_writable( $uploads['basedir'] ) ? 'pass' : 'fail', (string) $uploads['basedir'], 'WordPress cannot write to wp-content/uploads: fix its permissions (755) and owner.' );
+
+	// PDF and image libraries.
+	$fonts = glob( CERTIFICATE_GENERATOR_PATH . 'lib/fpdf/font/*.php' ) ?: array();
+	$add( 'fonts', 'Bundled PDF fonts', $fonts ? 'pass' : 'fail', count( $fonts ) . ' fonts', 'The plugin\'s lib/fpdf/font folder is empty or missing: reinstall the plugin from a fresh ZIP.' );
+	$add( 'fpdf', 'PDF library (FPDF / tFPDF)', is_readable( CERTIFICATE_GENERATOR_PATH . 'lib/fpdf/fpdf.php' ) && is_readable( CERTIFICATE_GENERATOR_PATH . 'lib/tfpdf/tfpdf.php' ) ? 'pass' : 'fail', '', 'lib/fpdf or lib/tfpdf is missing: reinstall the plugin from a fresh ZIP.' );
+	$gd      = extension_loaded( 'gd' );
+	$formats = $gd && function_exists( 'gd_info' ) ? array_keys( array_filter( array( 'PNG' => gd_info()['PNG Support'] ?? false, 'JPEG' => gd_info()['JPEG Support'] ?? false ) ) ) : array();
+	$add( 'images', 'Image library (GD)', $gd && 2 === count( $formats ) ? 'pass' : ( $gd || extension_loaded( 'imagick' ) ? 'warn' : 'fail' ), $gd ? 'GD: ' . implode( ', ', $formats ) : ( extension_loaded( 'imagick' ) ? 'Imagick only' : 'none' ), 'Ask your host to enable the PHP "gd" extension with PNG and JPEG support (template images, QR codes, PNG downloads need it).' );
+
+	// Database.
+	if ( class_exists( '\CertificateGenerator\Database\Migrations\MigrationRunner' ) ) {
+		$runner = new \CertificateGenerator\Database\Migrations\MigrationRunner();
+		$have   = $runner->get_current_version();
+		$want   = $runner->get_target_version();
+		$add( 'db_version', 'Database version', $have === $want ? 'pass' : 'fail', "$have (plugin needs $want)", 'Run the pending migrations: Certificate Generator → Migration, or deactivate and reactivate the plugin.' );
+	}
+
+	// Cron.
+	$cron_off = defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON;
+	$overdue  = array();
+	foreach ( (array) _get_cron_array() as $time => $hooks ) {
+		foreach ( array_keys( (array) $hooks ) as $hook ) {
+			if ( str_starts_with( (string) $hook, 'certificate_generator_' ) && (int) $time < time() - 10 * MINUTE_IN_SECONDS ) {
+				$overdue[ $hook ] = true;
+			}
+		}
+	}
+	if ( $overdue ) {
+		$add( 'cron', 'Scheduled tasks (WP-Cron)', 'fail', count( $overdue ) . ' overdue: ' . implode( ', ', array_keys( $overdue ) ), $cron_off ? 'DISABLE_WP_CRON is set but no server cron runs WordPress: add a server cron job running `wp cron event run --due-now` (or a request to wp-cron.php) every 5 minutes.' : 'WP-Cron only runs when someone visits the site: add a server cron job running `wp cron event run --due-now` every 5 minutes, then set DISABLE_WP_CRON.' );
+	} else {
+		$add( 'cron', 'Scheduled tasks (WP-Cron)', $cron_off ? 'warn' : 'pass', $cron_off ? 'DISABLE_WP_CRON set; nothing overdue' : 'running', $cron_off ? 'Nothing is overdue, so a server cron seems to run WordPress. If emails or bulk jobs stall, check that cron job.' : '' );
+	}
+
+	// Email queue.
+	$queue = $wpdb->prefix . 'cert_email_queue';
+	if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $queue ) ) === $queue ) {
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix
+		$row    = $wpdb->get_row( "SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM $queue WHERE status = 'pending'" );
+		$n      = (int) ( $row->n ?? 0 );
+		$stuck  = $n && $row->oldest && strtotime( (string) $row->oldest ) < strtotime( (string) $wpdb->get_var( 'SELECT NOW()' ) ) - HOUR_IN_SECONDS;
+		$add( 'email_queue', 'Email queue', $stuck ? 'warn' : 'pass', $n ? sprintf( '%d pending, oldest %s', $n, $row->oldest ) : 'empty', 'Emails have waited over an hour: check the Scheduled tasks row above, and Email Logs for send errors (SMTP / API credentials, rate limits).' );
+	}
+	$transport = (string) get_option( 'certificate_generator_email_transport', 'wp_mail' );
+	$add( 'mail', 'Email sending', 'pass', 'wp_mail' === $transport ? ( function_exists( 'certificate_generator_is_wp_mail_smtp_active' ) && certificate_generator_is_wp_mail_smtp_active() ? 'wp_mail via WP Mail SMTP' : 'wp_mail (the server\'s PHP mail)' ) : $transport );
+
+	// Bulk jobs.
+	if ( class_exists( '\CertificateGenerator\Services\Jobs' ) ) {
+		$stalled = 0;
+		$failed  = 0;
+		$day     = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
+		foreach ( \CertificateGenerator\Services\Jobs::recent( 100 ) as $job ) {
+			$stalled += \CertificateGenerator\Services\Jobs::is_stalled( $job ) ? 1 : 0;
+			$failed  += (int) $job['failed'] > 0 && (string) $job['created_at'] >= $day ? 1 : 0;
+		}
+		$add( 'jobs', 'Bulk generation jobs', $stalled ? 'fail' : ( $failed ? 'warn' : 'pass' ), sprintf( '%d stalled, %d with failed items in the last 24 h', $stalled, $failed ), $stalled ? 'A job has had no worker for 15 minutes: fix Scheduled tasks above, open the job (Certificate Generator → Bulk Jobs) to run it, or run `wp certificate-generator jobs run <id>`.' : 'Open Certificate Generator → Bulk Jobs to see each failed item\'s error, fix it (usually a missing published template), then Retry failed.' );
+	}
+	return $checks;
+}

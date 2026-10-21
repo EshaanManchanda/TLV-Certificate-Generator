@@ -119,6 +119,8 @@ function certificate_generator_reissue_certificate( string $serial, string $reas
 		array( '%s' )
 	);
 	certificate_generator_record_event( $serial, 'reissued', array( 'reason' => $reason, 'revision' => $revision ) );
+	/** Fires after a certificate is reissued with its template's current layout. */
+	do_action( 'certificate_generator_certificate_reissued', $serial, $revision );
 	return $revision;
 }
 

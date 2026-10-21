@@ -27,13 +27,18 @@ Schema owner: `src/Database/CustomTables.php` (all tables created via `dbDelta`)
 | `wp_cg_custom_fonts` | v9: custom `.ttf` font uploads (`font_name`, `file_path`, `uploaded_by`), rendered via the bundled [tFPDF](../../lib/tfpdf) engine instead of classic FPDF. Uploading needs the Pro add-on; uploaded fonts keep rendering in Free. Managed from **Certificate Generator → Fonts** (`src/Admin/Pages/FontsPage.php`). |
 | `wp_cg_email_templates` | Named, per-certificate-type email templates (`certificate_type` is unique) — subject, title, message, attach/cc/bcc/reply-to. `certificate_generator_send_email()` (`includes/Email/functions.php`) checks this table first, falling back to the global `certificate_generator_email_subject`/`certificate_generator_email_body` options if no per-type row matches. Managed from **Settings → Email**. Free on every plan; see [`PLAN-COMPARISON.md`](../guide/PLAN-COMPARISON.md). |
 
+| `wp_cg_api_keys` | 7.9.3: scoped API keys for the Pro REST API — `key_prefix` (unique, public part), `key_hash` (SHA-256), `scopes`, `user_id`, `expires_at`, `revoked_at`, `last_used_at` |
+| `wp_cg_message_log` | 7.9.2: one row per outgoing webhook delivery or WhatsApp message (Pro): channel, event, recipient, status, attempts, last error |
+| `wp_cg_jobs` | 7.9.3: background jobs (`src/Services/Jobs.php`). `type` `certificate_generation` (items JSON `{ref, status, certificate_id, created, error}`, `params` `{entity, force}`, processed 25 per WP-Cron event) or `import` (an import run: counts in `params`, rows in `wp_cg_import_items`). `api_key_id` + `idempotency_key` unique, for the Pro API's Idempotency-Key |
+| `wp_cg_import_items` | 7.9.3: import history — per run (`run_id`), one row per updated record (`changed` JSON `{col: [old, new]}`), flagged row (`file_values`) or undo outcome (`reverted` / `skipped` + `note`) |
+
 `wp_cg_certificate_templates` also carries a `badge_template_url` column (v9, nullable) — an optional companion badge image. When set, `src/Listeners/BadgeGenerationListener.php` generates a PNG via `src/Services/BadgeGenerator.php` (GD) alongside every certificate issued from that template, and stores the result in the new `badge_path` column on `wp_cg_certificates`. Added by `Migration005_AddBadgeColumns.php`; gated by the `CG_USE_BADGES` flag, not plan-gated.
 
 `wp_cg_certificate_templates`'s `field_config`/`extra_fields` JSON can also hold fields with `type: image` (v9) — e.g. a signature image — rendered independently of student data, alongside the existing text fields.
 
 The legacy `wp_certificate_generator` table also carries `verification_code` (migration 011) and the revoke columns; revoke and reinstate write both tables.
 
-`wp_cg_students`, `wp_cg_teachers`, `wp_cg_schools` also carry an `import_source` column (v8) — the uploaded CSV filename from Bulk Import, or a fixed tag like `tutor_lms`/`learndash`/`lifterlms`/`sensei`/`woocommerce` for LMS/e-commerce-auto-created records. Powers the Bulk Send "Source" filter.
+`wp_cg_students`, `wp_cg_teachers`, `wp_cg_schools` also carry an `import_source` column (v8) — the uploaded CSV filename from Bulk Import, or a fixed tag like `tutor_lms`/`learndash`/`lifterlms`/`sensei`/`woocommerce` for LMS/e-commerce-auto-created records. Powers the Bulk Send "Source" filter. Migration 014 adds `external_id` (VARCHAR 191, indexed: an LMS / CRM / sheet id) and migration 015 `import_run_id` (indexed: the import that created the row) to the same three tables; 015 also adds `wp_cg_jobs.params`.
 
 ## Legacy tables (kept for back-compat)
 

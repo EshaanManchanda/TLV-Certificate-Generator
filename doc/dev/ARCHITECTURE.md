@@ -21,6 +21,24 @@ Free never calls Pro code. Pro plugs in only through these hooks:
 | `certificate_generator_admin_menu_integrations` (action) | admin menu in `certificate-generator.php` | Adds the LMS / WooCommerce mapping pages |
 | `CG_PRO_VERSION` (constant) | `certificate-generator.php` | Hides the "Pro add-on" link on the Plugins screen |
 
+Lifecycle actions, used by Pro webhooks (each one fires at the single function every path goes through):
+
+| Action | Args | Fired in |
+|---|---|---|
+| `certificate_generator_certificate_issued` | `$cert_row_id, $serial, $data, $generated_via` | `certificate_generator_insert_certificate_record()` (new record only; also bulk serial and the email path) |
+| `certificate_generator_certificate_generated` | `$post_id, $pdf_path, $new_serial, $cert_row_id` | end of `certificate_generator_generate_pdf_impl()` (PDF render, not a cache hit) |
+| `certificate_generator_certificate_revoked` / `_reinstated` | `$serial[, $reason]` | `certificate_generator_set_certificate_revoked()` |
+| `certificate_generator_certificate_reissued` | `$serial, $revision` | `certificate_generator_reissue_certificate()` |
+| `certificate_generator_certificate_expired` | `$serial, $legacy_row_id` | daily `certificate_generator_check_expiring_certificates` cron, once per certificate |
+| `certificate_generator_recipient_saved` | `$entity, $id, $is_new` | `certificate_generator_save_recipient()` (`includes/Services/recipients.php`) |
+| `certificate_generator_recipients_deleted` | `$entity, int[] $ids` | single and bulk delete on the Students / Teachers / Schools lists |
+| `certificate_generator_import_completed` / `_import_failed` | `array $summary` (entity, source, counts) | `certificate_generator_import_run()` once the file is fully read; `_failed` when rows failed and none were saved |
+| `certificate_generator_certificate_verified` | `$serial, $by` (`code` / `serial`) | `SerialNumberService::verify()`, visitors only |
+| `certificate_generator_email_logged` | `array $data` (`status` sent / failed) | `certificate_generator_log_email()`, every delivery attempt |
+| `certificate_generator_job_finished` | `array $summary` (id, status, total, done, failed, …) | `Jobs::process()` when a bulk job ends (again after a retry) |
+
+**Bulk jobs** (`src/Services/Jobs.php`, table `wp_cg_jobs`, cron hook `certificate_generator_job_batch`): admin Generate, WP-CLI and Pro's REST `/jobs` create jobs over recipient ids; each WP-Cron event runs 25 items through `certificate_generator_generate_for_row()` (`includes/Services/recipients.php`) and schedules the next. One worker per job (`add_option()` lock `certificate_generator_job_lock_{id}`, expires after 15 min); progress is saved after every item; the hourly `certificate_generator_publish_scheduled_templates` event reschedules stalled jobs, and the Bulk Jobs progress page runs a batch on each poll. Import runs are `type = import` rows in the same table, with per-row history in `wp_cg_import_items` (`includes/Services/import-history.php`).
+
 Pro features check `CG_License_Manager::is_pro()` (true for Pro and Business). The tables Pro features use (`wp_cg_lms_course_map`, `wp_cg_lms_tracks`, `wp_cg_lms_track_courses`, `wp_cg_custom_fonts`) are created by Free (`src/Database/CustomTables.php`), so their data survives if the add-on is deactivated. Uploaded fonts keep rendering in Free.
 
 Pro's integration classes keep the free namespace (`CertificateGenerator\Integrations\…`, `CertificateGenerator\Admin\Pages\*LmsPage`); `certificate-generator-pro/includes/integrations.php` autoloads them from `certificate-generator-pro/src/`.

@@ -2,7 +2,7 @@
 
 [← Back to README](../../README.md) · Full guide: [`documentation.md`](documentation.md) · [Free vs Pro](PLAN-COMPARISON.md)
 
-Every hard limit, default and tested capacity in Certificate Generator 7.8.0, taken from the code. "Filter" / "constant" means you can change it.
+Every hard limit, default and tested capacity in Certificate Generator 7.9.3, taken from the code (benchmarks name the version they were measured on). "Filter" / "constant" means you can change it.
 
 ## Plan limits
 
@@ -18,6 +18,15 @@ None. Since 7.6 no plan caps certificates, emails, import/export rows or templat
 | Template image decode cache (per request) | 64 MB | Oldest image dropped first beyond this |
 | Render time per certificate | ~45 ms (Latin, FPDF) / ~115 ms (non-Latin, mPDF) | Measured on Local, JPEG template, 30 certificates each, warm cache |
 | Render time per certificate | ~45 ms (Latin, FPDF) / ~115 ms (non-Latin, mPDF) | Measured on Local, JPEG template, 30 certificates each, warm cache |
+
+## Bulk generation jobs (Generate on the lists, WP-CLI, Pro API)
+
+| Limit | Value | Change with |
+|---|---|---|
+| Records per job | 5,000 | `certificate_generator_job_max_items` filter |
+| Certificates per step | 25 | `CertificateGenerator\Services\Jobs::BATCH` |
+| A job counts as stalled after | 15 minutes without a step | `Jobs::STALE`; the hourly cron reschedules it |
+| Undo of an import | 500 records per request, continues automatically | `CERTIFICATE_GENERATOR_UNDO_BATCH` |
 
 ## Bulk download (admin → Download Certificates)
 

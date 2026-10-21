@@ -315,8 +315,27 @@ function certificate_generator_render_documentation_page() {
 				</table>
 				<div class="cg-note">The samples fit together: import <code>templates.csv</code> first (after putting in your image URLs), then the people, and every row has a matching template. Dates are written day-month-year (<code>25-08-2026</code>). Each import tab also has its own <strong>Download a sample CSV</strong> link, which adds the custom fields your templates already use.</div>
 
+				<h4>Duplicate rows, import history and undo</h4>
+				<p>On the check step, rows that match an existing record can <strong>update it</strong>, <strong>leave it unchanged</strong>, or <strong>leave it unchanged and flag the row for review</strong>. Every import is listed under <a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-bulk-import&tab=history' ) ); ?>">Bulk Import → Import history</a> (administrators). Open one to handle its flagged rows (<em>Apply file values</em>, <em>Add as new record</em>, <em>Dismiss</em>) or to <strong>Undo import</strong>: it shows what it would do first, then deletes the records the import created and restores the fields it changed. Records that got a certificate or an email, or were edited after the import, are kept and listed with the reason.</p>
+
 				<h4>Bulk export</h4>
 				<p>Go to <strong>Bulk Export</strong> to download all records (including any custom fields, serial numbers, and photo URLs) as CSV. Use this to back up data, migrate to another site, or edit many records at once and re-import.</p>
+			</div>
+		</details>
+		<hr class="cg-divider">
+
+		<details class="cg-section">
+			<summary>Generating Certificates in Bulk (Bulk Jobs)</summary>
+			<div class="cg-section-body">
+				<ol>
+					<li>On the Students, Teachers or Schools list, tick the records (or <em>Select all matching</em> after filtering) and choose <strong>Generate certificates</strong>.</li>
+					<li>You land on the job's page. It generates 25 certificates per step and shows done / failed / pending. Keep it open if your site has little traffic: the page runs the steps itself.</li>
+					<li>When it finishes, failed records are listed with the reason (usually no published template for that certificate type and date). Fix it, then click <strong>Retry failed items</strong>: only those run again.</li>
+				</ol>
+				<div class="cg-note">Generating a record again never creates a second certificate or a new serial number, and an unchanged PDF is reused. <strong>Regenerate PDFs</strong> re-renders PDFs that are already up to date (for example after fixing a template), keeping every serial.</div>
+				<p>The <strong>PDF status</strong> filter on the lists finds records with <em>No PDF yet</em>, a <em>PDF file missing</em> on the server, or a PDF. All jobs: <a href="<?php echo esc_url( admin_url( 'admin.php?page=cg-jobs' ) ); ?>">Certificate Generator → Bulk Jobs</a>.</p>
+				<h4>Diagnostics and WP-CLI</h4>
+				<p><a href="<?php echo esc_url( admin_url( 'tools.php?page=cert-gen-compatibility-check' ) ); ?>">Tools → Cert Gen Diagnostics</a> checks folders, fonts, the PDF and image libraries, the database, scheduled tasks, the email queue and bulk jobs, and says how to fix each problem. From the command line: <code>wp certificate-generator generate --certificate-type="…"</code>, <code>import &lt;file.csv&gt; [--dry-run]</code>, <code>jobs list|run &lt;id&gt;</code> and <code>diagnostics</code>.</p>
 			</div>
 		</details>
 		<hr class="cg-divider">
@@ -526,6 +545,8 @@ function certificate_generator_render_documentation_page() {
 							'{result_link}'       => 'Link to online results page',
 							'{verify_link}'       => 'Link to certificate verification page',
 							'{zip_link}'          => 'Download link (when ZIP > 25 MB)',
+							'{verification_code}' => 'Verification code of the certificate (XXXX-XXXX-XXXX)',
+							'{certificate_link}'  => 'Verify page opened on this certificate (full details, Add to LinkedIn)',
 						);
 						foreach ( $placeholders as $ph => $desc ) :
 							?>
@@ -632,6 +653,14 @@ function certificate_generator_render_documentation_page() {
 		<hr class="cg-divider">
 
 		<details class="cg-section">
+			<summary>A bulk job says "stalled" or stays at 0%</summary>
+			<div class="cg-section-body">
+				<p>WordPress's scheduled tasks (WP-Cron) aren't running the job. Keep the job's page open (it runs the job itself), or run <code>wp certificate-generator jobs run &lt;id&gt;</code>. For a lasting fix, open <strong>Tools → Cert Gen Diagnostics</strong> and follow the <em>Scheduled tasks</em> advice: a server cron job that runs WP-Cron every 5 minutes.</p>
+			</div>
+		</details>
+		<hr class="cg-divider">
+
+		<details class="cg-section">
 			<summary>Bulk send shows "No certificate records found"</summary>
 			<div class="cg-section-body">
 				<p>The custom table (<code>wp_certificate_generator</code>) has no rows for the filtered recipients.</p>
@@ -678,6 +707,12 @@ define( 'WP_DEBUG_DISPLAY', false );</pre>
 
 			'What does "Upload and check" do on Bulk Import?' =>
 				'It reads the whole file and saves nothing. You see how each column maps, what will be new, updated, merged or skipped, problems by row number, and the first rows as they will be saved. Fix anything, then click Import.',
+
+			'I imported the wrong file. Can I undo it?' =>
+				'Yes. Open <strong>Bulk Import → Import history</strong>, open the import and click <strong>Undo import</strong> after checking the preview. Records that got a certificate or an email, or were edited since, are kept and listed with the reason.',
+
+			'How do students get their verification code?' =>
+				'It is in the QR code on the certificate (when the template has QR enabled) and on the My Certificates page. To email it, add <code>{verification_code}</code> (the code) or <code>{certificate_link}</code> (the verify page opened on their certificate) to your email template.',
 
 			'What happens if an email fails to send?'     =>
 				'The queue retries up to 3 times with exponential backoff. After 3 failures the item is marked <code>failed</code> in the queue and logged in Email Logs with the error message. You can reset failed items from the queue management section.',

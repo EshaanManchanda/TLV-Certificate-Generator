@@ -19,3 +19,4 @@ parameters:
         - lib/fpdf/fpdf.php
         - lib/tfpdf/tfpdf.php
         - lib/tfpdf/font/unifont/ttfonts.php
+        - tests/stubs/wp-cli.php # WP-CLI classes for includes/Cli/commands.php

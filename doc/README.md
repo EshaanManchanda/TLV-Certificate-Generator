@@ -8,7 +8,7 @@ These docs are for this repository and are not shipped in the plugin ZIP. Inside
 
 | Doc | Covers |
 |---|---|
-| [documentation.md](guide/documentation.md) | **Start here.** Full guide: setup, admin pages, email & bulk send, shortcodes, REST API, configuration, database, plans, troubleshooting, FAQ |
+| [documentation.md](guide/documentation.md) | **Start here.** Full guide: setup, admin pages, bulk generation jobs, import history and undo, diagnostics, WP-CLI, email & bulk send, shortcodes, REST API, configuration, database, plans, troubleshooting, FAQ |
 | [PLAN-COMPARISON.md](guide/PLAN-COMPARISON.md) | Free vs Pro vs Business, pricing, how the Pro add-on plugs in, license keys |
 | [FAQ.md](guide/FAQ.md) | Sending, templates, backups, plans, debugging |
 | [SHORTCODES.md](guide/SHORTCODES.md) | Front-end shortcodes |

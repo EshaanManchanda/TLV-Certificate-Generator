@@ -24,6 +24,15 @@ function certificate_generator_schedule_queue_processor() {
 	}
 }
 
+/**
+ * Start sending the queue now, in the background, instead of waiting up to 5 minutes for the
+ * next tick. The 'kick' arg keeps WP from rejecting it as a duplicate of the recurring event.
+ */
+function certificate_generator_kick_email_queue(): void {
+	wp_schedule_single_event( time(), 'certificate_generator_process_email_queue', array( 'kick' ) );
+	spawn_cron();
+}
+
 // Add custom cron schedule
 add_filter( 'cron_schedules', 'certificate_generator_add_cron_schedules' );
 function certificate_generator_add_cron_schedules( $schedules ) {
@@ -213,19 +222,17 @@ function certificate_generator_start_bulk_send( $post_type, $post_ids = array() 
 	// Calculate estimate
 	$estimate = certificate_generator_estimate_send_time( $queue_results['queued'] );
 
-	// Trigger immediate processing of first batch
-	$process_results = certificate_generator_process_queue_batch();
+	// Sending starts in the background; a batch built inline would hold this request.
+	certificate_generator_kick_email_queue();
 
 	return array(
 		'success'          => true,
 		'message'          => sprintf(
-			'%d emails queued successfully. %d sent immediately.',
-			$queue_results['queued'],
-			$process_results['sent']
+			'%d emails queued successfully. Sending has started.',
+			$queue_results['queued']
 		),
 		'queued'           => $queue_results['queued'],
 		'skipped'          => $queue_results['skipped'],
-		'sent_immediately' => $process_results['sent'],
 		'estimate'         => $estimate,
 	);
 }
@@ -334,27 +341,39 @@ function certificate_generator_queue_status_notice() {
 
 		?>
 		<div class="notice notice-info is-dismissible">
-			<h3>📧 Certificate Email Queue Status</h3>
+			<h3>📧 <?php esc_html_e( 'Certificate Email Queue Status', 'certificate-generator' ); ?></h3>
 			<p>
-				<strong><?php echo number_format( $stats['pending'] ); ?></strong> emails pending |
-				<strong><?php echo number_format( $stats['sent'] ); ?></strong> sent |
-				<strong><?php echo number_format( $stats['failed'] ); ?></strong> failed
+				<?php
+				printf(
+					/* translators: 1: pending count, 2: sent count, 3: failed count */
+					esc_html__( '%1$s emails pending | %2$s sent | %3$s failed', 'certificate-generator' ),
+					'<strong>' . esc_html( number_format_i18n( $stats['pending'] ) ) . '</strong>',
+					'<strong>' . esc_html( number_format_i18n( $stats['sent'] ) ) . '</strong>',
+					'<strong>' . esc_html( number_format_i18n( $stats['failed'] ) ) . '</strong>'
+				);
+				?>
 			</p>
 			<?php if ( $progress['eta'] ) : ?>
 				<p>
-					<strong>Estimated completion:</strong> <?php echo esc_html( $progress['eta_human'] ); ?>
-					(<?php echo esc_html( $progress['progress_percentage'] ); ?>% complete)
+					<strong><?php esc_html_e( 'Estimated completion:', 'certificate-generator' ); ?></strong> <?php echo esc_html( $progress['eta_human'] ); ?>
+					<?php
+					/* translators: %s: percentage complete */
+					echo esc_html( sprintf( __( '(%s%% complete)', 'certificate-generator' ), $progress['progress_percentage'] ) );
+					?>
 				</p>
 			<?php endif; ?>
 			<?php if ( certificate_generator_is_queue_paused() ) : ?>
 				<p style="color: #d63638;">
-					<strong>⚠️ Queue is PAUSED</strong> - No emails are being sent
+					<strong>⚠️ <?php esc_html_e( 'Queue is PAUSED', 'certificate-generator' ); ?></strong> - <?php esc_html_e( 'No emails are being sent', 'certificate-generator' ); ?>
 				</p>
 			<?php endif; ?>
 			<?php if ( ! $progress['rate_status']['can_send']['can_send'] ) : ?>
 				<p style="color: #d63638;">
-					<strong>⚠️ Rate limit reached:</strong> <?php echo esc_html( $progress['rate_status']['can_send']['reason'] ); ?>
-					- Will resume automatically in <?php echo esc_html( certificate_generator_format_wait_time( $progress['rate_status']['can_send']['wait_seconds'] ) ); ?>
+					<strong>⚠️ <?php esc_html_e( 'Rate limit reached:', 'certificate-generator' ); ?></strong> <?php echo esc_html( $progress['rate_status']['can_send']['reason'] ); ?>
+					- <?php
+					/* translators: %s: human-readable wait time */
+					echo esc_html( sprintf( __( 'Will resume automatically in %s', 'certificate-generator' ), certificate_generator_format_wait_time( $progress['rate_status']['can_send']['wait_seconds'] ) ) );
+					?>
 				</p>
 			<?php endif; ?>
 		</div>

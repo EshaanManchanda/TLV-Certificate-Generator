@@ -48,6 +48,8 @@ INI="C:/Users/eshaa/AppData/Roaming/Local/run/6QexFw-dH/conf/php/php.ini"
 
 The WP-bootstrap suites (everything but `Unit`) run against a real WordPress core + a dedicated `wordpress_test` database — see `tests/bootstrap.php` and `tests/wp-tests-config.php` for that connection. They do **not** touch your real site's database.
 
+Bulk jobs and import history have their own integration tests: `JobsEngineTest` (batches, one worker per job, a worker crash, a lost item save, stalled jobs, re-render, PDF status filter, diagnostics) and `ImportHistoryTest` (resumed import = one run, flag/apply/add/dismiss, undo keeping what changed since, the email tags). WP-CLI is checked by hand: `wp certificate-generator diagnostics` and `import <csv> --dry-run`.
+
 Run one test class or method directly:
 
 ```bash
@@ -115,6 +117,7 @@ npx playwright test
 Notes:
 - `CG_E2E_LOGIN_PATH` — override if the login page has been moved (defaults to `/wp-login.php`). For example, if your site's login lives at `/gema-login`: add `CG_E2E_LOGIN_PATH="/gema-login"`.
 - Bulk import/export has no row limit on any plan, so the bulk-import spec runs on a plain free install.
+- `22-bulk-jobs` covers Generate as a background job (progress page to the end, failed item, PDF status filter) and Import history (flag a duplicate, apply it).
 - Specs worth knowing: `09-verify` (verification codes, masked serial lookups, rate limit), `10-revoke` (revoke / reinstate / history; reissue and snapshots are covered by `tests/Integration/TemplateSnapshotTest.php`), `15-field-fonts` (per-field fonts, custom text), `16-bulk-import` (the check step: mapping, date order, counts, then import), `17-unicode-names` (Hindi, Tamil, Urdu and mixed names rendered through mPDF; saves each PNG as a test attachment and asks the vision judge).
 - `03-templates`' preview test fails while `$visual_debug = true` in `certificate-search.php` (the PDF starts with the debug box). That is expected; don't change the flag.
 - `11-bulk-send` has failed intermittently in full runs and passed when run alone.

@@ -62,7 +62,12 @@ and usage analytics.
 - **Serial numbers** — auto-generated, configurable format (`PREFIX-{YEAR}-{SEQ}`), with a
   bulk-assignment tool for existing records that don't have one yet.
 - **Students / Teachers / Schools management** — manual entry, or bulk CSV import/export with a
-  check step before anything is saved (column mapping, counts, date order, encoding).
+  check step before anything is saved (column mapping, counts, date order, encoding), duplicate
+  flagging, an import history and undo (see [Import history and undo](#import-history-and-undo)).
+- **Bulk generation jobs** — certificates for any number of records are generated in the
+  background with progress, failed items and retry (see [Bulk generation jobs](#bulk-generation-jobs)).
+- **Diagnostics and WP-CLI** — a checks page with fixes, and `wp certificate-generator` commands
+  (see [Diagnostics](#diagnostics) and [WP-CLI](#wp-cli)).
 - **Bulk email sending** — filter by school/certificate type/source, background queue
   processing, automatic ZIP bundling when a recipient has multiple certificates, configurable
   rate limits, retry with exponential backoff.
@@ -74,7 +79,7 @@ and usage analytics.
 - **E-signature / image fields** on templates — place a signature or seal image independent of student data.
 - **Recipient renewal reminders** — emails certificate holders before expiry, distinct from the admin-only expiring-certificates digest.
 - **Custom font upload** (Pro add-on) — upload your own `.ttf`, rendered via a bundled tFPDF engine.
-- **REST API** (Pro add-on) for external integrations (issuing certificates, health checks, lookups).
+- **REST API, webhooks and automation** (Pro add-on) — scoped API keys, students / certificates / bulk-job endpoints, signed webhooks, n8n templates and a Zapier guide on **Certificate Generator → Automation**.
 - **Licensing tiers** (Free / Pro / Business) — see [Licensing & plans](#licensing--plans).
 
 ## Requirements & soft dependencies
@@ -110,9 +115,10 @@ Registered under the **Certificate Generator** top-level menu (`cg-dashboard`) i
 | Dashboard | `cg-dashboard` | Landing page |
 | Students / Teachers / Schools | `cg-students` etc. | List + Add/Edit records (`src/Admin/Pages/*Page.php`) |
 | Templates | `cg-templates` | Certificate template designer (`src/Admin/Pages/TemplatesPage.php`) |
-| Bulk Import | `cg-bulk-import` | CSV import for students/teachers/schools/certificate templates |
+| Bulk Import | `cg-bulk-import` | CSV import for students/teachers/schools/certificate templates; **Import history** tab (admins): flagged rows, undo |
 | Bulk Export | `cg-bulk-export` | CSV export for the same four entities |
 | Download Certs | `cg-cert-download` | Admin-side certificate download tool |
+| Bulk Jobs | `cg-jobs` | Background generation jobs: progress, failed items with their reason, Retry failed |
 | Register | `cg-register` | Every issued certificate (serial, code, school, status), filtered and downloaded as CSV or PDF. School Coordinators see their own school only |
 | Bulk Send | `certificate-bulk-send` | Filtered bulk email sending with background queue |
 | Email Logs | `certificate-email-logs` | Per-send delivery history |
@@ -124,7 +130,9 @@ Registered under the **Certificate Generator** top-level menu (`cg-dashboard`) i
 | Tutor LMS / LearnDash / LifterLMS / Sensei LMS / LearnPress | `cg-tutor-lms`, `cg-learndash`, `cg-lifterlms`, `cg-sensei`, `cg-learnpress` | **Pro add-on**: map courses → certificate templates (each shown only when its toggle is on) |
 | WooCommerce | `cg-woocommerce` | **Pro add-on**: map products → certificate templates (issues on order completion) |
 | 🧪 Test Center | (via `src/Admin/Pages/TestCenterPage.php`) | Dev-only test runner dashboard — hidden unless `CG_TESTING_UI` is set, see [`TESTING.md`](../dev/TESTING.md) |
+| Automation | `cg-automation` | **Pro add-on**: n8n / Zapier set-up, n8n template downloads, job and webhook logs |
 | Documentation | `cg-documentation` | This guide's in-admin counterpart |
+| Cert Gen Diagnostics | `cert-gen-compatibility-check` (Tools menu) | Plugin and server checks, each failing one with its fix |
 | Settings | `certificate_generator_settings` (Settings menu) | General / Templates / Email / Rate Limits tabs; the Pro add-on adds **API Settings** and **License** |
 
 The LMS / e-commerce pages come from the Pro add-on — see [Licensing & plans](#licensing--plans)
@@ -184,6 +192,75 @@ same. To apply a correction to an issued certificate, reissue it (see
   [Required CSV columns](#required-csv-columns) for the columns and how the check works.
 - **Bulk export**: go to **Bulk Export** to download all records as CSV — useful for backups or
   migrating data.
+- **Generate**: tick records (or *Select all matching*), choose **Generate certificates** and
+  click Apply. This starts a [bulk generation job](#bulk-generation-jobs). **Regenerate PDFs**
+  re-renders PDFs that are already up to date (after a template fix), keeping every serial.
+- **PDF status filter**: *No PDF yet* (never generated), *PDF file missing* (generated, but the
+  file is gone from the server) or *Has PDF*. Combine it with Select all matching + Generate to
+  fill the gaps; existing valid PDFs are reused, not overwritten.
+
+### Bulk generation jobs
+
+Generating certificates runs as a background job, so 50 or 5,000 records take the same
+clicks and no request times out.
+
+- Each step renders 25 certificates and saves progress after each one. Steps run on WP-Cron,
+  and also from the job page while it is open, so a job finishes even on a site where WP-Cron is
+  slow or disabled.
+- **Certificate Generator → Bulk Jobs** lists recent jobs. A job's page shows done / failed /
+  pending, then each failed record with the reason (usually *No published template for
+  certificate type … and issue date …*). Fix the cause, then **Retry failed items**: only those
+  run again.
+- Running a record twice never creates a second certificate or a new serial: the record keeps
+  the serial its first certificate got, and an unchanged PDF is reused.
+- *Stalled* means no step has run for 15 minutes — WP-Cron isn't firing. Keep the job page open,
+  run `wp certificate-generator jobs run <id>`, or set up a server cron (see
+  [Diagnostics](#diagnostics)). The hourly scheduled task also restarts stalled jobs.
+- At most 5,000 records per job (filter `certificate_generator_job_max_items`).
+
+### Import history and undo
+
+**Bulk Import → Import history** (administrators) lists every CSV import of students, teachers
+or schools: file, counts and status. A timed-out import that you continue stays one entry.
+
+- **Flag for review.** On the check step, *Rows that match an existing record* has a third
+  choice: *Leave the record unchanged and flag the row for review*. Each flagged row then shows
+  on the import's page next to the existing record, with the differences. **Apply file values**
+  updates the record, **Add as new record** creates a separate one, **Dismiss** ignores it.
+- **Undo import.** The page first shows what undo would do. Undo deletes the records the import
+  created and restores the old value of every field it changed, except:
+  - a created record that already has a certificate, was emailed, or was edited after the import
+    is kept;
+  - an updated field that someone changed after the import keeps its current value; a record
+    whose certificate was issued or regenerated after the import isn't touched.
+
+  Every record undo keeps is listed with the reason. Large undos run in batches of 500 and
+  continue automatically; an interrupted undo continues where it stopped.
+- Schools created automatically by a students import are not removed by undo.
+
+### Diagnostics
+
+**Tools → Cert Gen Diagnostics** checks the plugin and the server and says how to fix each
+problem: certificates and uploads folders writable, bundled fonts and PDF libraries present, GD
+with PNG and JPEG, database version, overdue scheduled tasks (WP-Cron), email queue age, mail
+transport, and stalled or failed bulk jobs. The server compatibility checks follow below it.
+
+If scheduled tasks are overdue, WP-Cron only runs when someone visits the site. Add a server
+cron job that runs `wp cron event run --due-now` (or requests `wp-cron.php`) every 5 minutes,
+then set `define( 'DISABLE_WP_CRON', true );`.
+
+### WP-CLI
+
+| Command | Does |
+|---|---|
+| `wp certificate-generator generate --certificate-type="Participation" [--issue-date=2026-10-20]` | Generates every matching record as a job, with a progress bar |
+| `wp certificate-generator generate --ids=12,13 [--entity=teachers] [--force]` | Those records; `--force` re-renders up-to-date PDFs |
+| `wp certificate-generator generate --missing-pdf` | Every record never generated or whose PDF file is missing |
+| `wp certificate-generator import students.csv [--existing=update\|keep\|flag] [--dry-run]` | The Bulk Import pipeline; `--dry-run` only counts |
+| `wp certificate-generator jobs list` / `status <id>` / `retry <id>` / `run <id>` | Bulk jobs |
+| `wp certificate-generator diagnostics [--format=json]` | The Diagnostics checks; exits with 1 when one fails |
+
+`--entity` is `students` (default), `teachers` or `schools`.
 
 ### Serial numbers
 
@@ -453,6 +530,13 @@ Configure per-entity templates under **Settings → Email**. WordPress shortcode
 | `{result_link}` | Link to online results page |
 | `{verify_link}` | Link to certificate verification page |
 | `{zip_link}` | Download link (used when the ZIP attachment would exceed 25 MB) |
+| `{verification_code}` | The certificate's verification code, as printed (`XXXX-XXXX-XXXX`) *(7.9.3)* |
+| `{certificate_link}` | The verify page opened on this certificate: full details, Add to LinkedIn, share buttons *(7.9.3)*. `{verify_link}` is the blank verify page |
+
+**Giving recipients their verification code.** It's printed as a QR code on the certificate
+(when the template has QR enabled), it's on the **My Certificates** page ("Verify & share"), and
+the email can carry it: put `{verification_code}` and/or `{certificate_link}` in the email
+template. When one email covers several certificates, the tags use the first one.
 
 ### Sending bulk emails
 
@@ -691,10 +775,14 @@ created directly in the activation hook in `certificate-generator.php`.
 | `wp_cg_settings` | Structured settings storage |
 | `wp_cg_migrations` | Tracks which versioned migrations have run |
 | `wp_cg_lms_course_map` | Course → certificate-template mapping for LMS integrations (Tutor LMS) |
+| `wp_cg_jobs` | Bulk generation jobs (and import runs): status, counts, per-item JSON, params |
+| `wp_cg_import_items` | Import history: per-row changes (`changed` old/new values), flagged rows, undo outcomes |
+| `wp_cg_api_keys` / `wp_cg_message_log` | Hashed scoped API keys, and webhook / WhatsApp deliveries (used by the Pro add-on) |
 
 `wp_cg_students`/`teachers`/`schools` also carry an `import_source` column — the uploaded CSV
 filename from Bulk Import, or a fixed tag like `tutor_lms` for LMS-auto-created records. Powers
-the Bulk Send "Source" filter.
+the Bulk Send "Source" filter. Since 7.9.3 they also have `external_id` (an LMS / CRM / sheet id,
+optional import column) and `import_run_id` (the import that created the row, for undo).
 
 ### Legacy tables (kept for back-compat)
 
@@ -824,6 +912,12 @@ in the email body instead of an attachment.
   plugins leave reachable; limited to 5 per minute per visitor), not on every page view.
 - Benchmark: `wp eval-file bin/bench-bulk-download.php 1000` (dev sites only; it seeds and
   removes its own data).
+
+### A bulk job says "stalled" or stays at 0%
+
+WP-Cron isn't running the job's steps. Keep the job's page open (it runs the steps itself), or
+run `wp certificate-generator jobs run <id>`. For a lasting fix, open **Tools → Cert Gen
+Diagnostics** and follow the *Scheduled tasks* fix (a server cron job).
 
 ### Bulk send shows "No certificate records found"
 

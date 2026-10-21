@@ -4,7 +4,7 @@ Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 7.9.2
+Stable tag: 7.9.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,20 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 
 == Changelog ==
 
+= 7.9.3 =
+* Fix: certificate expiry dates are saved, so verification, renewal reminders and the expiring-soon email see them.
+* Fix: "Send" on Bulk Send starts sending at once in the background instead of waiting for the next 5-minute run.
+* Fix: re-generating a revoked or emailed certificate's PDF no longer resets its status; emailed certificates are marked "sent".
+* Fix: the email rate limit counts in your site's time zone.
+* Fix: {result_link} opens your certificate search page (created if missing), and the "View Your Results Online" button is no longer added twice.
+* Fix: subdirectory sites return to the right page after asking for a My Certificates link.
+* New: developer hooks for recipient saved / deleted, import completed, certificate issued / reissued / expired and email logged (used by Pro webhooks).
+* New: bulk generation runs in the background with a progress page, failed-item list and Retry; no 200-certificate limit. "Regenerate PDFs" bulk action.
+* New: filter recipients by PDF status (none yet, file missing, present).
+* New: Import history — flag duplicate rows for review, and undo an import (records changed since are kept and listed).
+* New: Diagnostics page (Tools) and WP-CLI commands: generate, import, jobs, diagnostics.
+* New: email tags {verification_code} and {certificate_link}; LinkedIn "Add to Profile" includes the expiry date.
+
 = 7.9.2 =
 * Fix: no more "translation loading triggered too early" notice when another plugin schedules a task early.
 * New: a delivery log table and a certificate id on the "certificate generated" hook, used by the Pro add-on's WhatsApp and webhooks.
@@ -146,6 +160,9 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
+
+= 7.9.3 =
+Saves certificate expiry dates, starts Bulk Send at once, and adds lifecycle hooks. Required by Certificate Generator Pro 1.8.0 (scoped API keys, webhooks v2).
 
 = 7.9.2 =
 Fixes an early-translation notice. Required by Certificate Generator Pro 1.7.0 (WhatsApp delivery, webhooks).

@@ -27,16 +27,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   date_col       'issue_date'|'event_date',
  *   bulk_fields    [col => text|type|type_free|date|status|event|entity_type],
  *   has_email, can_generate, can_empty, is_templates  bool,
- *   gen_fields     string[]|null           — fields passed to certificate_generator_generate_certificate_pdf (null = CertificateGenerator_Field_Schema).
  */
 abstract class EntityListPage {
 
 	protected string $slug;
 	protected string $edit_slug;
 	protected string $table_key;
-
-	/** Rows processed per synchronous "Generate certificates" run. */
-	private const GENERATE_CAP = 200;
 
 	private const ENTITY_TABLES = array( 'students', 'teachers', 'schools' );
 
@@ -75,9 +71,23 @@ abstract class EntityListPage {
 			if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'cg_delete_' . $c['singular'] . '_single_' . $id )
 				&& $this->ids_in_scope( array( $id ) ) ) {
 				$wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
+				/** Fires after recipient rows are deleted (args: students|teachers|schools, int[] ids). */
+				do_action( 'certificate_generator_recipients_deleted', $this->table_key, array( $id ) );
 				wp_safe_redirect( add_query_arg( 'cg_msg', 'deleted', $this->list_url( $this->filters() ) ) );
 				exit;
 			}
+		}
+
+		// Generate / re-render: a background job, then its progress page.
+		$bulk = sanitize_key( $_POST['bulk_action'] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified below
+		if ( in_array( $bulk, array( 'generate', 'regenerate' ), true ) && ! empty( $c['can_generate'] ) && $this->verify_bulk_nonce() ) {
+			$ids = $this->selected_ids( $this->filters() );
+			$job = $ids ? $this->start_generation_job( $ids, 'regenerate' === $bulk ) : '';
+			if ( is_int( $job ) ) {
+				wp_safe_redirect( admin_url( 'admin.php?page=cg-jobs&job=' . $job ) );
+				exit;
+			}
+			// An error: handle_bulk() reports it on the list.
 		}
 
 		// Export selected / all matching rows as an importer-compatible CSV.
@@ -149,6 +159,7 @@ abstract class EntityListPage {
 			'tpl_match'    => sanitize_key( $_GET['tpl_match'] ?? '' ),
 			'email_status' => sanitize_key( $_GET['email_status'] ?? '' ),
 			'usage'        => sanitize_key( $_GET['usage'] ?? '' ),
+			'pdf'          => sanitize_key( $_GET['pdf'] ?? '' ),
 		);
 		foreach ( array_keys( $c['select_filters'] ) as $param ) {
 			$f[ $param ] = sanitize_text_field( wp_unslash( $_GET[ $param ] ?? '' ) );
@@ -238,6 +249,10 @@ abstract class EntityListPage {
 			$params  = array_merge( $params, $scope_params );
 		}
 
+		if ( ! empty( $c['can_generate'] ) && in_array( $f['pdf'], array( 'none', 'missing', 'ok' ), true ) ) {
+			$where[] = $this->pdf_filter_sql( $f['pdf'] );
+		}
+
 		return array( implode( ' AND ', $where ), $params );
 	}
 
@@ -249,6 +264,39 @@ abstract class EntityListPage {
 		$tpl = CustomTables::instance()->get_table( 'certificate_templates' );
 		return "EXISTS (SELECT 1 FROM $tpl t WHERE t.certificate_type = e.certificate_type AND t.status IN ($statuses)"
 			. " AND (e.issue_date IS NULL OR t.event_date IS NULL OR t.event_date < '1000-01-01' OR t.event_date = e.issue_date))";
+	}
+
+	/** The newest stored PDF path of row e's certificate (matched by the serial generation wrote back to it). */
+	private function pdf_path_sql(): string {
+		$certs = CustomTables::instance()->get_table( 'certificates' );
+		return "(SELECT c.pdf_path FROM $certs c WHERE c.serial_number = e.serial_number AND c.pdf_path <> '' ORDER BY c.id DESC LIMIT 1)";
+	}
+
+	/**
+	 * none: never generated (no serial, or no certificate with a PDF path). missing / ok: a path is
+	 * stored and the file is gone / still there — checked on disk, so it needs a PHP pass.
+	 * ponytail: one stat per row with a path; cache the scan if lists grow past tens of thousands.
+	 */
+	private function pdf_filter_sql( string $state ): string {
+		global $wpdb;
+		$path = $this->pdf_path_sql();
+		if ( 'none' === $state ) {
+			return "(e.serial_number IS NULL OR e.serial_number = '' OR $path IS NULL)";
+		}
+		if ( ! isset( $this->memo['pdf_scan'] ) ) {
+			[ $scope, $scope_params ] = $this->scope();
+			$sql  = 'SELECT e.id, ' . $path . ' AS p FROM ' . $this->table() . " e WHERE e.serial_number <> ''" . ( '' !== $scope ? " AND $scope" : '' );
+			$rows = $scope_params ? $wpdb->get_results( $wpdb->prepare( $sql, ...$scope_params ), ARRAY_A ) : $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table names come from $wpdb->prefix; scope is prepared
+			$scan = array( 'ok' => array(), 'missing' => array() );
+			foreach ( $rows ?: array() as $r ) {
+				if ( null !== $r['p'] ) {
+					$scan[ file_exists( (string) $r['p'] ) ? 'ok' : 'missing' ][] = (int) $r['id'];
+				}
+			}
+			$this->memo['pdf_scan'] = $scan;
+		}
+		$ids = $this->memo['pdf_scan'][ $state ];
+		return $ids ? 'e.id IN (' . implode( ',', $ids ) . ')' : '1=0';
 	}
 
 	/** Template e is used by at least one recipient of its entity_type. */
@@ -420,6 +468,8 @@ abstract class EntityListPage {
 		switch ( $action ) {
 			case 'delete':
 				$n = $this->for_ids( $ids, static fn( $in ) => $wpdb->query( "DELETE FROM $table WHERE id IN ($in)" ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				/** This action is documented in handle_early_actions(). */
+				do_action( 'certificate_generator_recipients_deleted', $this->table_key, array_map( 'intval', $ids ) );
 				return array( "$n $label deleted.", 'success' );
 
 			case 'bulk_edit':
@@ -436,7 +486,10 @@ abstract class EntityListPage {
 				return array( "$n $label updated via bulk edit.", 'success' );
 
 			case 'generate':
-				return empty( $c['can_generate'] ) ? array( '', '' ) : $this->bulk_generate( $ids );
+			case 'regenerate':
+				// Normally redirected to the job page in handle_early_actions(); here only on error.
+				$job = empty( $c['can_generate'] ) ? 0 : $this->start_generation_job( $ids, 'regenerate' === $action );
+				return is_string( $job ) ? array( $job, 'error' ) : array( '', '' );
 
 			case 'send_email':
 				return empty( $c['has_email'] ) ? array( '', '' ) : $this->bulk_queue_emails( $ids );
@@ -495,48 +548,15 @@ abstract class EntityListPage {
 		return $data;
 	}
 
-	private function bulk_generate( array $ids ): array {
-		if ( ! function_exists( 'certificate_generator_generate_certificate_pdf' ) || ! function_exists( 'certificate_generator_resolve_entity_template' ) ) {
-			return array( 'Certificate generator functions are unavailable.', 'error' );
-		}
-		$c       = $this->config();
-		$skipped = max( 0, count( $ids ) - self::GENERATE_CAP );
-		$ids     = array_slice( $ids, 0, self::GENERATE_CAP ); // ponytail: synchronous; move to the background processor if 200/run is too slow
-		@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-
-		$ok      = 0;
-		$failed  = 0;
-		$missing = array();
-		foreach ( $this->rows_by_ids( $ids ) as $row ) {
-			if ( ! certificate_generator_resolve_entity_template( $row ) ) {
-				$missing[ $row['certificate_type'] . ( $row['issue_date'] ? ' (' . $row['issue_date'] . ')' : '' ) ] = true;
-				++$failed;
-				continue;
-			}
-			if ( ! isset( $row['place'] ) && isset( $row['city'] ) ) {
-				$row['place'] = $row['city'];
-			}
-			$fields = $c['gen_fields'] ?? ( class_exists( 'CertificateGenerator_Field_Schema' )
-				? \CertificateGenerator_Field_Schema::get_all_renderable_fields( $row['certificate_type'] )
-				: array( $c['name_col'], 'school_name', 'issue_date' ) );
-			if ( certificate_generator_generate_certificate_pdf( (int) ( $row['wp_post_id'] ?? 0 ), $fields, $row ) ) {
-				++$ok;
-			} else {
-				++$failed;
-			}
-		}
-
-		$msg = "Generated $ok certificate(s).";
-		if ( $missing ) {
-			$msg .= ' No published template for: ' . implode( ', ', array_keys( $missing ) ) . '.';
-		}
-		if ( $failed > count( $missing ) ) {
-			$msg .= ' Some failed — check the error log.';
-		}
-		if ( $skipped ) {
-			$msg .= " $skipped more selected — run again to continue (max " . self::GENERATE_CAP . ' per run).';
-		}
-		return array( $msg, $failed || $skipped ? 'warning' : 'success' );
+	/**
+	 * Start a background job for the selected rows (no per-run cap) and return its id, or an
+	 * error message. $force re-renders PDFs that are already up to date.
+	 *
+	 * @return int|string
+	 */
+	private function start_generation_job( array $ids, bool $force ) {
+		$job = \CertificateGenerator\Services\Jobs::create( $ids, get_current_user_id(), 0, '', array( 'entity' => $this->table_key, 'force' => $force ) );
+		return is_wp_error( $job ) ? $job->get_error_message() : (int) $job['id'];
 	}
 
 	/** Queue one certificate email per distinct address; the email cron sends them. */
@@ -913,6 +933,14 @@ abstract class EntityListPage {
 					<?php endforeach; ?>
 				</select>
 			<?php endif; ?>
+			<?php if ( ! empty( $c['can_generate'] ) ) : ?>
+				<select name="pdf">
+					<option value="">— Any PDF status —</option>
+					<?php foreach ( array( 'none' => 'No PDF yet', 'missing' => 'PDF file missing', 'ok' => 'Has PDF' ) as $val => $text ) : ?>
+						<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $f['pdf'], $val ); ?>><?php echo esc_html( $text ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			<?php endif; ?>
 			<label><?php echo $c['date_col'] === 'event_date' ? 'Event date' : 'Issue date'; ?>
 				<input type="date" name="date_from" value="<?php echo esc_attr( $f['date_from'] ); ?>" aria-label="From"> –
 				<input type="date" name="date_to" value="<?php echo esc_attr( $f['date_to'] ); ?>" aria-label="To">
@@ -932,7 +960,8 @@ abstract class EntityListPage {
 			$actions['duplicate_to_date'] = 'Duplicate to new event date';
 		}
 		if ( ! empty( $c['can_generate'] ) ) {
-			$actions['generate'] = 'Generate certificates';
+			$actions['generate']   = 'Generate certificates';
+			$actions['regenerate'] = 'Regenerate PDFs (even if up to date)';
 		}
 		if ( ! empty( $c['has_email'] ) ) {
 			$actions['send_email'] = 'Send email (queue)';
@@ -1197,7 +1226,7 @@ abstract class EntityListPage {
 				if (action === 'duplicate_to_date' && !form.querySelector('[name="bulk_new_event_date"]').value) {
 					e.preventDefault(); alert('Choose the new event date.'); return;
 				}
-				var verbs = { delete: 'Delete', bulk_edit: 'Update', generate: 'Generate certificates for', send_email: 'Queue emails to', duplicate_to_date: 'Duplicate' };
+				var verbs = { delete: 'Delete', bulk_edit: 'Update', generate: 'Generate certificates for', regenerate: 'Re-render the PDFs of', send_email: 'Queue emails to', duplicate_to_date: 'Duplicate' };
 				if (!verbs[action]) { return; } // Export: plain submit; the page stays while the file downloads.
 				var btn = this;
 				e.preventDefault();

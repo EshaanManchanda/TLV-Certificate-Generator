@@ -21,11 +21,11 @@ Response: `valid`, `message`, and `data` with `student_name` (masked for serial-
 
 ## `certificate-generator/v1` integration API (Pro add-on)
 
-Defined in `certificate-generator-pro/includes/rest-api.php`; key and on/off switch on **Settings → API Settings** (`certificate-generator-pro/includes/api-settings.php`). Requires a bearer token (`certificate_generator_api_key` option, enabled with `certificate_generator_api_key_enabled`) unless noted. Calls on the Free plan, or with the add-on inactive, get `plan_required` / 404.
+Full reference (scoped keys, students, certificates, bulk jobs, webhooks, signatures): `certificate-generator-pro/docs/API.md` (Pro 1.8.0); n8n and Zapier guides in `certificate-generator-pro/docs/integrations/`. Bulk jobs over the API use the free plugin's engine (`src/Services/Jobs.php`). Routes: `certificate-generator-pro/includes/rest-api.php` (1.x) and `src/Api/Routes.php`; keys on **Settings → API Settings**, stored hashed in Free's `wp_cg_api_keys` table. Calls on the Free plan get `plan_required` (after authentication), or 404 with the add-on inactive. Pro's webhooks listen to Free's lifecycle actions, listed in [`ARCHITECTURE.md`](ARCHITECTURE.md). The 1.x routes:
 
 | Method | Route | Auth | Notes |
 |---|---|---|---|
-| `POST` | `/issue-certificate` | Bearer token | Generates and emails/zips certificates by student email. |
+| `POST` | `/issue-certificate` | Bearer token | Renders (or reuses) every certificate of `student_email` and returns `download_url` (a ZIP when more than 3). It does not email. |
 | `GET` | `/health` | None | Liveness check. |
 | `POST` | `/validate-key` | Bearer token | Validates an API key. |
 | `GET` | `/certificates-by-email` | Bearer token | Read-only lookup — does not regenerate certificates. |

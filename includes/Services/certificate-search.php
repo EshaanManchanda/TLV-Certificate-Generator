@@ -1590,7 +1590,13 @@ function certificate_generator_generate_pdf_with_data_impl( $post_data ) {
 	// runs (throwaway PDFs); a certificate without a serial yet still gets
 	// logged so analytics doesn't undercount deferred/no-serial issuance.
 	if ( empty( $post_data['_preview_post_id'] ) ) {
-		certificate_generator_insert_certificate_record( $post_data + array( 'template_id' => $certificate_template->id ?? null ), $serial_number );
+		certificate_generator_insert_certificate_record(
+			$post_data + array(
+				'template_id' => $certificate_template->id ?? null,
+				'expires_at'  => certificate_generator_template_expires_at( $tmpl_meta ),
+			),
+			$serial_number
+		);
 	}
 
 	return $upload_dir['url'] . '/' . $pdf_filename;
@@ -1684,6 +1690,34 @@ function certificate_generator_verification_code( string $serial_number ): ?stri
 }
 
 /**
+ * The {verification_code} and {certificate_link} email tags: the code as printed (XXXX-XXXX-XXXX)
+ * and the verify page opened on it (the full answer, like the QR code). Empty without a serial.
+ *
+ * @return array{0:string,1:string} [code, link]
+ */
+function certificate_generator_verification_tags( string $serial_number ): array {
+	$code = certificate_generator_verification_code( $serial_number );
+	if ( ! $code ) {
+		return array( '', '' );
+	}
+	$page = function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/verify-certificate/' );
+	return array( implode( '-', str_split( $code, 4 ) ), add_query_arg( 'code', $code, $page ) );
+}
+
+/**
+ * Expiry of a certificate issued now, from its template's expiration_period_* meta
+ * (get_post_meta() shape). Null when the template never expires.
+ */
+function certificate_generator_template_expires_at( array $tmpl_meta ): ?string {
+	$unit  = $tmpl_meta['expiration_period_unit'][0] ?? 'never';
+	$value = (int) ( $tmpl_meta['expiration_period_value'][0] ?? 0 );
+	if ( $value <= 0 || ! in_array( $unit, array( 'days', 'months', 'years' ), true ) ) {
+		return null;
+	}
+	return wp_date( 'Y-m-d H:i:s', (int) strtotime( "+{$value} {$unit}" ) );
+}
+
+/**
  * Insert a row into the wp_certificate_generator table after a certificate
  * has been generated.  This is the record that the public verification
  * shortcode and serial-number sequencer query against.
@@ -1710,6 +1744,7 @@ function certificate_generator_insert_certificate_record( array $post_data, stri
 		}
 	}
 
+	$cert_row_id = 0;
 	$wpdb->insert(
 		$table,
 		array(
@@ -1719,6 +1754,7 @@ function certificate_generator_insert_certificate_record( array $post_data, stri
 									?? 'Unknown',
 			'certificate_data' => wp_json_encode( $post_data ),
 			'issued_at'        => current_time( 'mysql' ),
+			'expires_at'       => $post_data['expires_at'] ?? null,
 			'serial_number'    => $serial_number,
 			'verification_code' => certificate_generator_verification_code( $serial_number ),
 			'certificate_type' => $post_data['certificate_type'] ?? '',
@@ -1769,6 +1805,7 @@ function certificate_generator_insert_certificate_record( array $post_data, stri
 					'serial_number'    => $serial_number,
 					'verification_code' => certificate_generator_verification_code( $serial_number ),
 					'issued_at'        => current_time( 'mysql' ),
+					'expires_at'       => $post_data['expires_at'] ?? null,
 					'generated_via'    => $generated_via,
 					'certificate_data' => wp_json_encode( $post_data ),
 					'layout_snapshot'  => certificate_generator_template_snapshot_json( $template_id ),
@@ -1776,6 +1813,7 @@ function certificate_generator_insert_certificate_record( array $post_data, stri
 					'created_at'       => current_time( 'mysql' ),
 				)
 			);
+			$cert_row_id = (int) $wpdb->insert_id;
 		}
 
 		// Write serial back to the entity (student/teacher/school) SQL row
@@ -1810,6 +1848,17 @@ function certificate_generator_insert_certificate_record( array $post_data, stri
 			}
 		}
 	}
+
+	/**
+	 * Fires once per newly issued certificate record, from every path (PDF render, email
+	 * send, bulk serial issue). Not fired when an existing serial is re-rendered.
+	 *
+	 * @param int    $cert_row_id   wp_cg_certificates row id (0 when that table is missing).
+	 * @param string $serial_number Serial ('' when issued without one).
+	 * @param array  $post_data     Recipient + certificate data.
+	 * @param string $generated_via manual | bulk | api | automatic.
+	 */
+	do_action( 'certificate_generator_certificate_issued', $cert_row_id, $serial_number, $post_data, $generated_via );
 }
 
 /**
@@ -2398,26 +2447,7 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 			}
 		}
 
-		// Calculate expiration date
-		$expires_at = null;
-		$exp_unit   = $tmpl_meta['expiration_period_unit'][0] ?? 'never';
-		$exp_value  = (int) ( $tmpl_meta['expiration_period_value'][0] ?? 0 );
-
-		if ( $exp_unit !== 'never' && $exp_value > 0 ) {
-			$issued_date = new DateTime();
-			switch ( $exp_unit ) {
-				case 'days':
-					$issued_date->modify( "+{$exp_value} days" );
-					break;
-				case 'months':
-					$issued_date->modify( "+{$exp_value} months" );
-					break;
-				case 'years':
-					$issued_date->modify( "+{$exp_value} years" );
-					break;
-			}
-			$expires_at = $issued_date->format( 'Y-m-d H:i:s' );
-		}
+		$expires_at = certificate_generator_template_expires_at( $tmpl_meta );
 
 		// Store serial number and time-based data in post meta
 		if ( ! empty( $serial_number ) ) {
@@ -2440,6 +2470,7 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 				'wp_post_id'       => $post_id,
 				'recipient_type'   => $post_data['recipient_type'] ?? ( $detached_entity ?: get_post_type( $post_id ) ),
 				'template_id'      => $certificate_template->id ?? null,
+				'expires_at'       => $expires_at,
 				// Stable recipient key (names can be edited by the recipient, e.g. an LMS display name).
 				'email'            => $use_table_data && is_email( $student_data['email'] ?? '' ) ? $student_data['email'] : null,
 			);
@@ -2538,16 +2569,14 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 					// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				}
 				if ( $cert_row_id ) {
-					$wpdb->update(
-						$cert_table,
-						array(
-							'pdf_path' => $pdf_path,
-							'pdf_url'  => $file_url,
-							'status'   => 'generated',
-						),
-						array( 'id' => (int) $cert_row_id ),
-						array( '%s', '%s', '%s' ),
-						array( '%d' )
+					// A re-render must not un-revoke or un-send a certificate: only pending/failed move to generated.
+					$wpdb->query(
+						$wpdb->prepare(
+							"UPDATE $cert_table SET pdf_path = %s, pdf_url = %s, status = IF( status IN ('pending','failed'), 'generated', status ) WHERE id = %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix
+							$pdf_path,
+							$file_url,
+							(int) $cert_row_id
+						)
 					);
 				}
 			}
@@ -3523,11 +3552,6 @@ function certificate_generator_school_search_shortcode( $atts = array() ) {
 		$output .= '</div>'; // End container
 	}
 
-	// Trigger background processing for certificates
-	if ( ! empty( $certificates_to_generate ) ) {
-		wp_schedule_single_event( time(), 'certificate_generator_generate_certificates_background', array( $certificates_to_generate ) );
-	}
-
 	return $output;
 }
 
@@ -4008,10 +4032,6 @@ function certificate_generator_student_search_shortcode( $atts = array() ) {
             </style>';
 
 			$output .= '</div>'; // End container
-
-			// Use the existing hex2rgb function with default color if not set
-			$hex_color = isset( $hex_color ) ? $hex_color : '#000000';
-			$rgb       = certificate_generator_hex2rgb_str( $hex_color );
 		}
 
 		wp_reset_postdata();

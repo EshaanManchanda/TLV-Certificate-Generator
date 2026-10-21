@@ -95,7 +95,8 @@ function certificate_generator_get_sent_count( $seconds = 3600 ) {
 
 	global $wpdb;
 	$table_name = $wpdb->prefix . 'cert_email_logs';
-	$since      = gmdate( 'Y-m-d H:i:s', time() - $seconds );
+	// sent_at is site-local time (log.php writes current_time('mysql')).
+	$since      = gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) - $seconds ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- compared with a local-time column
 
 	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 	$count = $wpdb->get_var(
@@ -125,7 +126,8 @@ function certificate_generator_get_wait_time_for_hourly_reset() {
 	global $wpdb;
 
 	$table_name   = $wpdb->prefix . 'cert_email_logs';
-	$one_hour_ago = gmdate( 'Y-m-d H:i:s', time() - 3600 );
+	$now          = current_time( 'timestamp' ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- sent_at is site-local time
+	$one_hour_ago = gmdate( 'Y-m-d H:i:s', $now - 3600 );
 
 	// Get oldest email sent in the last hour
 	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
@@ -147,7 +149,7 @@ function certificate_generator_get_wait_time_for_hourly_reset() {
 
 	$oldest_time  = strtotime( $oldest );
 	$reset_time   = $oldest_time + 3600; // 1 hour after oldest
-	$wait_seconds = max( 0, $reset_time - time() );
+	$wait_seconds = max( 0, $reset_time - $now );
 
 	return $wait_seconds;
 }
@@ -212,15 +214,14 @@ function certificate_generator_estimate_send_time( $num_emails ) {
 	$config = certificate_generator_get_rate_limit_config();
 
 	$emails_per_hour = $config['emails_per_hour'];
-	$hours_needed    = ceil( $num_emails / $emails_per_hour );
 
+	// At the hourly rate, but at least one 5-minute queue tick: ceil() made one email "1 hour".
 	$start_time = time();
-	$end_time   = $start_time + ( $hours_needed * 3600 );
+	$end_time   = $start_time + max( 5 * MINUTE_IN_SECONDS, (int) ceil( $num_emails * HOUR_IN_SECONDS / $emails_per_hour ) );
 
 	return array(
 		'num_emails'                 => $num_emails,
 		'emails_per_hour'            => $emails_per_hour,
-		'hours_needed'               => $hours_needed,
 		'estimated_completion'       => gmdate( 'Y-m-d H:i:s', (int) $end_time ),
 		'estimated_completion_human' => human_time_diff( $start_time, $end_time ),
 		'start_time'                 => gmdate( 'Y-m-d H:i:s', $start_time ),

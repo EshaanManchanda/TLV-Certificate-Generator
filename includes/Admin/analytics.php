@@ -45,7 +45,6 @@ class CertificateGenerator_Analytics_Dashboard {
 			array(
 				'ajaxurl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'cg_analytics_nonce' ),
-				'apiUrl'  => rest_url( 'certificate-generator/v1/analytics' ),
 			)
 		);
 	}

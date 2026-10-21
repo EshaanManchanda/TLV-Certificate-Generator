@@ -535,7 +535,7 @@ function certificate_generator_ajax_send_to_filtered() {
 					'certificate_type' => sanitize_text_field( $cert_data['certificate_type'] ),
 					'certificate_data' => wp_json_encode( $cert_data ),
 					'pdf_path'         => '',
-					'generated_via'    => 'bulk_queue',
+					'generated_via'    => 'bulk',
 					'issued_at'        => $now,
 					'updated_at'       => $now,
 				),
@@ -560,6 +560,11 @@ function certificate_generator_ajax_send_to_filtered() {
 		} else {
 			$failed[] = $email;
 		}
+	}
+
+	// Start sending now, in the background; a large ZIP built inline would hold this request for minutes.
+	if ( $emails ) {
+		certificate_generator_kick_email_queue();
 	}
 
 	$response = array(

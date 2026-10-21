@@ -49,22 +49,22 @@ function certificate_generator_mark_certificate_email_sent( array $cert_row ): v
 		return;
 	}
 
-	$update = array(
-		'email_sent'    => 1,
-		'email_sent_at' => current_time( 'mysql' ),
-	);
+	// status moves generated -> sent; a revoked or failed row keeps its status.
+	$now = current_time( 'mysql' );
 
+	// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix
 	$wp_post_id = (int) ( $cert_row['wp_post_id'] ?? 0 );
 	if ( $wp_post_id > 0 ) {
-		$wpdb->update( $cert_table, $update, array( 'wp_post_id' => $wp_post_id ), array( '%d', '%s' ), array( '%d' ) );
+		$wpdb->query( $wpdb->prepare( "UPDATE $cert_table SET email_sent = 1, email_sent_at = %s, status = IF( status IN ('pending','generated'), 'sent', status ) WHERE wp_post_id = %d", $now, $wp_post_id ) );
 		return;
 	}
 
 	$email = $cert_row['email'] ?? '';
 	$type  = $cert_row['certificate_type'] ?? '';
 	if ( $email !== '' && $type !== '' ) {
-		$wpdb->update( $cert_table, $update, array( 'recipient_email' => $email, 'certificate_type' => $type ), array( '%d', '%s' ), array( '%s', '%s' ) );
+		$wpdb->query( $wpdb->prepare( "UPDATE $cert_table SET email_sent = 1, email_sent_at = %s, status = IF( status IN ('pending','generated'), 'sent', status ) WHERE recipient_email = %s AND certificate_type = %s", $now, $email, $type ) );
 	}
+	// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 }
 
 /**
@@ -451,6 +451,72 @@ if ( ! class_exists( '\CertificateGenerator\Core\Config' )
 }
 
 /**
+ * {result_link}: the first published page with [certificate_generator_student_search] (it reads
+ * ?student_email=), else one with [certificate_generator_my_certificates], else /result/.
+ * Looked up once an hour, like certificate_generator_verify_page_url().
+ * Filter: certificate_generator_result_page_url (the Pro add-on makes it a setting).
+ */
+function certificate_generator_result_page_url( string $email ): string {
+	$custom = trim( (string) apply_filters( 'certificate_generator_result_page_url', '' ) );
+	if ( '' !== $custom ) {
+		return add_query_arg( 'student_email', rawurlencode( $email ), $custom );
+	}
+	$url = get_transient( 'certificate_generator_result_page_url' );
+	if ( ! $url ) {
+		$page_id = certificate_generator_find_result_page();
+		$url     = $page_id ? (string) get_permalink( $page_id ) : home_url( '/result/' );
+		set_transient( 'certificate_generator_result_page_url', $url, HOUR_IN_SECONDS );
+	}
+	return add_query_arg( 'student_email', rawurlencode( $email ), $url );
+}
+
+/** First published page with the search shortcode, else with My Certificates; 0 if none. */
+function certificate_generator_find_result_page(): int {
+	global $wpdb;
+	foreach ( array( 'certificate_generator_student_search', 'certificate_generator_my_certificates' ) as $shortcode ) {
+		$page_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'page' AND post_status = 'publish' AND post_content LIKE %s ORDER BY ID ASC LIMIT 1",
+				'%' . $wpdb->esc_like( '[' . $shortcode ) . '%'
+			)
+		);
+		if ( $page_id ) {
+			return $page_id;
+		}
+	}
+	return 0;
+}
+
+/**
+ * Make sure {result_link} has a page to open: creates "My Certificates" when no page holds a
+ * search shortcode. [certificate_generator_my_certificates] emails a sign-in link, so the page
+ * shows certificates only to the owner of the address. Runs on activation, like the verify page.
+ */
+function certificate_generator_ensure_result_page(): int {
+	$page_id = certificate_generator_find_result_page();
+	if ( ! $page_id ) {
+		$page_id = (int) wp_insert_post(
+			array(
+				'post_type'    => 'page',
+				'post_status'  => 'publish',
+				'post_title'   => __( 'My Certificates', 'certificate-generator' ),
+				'post_name'    => 'my-certificates',
+				'post_content' => '[certificate_generator_my_certificates]',
+			)
+		);
+	}
+	delete_transient( 'certificate_generator_result_page_url' );
+	return $page_id;
+}
+
+// A page added, edited or removed may change which page {result_link} opens.
+function certificate_generator_forget_result_page(): void {
+	delete_transient( 'certificate_generator_result_page_url' );
+}
+add_action( 'save_post_page', 'certificate_generator_forget_result_page' );
+add_action( 'deleted_post', 'certificate_generator_forget_result_page' );
+
+/**
  * Send certificate email for a wp_certificate_generator row.
  *
  * @param int        $cg_id     Row ID in wp_certificate_generator.
@@ -610,7 +676,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		: ( $_ss ? \CertificateGenerator\Services\SettingsService::get( 'certificate_generator_email_body' ) : get_option( 'certificate_generator_email_body', '' ) );
 
 	// Generate result page URL
-	$result_page_url = home_url( '/result/?student_email=' . urlencode( $recipient_email ) );
+	$result_page_url = certificate_generator_result_page_url( $recipient_email );
 	$verify_page_url = function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/verify-certificate/' );
 
 	// Initialize ZIP link (will be populated later if ZIP is created)
@@ -619,7 +685,7 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 	// Count certificates for this email
 	$certificate_count = count( $all_rows );
 
-	// Replace placeholders (initial replacement - {zip_link} will be replaced again later if ZIP is created)
+	// {zip_link} is left in place here and replaced once the ZIP exists (below).
 	$serial_number = $anchor['serial_number'] ?? '';
 	$expires_at    = $anchor['expires_at'] ?? '';
 
@@ -627,7 +693,6 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		'{name}'              => $recipient_name,
 		'{certificate_title}' => $certificate_type,
 		'{result_link}'       => $result_page_url,
-		'{zip_link}'          => '', // Empty for now, populated later if ZIP exists
 		'{certificate_count}' => $certificate_count,
 		'{email}'             => $recipient_email,
 		'{serial_number}'     => $serial_number ?: 'N/A',
@@ -635,6 +700,8 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		'{verify_link}'       => $verify_page_url,
 		'{site_name}'         => get_bloginfo( 'name' ),
 	);
+	// The anchor certificate's own code and verify link (an email for several certificates gets the first one's).
+	list( $placeholders['{verification_code}'], $placeholders['{certificate_link}'] ) = certificate_generator_verification_tags( (string) $serial_number );
 
 	// Shortcodes in the admin's template (e.g. [site_name], [event_fees] from wp-dynamic-tags) run
 	// BEFORE recipient data goes in, so a name like "[some_shortcode]" is never executed.
@@ -731,18 +798,26 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		$zip_download_url = isset( $zip_result['zip_url'] ) ? $zip_result['zip_url'] : '';
 
 		// Update subject and message to indicate multiple certificates
+		// "Your Student Certificate is Ready" → "Your Student Certificates are Ready (420)". Skipped
+		// when the text already has the count (e.g. from {certificate_count}).
 		$cert_count = count( $certificates_data );
-		$subject    = str_replace(
-			array( '{certificate_count}', 'Certificate', 'certificate' ),
-			array( $cert_count, $cert_count . ' Certificates', $cert_count . ' certificates' ),
-			$subject
-		);
-
-		// Add count to title and message if not already present
-		if ( strpos( $title, $cert_count ) === false ) {
-			$title = str_replace( 'Certificate', $cert_count . ' Certificates', $title );
-		}
-		if ( strpos( $message, $cert_count ) === false ) {
+		$has_count  = static fn( string $text ): bool => (bool) preg_match( '/(?<!\d)' . $cert_count . '(?!\d)/', $text );
+		$pluralize  = static function ( string $text ) use ( $cert_count, $has_count ): string {
+			if ( $has_count( $text ) ) {
+				return $text;
+			}
+			$plural = preg_replace_callback(
+				'/\b([Cc])ertificate\b(\s+is\b)?/',
+				fn( $m ) => $m[1] . 'ertificates' . ( isset( $m[2] ) ? ' are' : '' ),
+				$text,
+				1,
+				$n
+			);
+			return $n ? $plural . ' (' . $cert_count . ')' : $text;
+		};
+		$subject    = $pluralize( $subject );
+		$title      = $pluralize( $title );
+		if ( ! $has_count( $message ) ) {
 			$message = str_replace(
 				array( 'attached your certificate', 'find attached your' ),
 				array( 'attached your ' . $cert_count . ' certificates', 'find attached your ' . $cert_count ),
@@ -765,27 +840,39 @@ function certificate_generator_send_email( $cg_id, $log_email = true, $scope = n
 		return false;
 	}
 
-	// Replace {zip_link} placeholder now that we know if ZIP was created
-	$message = str_replace( '{zip_link}', esc_url( $zip_download_url ), $message );
-	$subject = str_replace( '{zip_link}', $zip_download_url, $subject );
-	$title   = str_replace( '{zip_link}', $zip_download_url, $title );
+	// No ZIP (single certificate): the result page, where every certificate can be downloaded,
+	// so a "Download ZIP" button never ends up with an empty href.
+	$zip_link_url = $zip_download_url ?: $result_page_url;
+	$message      = str_replace( '{zip_link}', esc_url( $zip_link_url ), $message );
+	$subject      = str_replace( '{zip_link}', $zip_link_url, $subject );
+	$title        = str_replace( '{zip_link}', $zip_link_url, $title );
 
 	// Check final $message (covers per-type + global template) for result_link usage.
-	$result_link_used = strpos( $message, $result_page_url ) !== false
+	// The body got the URL through esc_html(), so "&" in it is "&amp;" there.
+	$result_link_used = ( $result_page_url !== '' && (
+			strpos( $message, $result_page_url ) !== false
+			|| strpos( $message, esc_html( $result_page_url ) ) !== false
+		) )
 		|| strpos( $message, '{result_link}' ) !== false;
 
+	// A template that is already laid out in HTML (tables, its own header) is sent as is:
+	// wpautop() would push <br>/<p> into its markup, and the default heading would duplicate its own.
+	$is_html_layout = (bool) preg_match( '/<(table|div|p|h[1-6])[\s>]/i', $message );
+
 	// Title falls back to certificate type when no explicit email title is set.
-	$display_title = $title ?: $certificate_type;
+	$display_title = $title ?: ( $is_html_layout ? '' : $certificate_type );
 
 	// Format HTML email
-	$html_message  = '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">';
-	$html_message .= '<h1 style="color: #2c3e50; margin-bottom: 20px;">' . esc_html( $display_title ) . '</h1>';
-	$html_message .= '<div style="line-height: 1.6; color: #333;">' . wpautop( $message ) . '</div>';
+	$html_message = '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">';
+	if ( $display_title !== '' ) {
+		$html_message .= '<h1 style="color: #2c3e50; margin-bottom: 20px;">' . esc_html( $display_title ) . '</h1>';
+	}
+	$html_message .= '<div style="line-height: 1.6; color: #333;">' . ( $is_html_layout ? $message : wpautop( $message ) ) . '</div>';
 
 	// Auto-add result page button if {result_link} placeholder was not used
 	if ( ! $result_link_used && ! empty( $result_page_url ) ) {
 		$html_message .= '<div style="text-align: center; margin: 30px 0 20px 0;">';
-		$html_message .= '<a href="' . esc_url( $result_page_url ) . '" style="display: inline-block; padding: 12px 28px; background-color: #0073aa; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">View Your Results Online</a>';
+		$html_message .= '<a href="' . esc_url( $result_page_url ) . '" style="display: inline-block; padding: 12px 28px; background-color: #0073aa; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 16px;">' . esc_html__( 'View Your Results Online', 'certificate-generator' ) . '</a>';
 		$html_message .= '</div>';
 	}
 

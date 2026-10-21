@@ -262,19 +262,6 @@ function certificate_generator_render_students_extra_fields_form( $post ) {
 // Include FontManager class
 require_once plugin_dir_path( __FILE__ ) . 'font-manager.php';
 
-// Add Meta Box for Certificates Post Type
-function certificate_generator_add_certificates_meta_box() {
-	add_meta_box(
-		'certificates_meta_box',
-		'Certificate Details',
-		'render_certificates_form',
-		'certificates',
-		'normal',
-		'high'
-	);
-}
-add_action( 'add_meta_boxes', 'certificate_generator_add_certificates_meta_box' );
-
 // Save Certificates Data
 function certificate_generator_save_certificates_data( $post_id ) {
 	// Check if data is being saved correctly

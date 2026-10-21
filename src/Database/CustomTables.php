@@ -12,7 +12,7 @@ class CustomTables {
 	// Bump whenever a column/index is added to any create_*_table() method below,
 	// so existing installs get dbDelta() re-run (all_tables_exist() alone only
 	// catches a fully-missing table, never a stale column on an existing one).
-	private const SCHEMA_VERSION = '1.3.4';
+	private const SCHEMA_VERSION = '1.3.7';
 
 	private static ?CustomTables $instance = null;
 	private array $tables                  = array();
@@ -51,6 +51,9 @@ class CustomTables {
 			'events'                => $prefix . 'events',
 			'certificate_events'    => $prefix . 'certificate_events',
 			'message_log'           => $prefix . 'message_log',
+			'api_keys'              => $prefix . 'api_keys',
+			'jobs'                  => $prefix . 'jobs',
+			'import_items'          => $prefix . 'import_items',
 		);
 	}
 
@@ -82,6 +85,9 @@ class CustomTables {
 		$this->create_events_table();
 		$this->create_certificate_events_table();
 		$this->create_message_log_table();
+		$this->create_api_keys_table();
+		$this->create_jobs_table();
+		$this->create_import_items_table();
 
 		update_option( 'certificate_generator_custom_tables_version', self::SCHEMA_VERSION );
 	}
@@ -132,6 +138,8 @@ class CustomTables {
             student_name VARCHAR(255) NOT NULL,
             email VARCHAR(255) DEFAULT NULL,
             phone VARCHAR(50) DEFAULT NULL,
+            external_id VARCHAR(191) DEFAULT NULL,
+            import_run_id BIGINT UNSIGNED DEFAULT NULL,
             school_id BIGINT UNSIGNED DEFAULT NULL,
             school_name VARCHAR(255) DEFAULT NULL,
             certificate_type VARCHAR(255) NOT NULL DEFAULT '',
@@ -153,6 +161,8 @@ class CustomTables {
             INDEX idx_school_id (school_id),
             INDEX idx_status (status),
             INDEX idx_student_name (student_name),
+            INDEX idx_external_id (external_id),
+            INDEX idx_import_run_id (import_run_id),
             INDEX idx_serial_number (serial_number),
             INDEX idx_certificate_type (certificate_type),
             INDEX idx_year (year)
@@ -174,6 +184,8 @@ class CustomTables {
             teacher_name VARCHAR(255) NOT NULL,
             email VARCHAR(255) DEFAULT NULL,
             phone VARCHAR(50) DEFAULT NULL,
+            external_id VARCHAR(191) DEFAULT NULL,
+            import_run_id BIGINT UNSIGNED DEFAULT NULL,
             school_id BIGINT UNSIGNED DEFAULT NULL,
             school_name VARCHAR(255) DEFAULT NULL,
             department VARCHAR(100) DEFAULT NULL,
@@ -194,6 +206,8 @@ class CustomTables {
             INDEX idx_school_id (school_id),
             INDEX idx_status (status),
             INDEX idx_teacher_name (teacher_name),
+            INDEX idx_external_id (external_id),
+            INDEX idx_import_run_id (import_run_id),
             INDEX idx_serial_number (serial_number),
             INDEX idx_certificate_type (certificate_type),
             INDEX idx_year (year)
@@ -220,6 +234,8 @@ class CustomTables {
             postal_code VARCHAR(20) DEFAULT NULL,
             phone VARCHAR(50) DEFAULT NULL,
             email VARCHAR(255) DEFAULT NULL,
+            external_id VARCHAR(191) DEFAULT NULL,
+            import_run_id BIGINT UNSIGNED DEFAULT NULL,
             website VARCHAR(255) DEFAULT NULL,
             principal_name VARCHAR(255) DEFAULT NULL,
             certificate_type VARCHAR(255) NOT NULL DEFAULT '',
@@ -237,6 +253,8 @@ class CustomTables {
             INDEX idx_school_name (school_name),
             INDEX idx_status (status),
             INDEX idx_city (city),
+            INDEX idx_external_id (external_id),
+            INDEX idx_import_run_id (import_run_id),
             INDEX idx_serial_number (serial_number),
             INDEX idx_certificate_type (certificate_type),
             INDEX idx_year (year)
@@ -703,6 +721,96 @@ class CustomTables {
             INDEX idx_due (status, next_attempt_at),
             INDEX idx_provider_message (provider_message_id),
             INDEX idx_campaign (campaign)
+        ) $charset_collate;";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
+	 * API keys for add-ons (the Pro REST API). Only a SHA-256 hash of each key is stored;
+	 * key_prefix is the public part used to find the row.
+	 */
+	private function create_api_keys_table(): void {
+		global $wpdb;
+		$table           = $this->tables['api_keys'];
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            name VARCHAR(100) NOT NULL DEFAULT '',
+            user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            key_prefix VARCHAR(20) NOT NULL,
+            key_hash CHAR(64) NOT NULL,
+            scopes VARCHAR(255) NOT NULL DEFAULT '',
+            created_at DATETIME DEFAULT NULL,
+            last_used_at DATETIME DEFAULT NULL,
+            expires_at DATETIME DEFAULT NULL,
+            revoked_at DATETIME DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uk_key_prefix (key_prefix)
+        ) $charset_collate;";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
+	 * Background jobs (bulk generation from wp-admin, WP-CLI and the Pro API) and import runs.
+	 * items is JSON: one {ref, status, certificate_id?, error?} per item, processed in order;
+	 * params is JSON ({entity, force} for generation; {entity, source, file, existing} for imports).
+	 */
+	private function create_jobs_table(): void {
+		global $wpdb;
+		$table           = $this->tables['jobs'];
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            type VARCHAR(50) NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'queued',
+            total INT UNSIGNED NOT NULL DEFAULT 0,
+            done INT UNSIGNED NOT NULL DEFAULT 0,
+            failed INT UNSIGNED NOT NULL DEFAULT 0,
+            items LONGTEXT DEFAULT NULL,
+            params LONGTEXT DEFAULT NULL,
+            created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            api_key_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            idempotency_key VARCHAR(100) DEFAULT NULL,
+            created_at DATETIME DEFAULT NULL,
+            updated_at DATETIME DEFAULT NULL,
+            finished_at DATETIME DEFAULT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uk_idempotency (api_key_id, idempotency_key),
+            INDEX idx_status (status)
+        ) $charset_collate;";
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		dbDelta( $sql );
+	}
+
+	/**
+	 * One row per imported CSV row worth remembering (created, updated, flagged), so an
+	 * import can be reviewed and undone. changed is JSON {col: [old, new]}; file_values holds
+	 * a flagged row's values.
+	 */
+	private function create_import_items_table(): void {
+		global $wpdb;
+		$table           = $this->tables['import_items'];
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            run_id BIGINT UNSIGNED NOT NULL,
+            line INT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(20) NOT NULL,
+            record_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            changed LONGTEXT DEFAULT NULL,
+            file_values LONGTEXT DEFAULT NULL,
+            note VARCHAR(255) DEFAULT NULL,
+            created_at DATETIME DEFAULT NULL,
+            PRIMARY KEY (id),
+            INDEX idx_run_status (run_id, status)
         ) $charset_collate;";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

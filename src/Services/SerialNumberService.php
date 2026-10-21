@@ -100,6 +100,8 @@ class SerialNumberService {
 		// Admins checking a certificate aren't verifiers; keep them out of the audit trail.
 		if ( $record && function_exists( 'certificate_generator_record_event' ) && ! current_user_can( 'certificate_generator_manage_settings' ) ) {
 			\certificate_generator_record_event( (string) $cert['serial_number'], 'verified', array( 'by' => $full ? 'code' : 'serial' ) );
+			/** Fires when a visitor (not an admin) verifies a certificate; $by is 'code' or 'serial'. */
+			\do_action( 'certificate_generator_certificate_verified', (string) $cert['serial_number'], $full ? 'code' : 'serial' );
 		}
 
 		// The recipient can hide their name from verification (My Certificates page).

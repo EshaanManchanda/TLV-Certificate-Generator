@@ -93,13 +93,14 @@ jQuery(document).ready(function ($) {
         if (S.linkedin_org_id) {
             params.organizationId = S.linkedin_org_id; // links the certificate to the issuer's LinkedIn page
         }
-        if (d.issued_at) {
-            var dt = new Date(String(d.issued_at).replace(' ', 'T'));
-            if (!isNaN(dt.getTime())) {
-                params.issueYear = dt.getFullYear();
-                params.issueMonth = dt.getMonth() + 1;
+        // Issue and expiry month/year, when the dates parse.
+        [['issued_at', 'issue'], ['expires_at', 'expiration']].forEach(function (p) {
+            var dt = d[p[0]] ? new Date(String(d[p[0]]).replace(' ', 'T')) : null;
+            if (dt && !isNaN(dt.getTime())) {
+                params[p[1] + 'Year'] = dt.getFullYear();
+                params[p[1] + 'Month'] = dt.getMonth() + 1;
             }
-        }
+        });
         var qs = Object.keys(params).map(function (k) {
             return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
         }).join('&');
@@ -109,7 +110,10 @@ jQuery(document).ready(function ($) {
             'style="display:inline-flex;align-items:center;gap:8px;background:#0a66c2;color:#fff;' +
             'padding:10px 18px;border-radius:' + br + ';text-decoration:none;font-weight:600;font-size:14px;">' +
             icon('<path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle>', 16) +
-            ' Add to LinkedIn Profile</a></div>';
+            ' Add to LinkedIn Profile</a>' +
+            // LinkedIn's link can't carry a file: the certificate itself goes on as media, by hand.
+            '<p style="margin:8px 0 0;font-size:12px;color:' + S.text_color + ';">' +
+            'To show the certificate itself, save it on LinkedIn, then edit it and choose <strong>Add media</strong> to upload your certificate PDF.</p></div>';
     }
 
     function renderValid(r) {

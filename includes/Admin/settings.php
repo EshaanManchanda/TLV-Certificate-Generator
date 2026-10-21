@@ -332,7 +332,7 @@ function certificate_generator_email_template_render( $args ) {
 			'label'   => __( 'Email Message', 'certificate-generator' ),
 			'type'    => 'textarea',
 			'default' => sprintf( /* translators: %s: recipient type, e.g. student */ __( 'Dear {name},\n\nPlease find attached your %s certificate.\n\nThank you!', 'certificate-generator' ), rtrim( $post_type, 's' ) ),
-			'desc'    => __( 'Message body. Available placeholders: {name} (recipient name), {certificate_title} (certificate type), {result_link} (result page URL), {zip_link} (ZIP download URL if available), {certificate_count} (number of certificates), {email} (recipient email)', 'certificate-generator' ),
+			'desc'    => __( 'Message body. Available placeholders: {name} (recipient name), {certificate_title} (certificate type), {result_link} (result page URL), {zip_link} (ZIP download URL if available), {certificate_count} (number of certificates), {email} (recipient email), {serial_number}, {verification_code}, {certificate_link} (verify page opened on the certificate)', 'certificate-generator' ),
 		),
 		'attach_certificate' => array(
 			'label'   => __( 'Attach Certificate', 'certificate-generator' ),
@@ -1204,7 +1204,7 @@ function certificate_generator_settings_page() {
 						<?php esc_html_e( 'Priority 2 — Used when per-type is blank', 'certificate-generator' ); ?>
 					</span>
 				</h3>
-				<p class="description cg-mb"><?php esc_html_e( 'Placeholders: {name} {certificate_title} {result_link} {serial_number} {expires_at} {certificate_count} {site_name}. WordPress shortcodes supported.', 'certificate-generator' ); ?></p>
+				<p class="description cg-mb"><?php esc_html_e( 'Placeholders: {name} {certificate_title} {result_link} {serial_number} {verification_code} {certificate_link} {expires_at} {certificate_count} {site_name}. WordPress shortcodes supported.', 'certificate-generator' ); ?></p>
 				<table class="form-table">
 					<tr>
 						<th><label for="certificate_generator_email_subject"><?php esc_html_e( 'Subject', 'certificate-generator' ); ?></label></th>
@@ -1500,6 +1500,9 @@ function certificate_generator_settings_page() {
 							<tr><td><span class="cg-tag blue" onclick="cgCopyTag(this)">{name}</span></td><td><?php esc_html_e( 'Recipient name', 'certificate-generator' ); ?></td></tr>
 							<tr><td><span class="cg-tag blue" onclick="cgCopyTag(this)">{certificate_title}</span></td><td><?php esc_html_e( 'Certificate title / type', 'certificate-generator' ); ?></td></tr>
 							<tr><td><span class="cg-tag blue" onclick="cgCopyTag(this)">{zip_link}</span></td><td><?php esc_html_e( 'ZIP download URL (bulk emails)', 'certificate-generator' ); ?></td></tr>
+							<tr><td><span class="cg-tag blue" onclick="cgCopyTag(this)">{serial_number}</span></td><td><?php esc_html_e( 'Certificate serial number', 'certificate-generator' ); ?></td></tr>
+							<tr><td><span class="cg-tag blue" onclick="cgCopyTag(this)">{verification_code}</span></td><td><?php esc_html_e( 'Verification code of the certificate (XXXX-XXXX-XXXX)', 'certificate-generator' ); ?></td></tr>
+							<tr><td><span class="cg-tag blue" onclick="cgCopyTag(this)">{certificate_link}</span></td><td><?php esc_html_e( 'Verify page opened on this certificate (with Add to LinkedIn and share buttons)', 'certificate-generator' ); ?></td></tr>
 						</table>
 						<p class="cg-ref-note"><?php esc_html_e( 'Always available. Replaced before shortcode processing.', 'certificate-generator' ); ?></p>
 					</div>

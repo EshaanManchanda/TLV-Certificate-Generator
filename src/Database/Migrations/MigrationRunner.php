@@ -9,7 +9,7 @@ namespace CertificateGenerator\Database\Migrations;
 class MigrationRunner {
 
 	private string $option_key      = 'certificate_generator_db_version';
-	private string $current_version = '013';
+	private string $current_version = '015';
 	private array $migrations       = array();
 
 	public function __construct() {
@@ -27,6 +27,8 @@ class MigrationRunner {
 			'011' => new Migration011_VerificationCode(),
 			'012' => new Migration012_TemplateSnapshot(),
 			'013' => new Migration013_ShowName(),
+			'014' => new Migration014_ExternalId(),
+			'015' => new Migration015_JobParamsImportRun(),
 		);
 	}
 

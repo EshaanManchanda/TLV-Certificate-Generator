@@ -49,16 +49,33 @@ const WPCLI = process.env.CG_E2E_WPCLI
 		.find((p) => fs.existsSync(p))
 	|| 'wp-cli.phar';
 
-/** Mailpit web URL for this Local site (CG_E2E_MAILPIT_URL wins). */
+// A site that already sends to a standalone Mailpit on its default ports (SMTP 1025, web 8025,
+// e.g. Docker) keeps it: mail stays where the developer is looking instead of moving to Local's.
+let ownMailpit;
+function siteUsesOwnMailpit() {
+	if (ownMailpit === undefined) {
+		try {
+			ownMailpit = wpEval(`$s = get_option('wp_mail_smtp', [])['smtp'] ?? []; echo json_encode(in_array($s['host'] ?? '', ['localhost', '127.0.0.1'], true) && 1025 === (int) ($s['port'] ?? 0));`) === true;
+		} catch {
+			ownMailpit = false;
+		}
+	}
+	return ownMailpit;
+}
+
+/** Mailpit web URL (CG_E2E_MAILPIT_URL wins, then the site's own Mailpit, then Local's). */
 function mailpitUrl() {
 	if (process.env.CG_E2E_MAILPIT_URL) return process.env.CG_E2E_MAILPIT_URL;
+	if (siteUsesOwnMailpit()) return 'http://localhost:8025';
 	const port = localSite()?.services?.mailpit?.ports?.WEB?.[0];
 	return port ? `http://localhost:${port}` : null;
 }
 
-/** Mailpit SMTP port for this Local site. */
+/** Mailpit SMTP port, chosen the same way as mailpitUrl(). */
 function mailpitSmtpPort() {
-	return Number(process.env.CG_E2E_MAILPIT_SMTP_PORT || localSite()?.services?.mailpit?.ports?.SMTP?.[0] || 0) || null;
+	if (process.env.CG_E2E_MAILPIT_SMTP_PORT) return Number(process.env.CG_E2E_MAILPIT_SMTP_PORT) || null;
+	if (siteUsesOwnMailpit()) return 1025;
+	return Number(localSite()?.services?.mailpit?.ports?.SMTP?.[0] || 0) || null;
 }
 
 const SELF = path.basename(path.resolve(__dirname, '../../..'));

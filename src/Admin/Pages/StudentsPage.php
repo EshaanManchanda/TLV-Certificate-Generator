@@ -90,7 +90,6 @@ class StudentsPage extends EntityListPage {
 			'has_email'      => true,
 			'can_generate'   => true,
 			'can_empty'      => true,
-			'gen_fields'     => null,
 		);
 	}
 
@@ -156,6 +155,7 @@ class StudentsPage extends EntityListPage {
 					'student_name'     => $name,
 					'email'            => $email,
 					'phone'            => \sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) ),
+					'external_id'      => mb_substr( \sanitize_text_field( wp_unslash( $_POST['external_id'] ?? '' ) ), 0, 191 ) ?: null,
 					'school_name'      => $school_lock ?? \sanitize_text_field( wp_unslash( $_POST['school_name'] ?? '' ) ),
 					'photo_url'        => $photo_url ?: null,
 					'event_id'         => absint( $_POST['event_id'] ?? 0 ) ?: null,
@@ -169,30 +169,15 @@ class StudentsPage extends EntityListPage {
 					'updated_at'       => current_time( 'mysql' ),
 				);
 
-				if ( $id && $row ) {
-					$result = $wpdb->update( $table, $data, array( 'id' => $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-					if ( $result === false ) {
-						$errors[] = 'Student was not saved — database error: ' . $wpdb->last_error;
-					} else {
-						$message = 'Student updated.';
-						$row     = array_merge( $row, $data );
-						$extra   = $new_extra;
-					}
+				$is_update = $id && $row;
+				$saved     = \certificate_generator_save_recipient( 'students', $data, $is_update ? (int) $id : 0 );
+				if ( \is_wp_error( $saved ) ) {
+					$errors[] = 'Student was not saved — database error: ' . $saved->get_error_message();
 				} else {
-					$data['created_at'] = current_time( 'mysql' );
-					$result              = $wpdb->insert( $table, $data ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-					if ( $result === false ) {
-						$errors[] = 'Student was not saved — database error: ' . $wpdb->last_error;
-					} else {
-						$id      = (int) $wpdb->insert_id;
-						$row     = array_merge( $data, array( 'id' => $id ) );
-						$extra   = $new_extra;
-						$message = 'Student added.';
-					}
-				}
-
-				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
-					certificate_generator_flush_filter_caches();
+					$message = $is_update ? 'Student updated.' : 'Student added.';
+					$row     = $is_update ? array_merge( $row, $data ) : array_merge( $data, array( 'id' => $saved ) );
+					$id      = $saved;
+					$extra   = $new_extra;
 				}
 
 				// Phase 6: sync to WP Dynamic Tags if a wp_post_id is linked
@@ -227,6 +212,9 @@ class StudentsPage extends EntityListPage {
 						<td><input type="email" id="email" name="email" class="regular-text" required value="<?php echo \esc_attr( $row['email'] ?? '' ); ?>"></td></tr>
 					<tr><th><label for="phone">Phone</label></th>
 						<td><input type="text" id="phone" name="phone" class="regular-text" value="<?php echo \esc_attr( $row['phone'] ?? '' ); ?>"></td></tr>
+					<tr><th><label for="external_id"><?php \esc_html_e( 'External ID', 'certificate-generator' ); ?></label></th>
+						<td><input type="text" id="external_id" name="external_id" class="regular-text code" maxlength="191" value="<?php echo \esc_attr( $row['external_id'] ?? '' ); ?>">
+						<p class="description"><?php \esc_html_e( 'Optional. The id of this student in your LMS, CRM or spreadsheet; integrations use it to find the record.', 'certificate-generator' ); ?></p></td></tr>
 					<tr><th><label for="school_name">School Name</label></th>
 						<td><input type="text" id="school_name" name="school_name" class="regular-text" value="<?php echo \esc_attr( $school_lock ?? ( $row['school_name'] ?? '' ) ); ?>"<?php echo null !== $school_lock ? ' readonly' : ''; ?>></td></tr>
 					<tr><th><label for="event_id">Event</label></th>

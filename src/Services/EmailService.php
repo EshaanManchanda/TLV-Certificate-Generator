@@ -74,22 +74,24 @@ class EmailService {
 	// template works for both; LMS emails used to ship a literal {result_link}.
 	// $html: escape values for the HTML body (the subject is plain text).
 	private function replace_placeholders( string $template, string $name, array $data, bool $html ): string {
-		$email  = (string) ( $data['email'] ?? '' );
-		$values = array(
+		$email      = (string) ( $data['email'] ?? '' );
+		$result_url = function_exists( 'certificate_generator_result_page_url' ) ? certificate_generator_result_page_url( $email ) : home_url( '/result/?student_email=' . rawurlencode( $email ) );
+		$values     = array(
 			$name,
 			$data['certificate_title'] ?? '',
 			$data['serial_number'] ?? 'N/A',
 			$data['expires_at'] ?? 'Never',
 			$data['issue_date'] ?? current_time( 'mysql' ),
 			$email,
-			home_url( '/result/?student_email=' . rawurlencode( $email ) ),
+			$result_url,
 			function_exists( 'certificate_generator_verify_page_url' ) ? certificate_generator_verify_page_url() : home_url( '/verify-certificate/' ),
 			get_bloginfo( 'name' ),
 			'1',
-			'',
+			$result_url, // {zip_link}: one certificate, no ZIP — same fallback as the main send path
 		);
+		$values = array_merge( $values, function_exists( 'certificate_generator_verification_tags' ) ? certificate_generator_verification_tags( (string) ( $data['serial_number'] ?? '' ) ) : array( '', '' ) );
 		return str_replace(
-			array( '{name}', '{certificate_title}', '{serial_number}', '{expires_at}', '{issue_date}', '{email}', '{result_link}', '{verify_link}', '{site_name}', '{certificate_count}', '{zip_link}' ),
+			array( '{name}', '{certificate_title}', '{serial_number}', '{expires_at}', '{issue_date}', '{email}', '{result_link}', '{verify_link}', '{site_name}', '{certificate_count}', '{zip_link}', '{verification_code}', '{certificate_link}' ),
 			$html ? array_map( 'esc_html', array_map( 'strval', $values ) ) : $values,
 			$template
 		);

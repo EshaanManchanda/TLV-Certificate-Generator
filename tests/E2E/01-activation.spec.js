@@ -25,12 +25,12 @@ test.describe('§01 Activation & upgrade', () => {
 		await expect(menu.locator('.wp-menu-image')).toHaveClass(/\bdashicons-award\b/);
 	});
 
-	test('SQL Migration page: DB version 013, up to date', async ({ page }) => {
+	test('SQL Migration page: DB version 015, up to date', async ({ page }) => {
 		await page.goto(adminUrl('cg-sql-migration'));
 		const body = page.locator('body');
-		await expect(body).toContainText(/Database version:\s*013/);
+		await expect(body).toContainText(/Database version:\s*015/);
 		await expect(body).toContainText('up to date');
-		expect(wp.getOption('certificate_generator_db_version')).toBe('013');
+		expect(wp.getOption('certificate_generator_db_version')).toBe('015');
 	});
 
 	test('reloading admin pages twice shows no database errors', async ({ page }) => {

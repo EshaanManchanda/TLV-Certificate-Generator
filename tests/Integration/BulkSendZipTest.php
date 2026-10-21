@@ -94,6 +94,22 @@ class BulkSendZipTest extends WP_UnitTestCase {
 		);
 		add_filter( 'pre_wp_mail', '__return_true' ); // Don't actually send.
 
+		// A custom HTML template: {zip_link} used to be blanked before the ZIP existed.
+		$email_settings                           = (array) get_option( 'certificate_generator_settings_email', array() );
+		$email_settings['students_email_message'] = "<table><tr><td>\n<a href=\"{zip_link}\">\nDownload ZIP\n</a> <a href=\"{result_link}\">View</a></td></tr></table>";
+		$email_settings['students_email_subject'] = 'Your Student Certificate is Ready';
+		update_option( 'certificate_generator_settings_email', $email_settings );
+
+		// {result_link} goes to the page that holds the search shortcode, not a hardcoded /result/.
+		$search_page = self::factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_status'  => 'publish',
+				'post_content' => '[certificate_generator_student_search]',
+			)
+		);
+		delete_transient( 'certificate_generator_result_page_url' );
+
 		$sent = certificate_generator_send_email( $cg_id, false );
 
 		$this->assertTrue( $sent, 'certificate_generator_send_email() should report success' );
@@ -102,6 +118,10 @@ class BulkSendZipTest extends WP_UnitTestCase {
 
 		$zip_path = $captured['attachments'][0];
 		$this->assertFileExists( $zip_path );
+		$this->assertStringContainsString( 'href="' . esc_url( certificate_generator_certificates_url() . '/' . basename( $zip_path ) ) . '"', $captured['message'], '{zip_link} must become the ZIP URL' );
+		$this->assertStringNotContainsString( '<br', $captured['message'], 'An HTML template must not go through wpautop()' );
+		$this->assertSame( 'Your Student Certificates are Ready (2)', $captured['subject'] );
+		$this->assertStringContainsString( 'href="' . esc_html( add_query_arg( 'student_email', rawurlencode( $email ), get_permalink( $search_page ) ) ) . '"', $captured['message'], '{result_link} must point at the search page' );
 
 		$zip = new ZipArchive();
 		$this->assertTrue( $zip->open( $zip_path ) === true );

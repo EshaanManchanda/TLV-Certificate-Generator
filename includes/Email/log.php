@@ -161,13 +161,16 @@ function certificate_generator_log_email( $certificate_id, $recipient_email, $re
 		'email_body'       => '',
 		'status'           => $success ? 'sent' : 'failed',
 		'error_message'    => $error_message,
+		'sent_at'          => current_time( 'mysql' ), // the rate limiter compares in site-local time
 	);
 
 	// CG_USE_EVENTS: delegate write + side-effects to LogEmailListener.
 	// Log seam: listeners own the row write; legacy path unchanged when flag is off.
 	if ( \CertificateGenerator\Core\Config::flag( 'CG_USE_EVENTS' ) ) {
 		do_action( 'certificate_generator_email_sent', $data );
-		return true; // truthy; no live caller consumes the id for a follow-up write
+		/** Fires after every email delivery attempt is logged ($data['status'] is 'sent' or 'failed'). */
+		do_action( 'certificate_generator_email_logged', $data );
+		return 1; // truthy; no live caller consumes the id for a follow-up write
 	}
 
 	$result = $wpdb->insert( $table_name, $data );
@@ -175,6 +178,10 @@ function certificate_generator_log_email( $certificate_id, $recipient_email, $re
 	if ( $result && $success ) {
 		delete_transient( 'certificate_generator_sent_count_3600' );
 		delete_transient( 'certificate_generator_sent_count_60' );
+	}
+	if ( $result ) {
+		/** This action is documented above. */
+		do_action( 'certificate_generator_email_logged', $data );
 	}
 
 	return $result ? $wpdb->insert_id : false;

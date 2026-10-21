@@ -11,6 +11,9 @@ class CertificateGenerator_Cron_Jobs {
 		add_action( 'certificate_generator_cleanup_old_certificates', array( __CLASS__, 'cleanup_old_certificates' ) );
 		add_action( 'certificate_generator_publish_scheduled_templates', array( __CLASS__, 'publish_scheduled_templates' ) );
 		add_action( 'certificate_generator_send_renewal_reminders', array( __CLASS__, 'send_recipient_renewal_reminders' ) );
+		// Bulk generation jobs: one batch per event; the hourly run reschedules a job whose batch was lost.
+		add_action( 'certificate_generator_job_batch', array( \CertificateGenerator\Services\Jobs::class, 'process' ) );
+		add_action( 'certificate_generator_publish_scheduled_templates', array( \CertificateGenerator\Services\Jobs::class, 'resume_stale' ) );
 		if ( function_exists( 'certificate_generator_ensure_verify_page' ) ) {
 			// Rides the daily QR cleanup rather than a cron event of its own: re-creates a deleted verify page.
 			add_action(
@@ -46,6 +49,31 @@ class CertificateGenerator_Cron_Jobs {
 		}
 	}
 
+	/**
+	 * Fire certificate_generator_certificate_expired once for each certificate that expired since
+	 * the last run (the stored mark makes a late or skipped cron neither miss nor repeat one).
+	 */
+	public static function announce_expired( string $table_name ): void {
+		global $wpdb;
+		$now   = current_time( 'mysql' );
+		$since = (string) get_option( 'certificate_generator_expired_checked_at', '' );
+		if ( '' === $since ) {
+			$since = gmdate( 'Y-m-d H:i:s', strtotime( $now ) - DAY_IN_SECONDS );
+		}
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name comes from $wpdb->prefix
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, serial_number FROM $table_name WHERE expires_at > %s AND expires_at <= %s AND revoked_at IS NULL", $since, $now ) );
+		update_option( 'certificate_generator_expired_checked_at', $now, false );
+		foreach ( (array) $rows as $row ) {
+			/**
+			 * Fires once when a certificate passes its expiry date (daily cron).
+			 *
+			 * @param string $serial Serial number.
+			 * @param int    $id     Legacy certificate_generator row id.
+			 */
+			do_action( 'certificate_generator_certificate_expired', (string) $row->serial_number, (int) $row->id );
+		}
+	}
+
 	public static function deactivate() {
 		wp_clear_scheduled_hook( 'certificate_generator_cleanup_qr_codes' );
 		wp_clear_scheduled_hook( 'certificate_generator_cleanup_old_zips' );
@@ -53,6 +81,7 @@ class CertificateGenerator_Cron_Jobs {
 		wp_clear_scheduled_hook( 'certificate_generator_cleanup_old_certificates' );
 		wp_clear_scheduled_hook( 'certificate_generator_publish_scheduled_templates' );
 		wp_clear_scheduled_hook( 'certificate_generator_send_renewal_reminders' );
+		wp_unschedule_hook( 'certificate_generator_job_batch' );
 	}
 
 	/**
@@ -125,6 +154,8 @@ class CertificateGenerator_Cron_Jobs {
 	public static function check_expiring_certificates() {
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'certificate_generator';
+
+		self::announce_expired( $table_name );
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		$expiring_soon = $wpdb->get_results(

@@ -135,7 +135,8 @@ function certificate_generator_wallet_handle_request(): void {
 	// phpcs:disable WordPress.Security.NonceVerification.Recommended -- the token is the credential; sign out is harmless
 	if ( isset( $_POST['certificate_generator_wallet_email'] ) ) {
 		$back = remove_query_arg( array( 'cg_wallet_sent', 'cg_wallet_expired' ), wp_unslash( $_SERVER['REQUEST_URI'] ?? '/' ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- validated by wp_validate_redirect() below
-		$back = wp_validate_redirect( home_url( $back ), home_url( '/' ) );
+		// REQUEST_URI already holds any subdirectory, so prefix only scheme + host.
+		$back = wp_validate_redirect( preg_replace( '#^(https?://[^/]+).*$#', '$1', home_url() ) . $back, home_url( '/' ) );
 		if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['certificate_generator_wallet_nonce'] ?? '' ) ), 'certificate_generator_wallet_link' ) ) {
 			$email     = strtolower( sanitize_email( wp_unslash( $_POST['certificate_generator_wallet_email'] ) ) );
 			$throttled = class_exists( 'CertificateGenerator_SecurityHelper' ) && ! CertificateGenerator_SecurityHelper::check_rate_limit( 'cg_wallet_link', 5, 10 * MINUTE_IN_SECONDS );

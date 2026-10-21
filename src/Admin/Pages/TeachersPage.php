@@ -64,7 +64,6 @@ class TeachersPage extends EntityListPage {
 			),
 			'has_email'      => true,
 			'can_generate'   => true,
-			'gen_fields'     => array( 'teacher_name', 'school_name', 'issue_date' ),
 		);
 	}
 
@@ -135,30 +134,15 @@ class TeachersPage extends EntityListPage {
 					'extra_fields'     => ! empty( $new_extra ) ? wp_json_encode( $new_extra ) : null,
 					'updated_at'       => current_time( 'mysql' ),
 				);
-				if ( $id && $row ) {
-					$result = $wpdb->update( $table, $data, array( 'id' => $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-					if ( $result === false ) {
-						$errors[] = 'Teacher was not saved — database error: ' . $wpdb->last_error;
-					} else {
-						$message = 'Teacher updated.';
-						$row     = array_merge( $row, $data );
-						$extra   = $new_extra;
-					}
+				$is_update = $id && $row;
+				$saved     = \certificate_generator_save_recipient( 'teachers', $data, $is_update ? (int) $id : 0 );
+				if ( \is_wp_error( $saved ) ) {
+					$errors[] = 'Teacher was not saved — database error: ' . $saved->get_error_message();
 				} else {
-					$data['created_at'] = current_time( 'mysql' );
-					$result              = $wpdb->insert( $table, $data ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-					if ( $result === false ) {
-						$errors[] = 'Teacher was not saved — database error: ' . $wpdb->last_error;
-					} else {
-						$id      = (int) $wpdb->insert_id;
-						$row     = array_merge( $data, array( 'id' => $id ) );
-						$extra   = $new_extra;
-						$message = 'Teacher added.';
-					}
-				}
-
-				if ( function_exists( 'certificate_generator_flush_filter_caches' ) ) {
-					certificate_generator_flush_filter_caches();
+					$message = $is_update ? 'Teacher updated.' : 'Teacher added.';
+					$row     = $is_update ? array_merge( $row, $data ) : array_merge( $data, array( 'id' => $saved ) );
+					$id      = $saved;
+					$extra   = $new_extra;
 				}
 
 				// Phase 6: sync to WP Dynamic Tags if a wp_post_id is linked

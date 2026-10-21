@@ -4,6 +4,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once __DIR__ . '/import-history.php';
+
 // phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_fopen, WordPress.WP.AlternativeFunctions.file_system_operations_fread, WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- CSV rows are streamed with fgetcsv()/fputcsv(); WP_Filesystem has no stream API.
 
 /**
@@ -87,6 +89,7 @@ class CertificateGenerator_Import_Writer {
 		'skipped' => 0,
 		'failed'  => 0,
 		'resumed' => 0,
+		'flagged' => 0,
 	);
 	private int $stopped_at  = 0;
 	private string $resume_key = '';
@@ -94,18 +97,29 @@ class CertificateGenerator_Import_Writer {
 	private bool $wrote     = false;
 	private bool $nested    = false;
 	private bool $dry_run;          // count outcomes only: no writes, no time limit, no resume state
-	private bool $update_existing;  // false: a row matching an existing record is skipped, not applied
+	private string $existing;       // a row matching an existing record: update | keep (skip) | flag (keep + list for review)
+	private int $run_id = 0;        // the import run (wp_cg_jobs type=import) this writes history to; 0 = none
 
-	public function __construct( string $table, array $identity, string $name_col, bool $dry_run = false, bool $update_existing = true ) {
-		$this->table           = $table;
-		$this->identity        = $identity;
-		$this->name_col        = $name_col;
-		$this->dry_run         = $dry_run;
-		$this->update_existing = $update_existing;
+	/** @param bool|string $existing update | keep | flag (true / false: update / keep, as before). */
+	public function __construct( string $table, array $identity, string $name_col, bool $dry_run = false, $existing = 'update' ) {
+		$this->table    = $table;
+		$this->identity = $identity;
+		$this->name_col = $name_col;
+		$this->dry_run  = $dry_run;
+		$this->existing = is_bool( $existing ) ? ( $existing ? 'update' : 'keep' ) : ( in_array( $existing, array( 'update', 'keep', 'flag' ), true ) ? $existing : 'update' );
 		$limit                 = (int) ini_get( 'max_execution_time' );
 		$start                 = (float) ( $_SERVER['REQUEST_TIME_FLOAT'] ?? microtime( true ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- cast to float
 		// ponytail: a dry run of a huge file can still hit the PHP time limit; batch it like the import if previews of 50k+ rows matter.
 		$this->deadline        = $dry_run ? 0.0 : (float) apply_filters( 'certificate_generator_import_deadline', $limit > 0 ? $start + $limit - 10 : 0.0 );
+	}
+
+	/** Record history for this run: inserted rows get import_run_id, updated fields and flagged rows go to wp_cg_import_items. */
+	public function track( int $run_id ): void {
+		$this->run_id = $run_id;
+	}
+
+	public function resume_key(): string {
+		return $this->resume_key;
 	}
 
 	/** Pick up where an earlier upload of this same file (and same $settings, e.g. the column mapping) stopped. */
@@ -166,6 +180,8 @@ class CertificateGenerator_Import_Writer {
 
 		$inserts  = array(); // full identity (or "#line") => row, last one wins
 		$updates  = array(); // existing id => row, last one wins
+		$lines    = array(); // existing id => CSV line of the row applied to it
+		$flags    = array(); // [line, existing id, row]
 		$outcomes = array(); // [line, name, outcome, note]
 		foreach ( $rows as list( $line, $row ) ) {
 			$name     = (string) ( $row[ $this->name_col ] ?? '' );
@@ -177,10 +193,13 @@ class CertificateGenerator_Import_Writer {
 			if ( $first && isset( $inserts[ $full ] ) ) {
 				$inserts[ $full ] = $row; // same record earlier in this chunk: newer values win
 			} elseif ( $keyed && ( $id = $this->claim( $existing, $row ) ) ) {
-				if ( $this->update_existing ) {
+				if ( 'update' === $this->existing ) {
 					$updates[ $id ] = $row;
+					$lines[ $id ]   = $line;
+				} elseif ( 'flag' === $this->existing && ! $first ) {
+					$flags[] = array( $line, $id, $row );
 				}
-				$outcome = $outcome ?? ( $this->update_existing ? 'updated' : 'kept' );
+				$outcome = $outcome ?? array( 'update' => 'updated', 'keep' => 'kept', 'flag' => 'flagged' )[ $this->existing ];
 			} else {
 				$inserts[ $keyed ? $full : '#' . $line ] = $row;
 				$outcome                                 = $outcome ?? 'new';
@@ -195,11 +214,16 @@ class CertificateGenerator_Import_Writer {
 		$ok = true;
 		if ( ! $this->dry_run ) {
 			$this->begin();
+			$items = $this->run_id ? $this->history_items( $updates, $lines, $flags ) : array();
+			if ( $this->run_id ) {
+				$inserts = array_map( fn( $r ) => $r + array( 'import_run_id' => $this->run_id ), $inserts );
+			}
 			$ok = ! $inserts || $this->insert_many( array_values( $inserts ) );
 			foreach ( $updates as $id => $row ) {
 				unset( $row['created_at'] ); // keep when the record was first imported
 				$ok = $ok && false !== $wpdb->update( $this->table, $row, array( 'id' => $id ) );
 			}
+			$ok = $ok && ( ! $items || certificate_generator_import_insert_items( $items ) ); // same transaction: history can't disagree with the data
 			$this->end( $ok );
 		}
 		$error = $ok ? '' : ( $wpdb->last_error ?: 'database error' );
@@ -212,6 +236,9 @@ class CertificateGenerator_Import_Writer {
 			} elseif ( 'kept' === $outcome ) {
 				++$this->counts['skipped'];
 				$this->issue( $line, $name, 'skipped: matches an existing record, left unchanged' );
+			} elseif ( 'flagged' === $outcome ) {
+				++$this->counts['flagged'];
+				$this->issue( $line, $name, 'flagged: matches an existing record, left unchanged for review (Import history)' );
 			} else {
 				++$this->counts[ $outcome ];
 				if ( 'merged' === $outcome ) {
@@ -262,6 +289,36 @@ class CertificateGenerator_Import_Writer {
 		} else {
 			$wpdb->query( $ok ? 'COMMIT' : 'ROLLBACK' ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table names come from $wpdb->prefix; other interpolated parts are whitelisted, cast or prepared
 		}
+	}
+
+	/**
+	 * History rows for one chunk: each update's changed columns {col: [old, new]} (read before
+	 * the update), and each flagged row's file values.
+	 */
+	private function history_items( array $updates, array $lines, array $flags ): array {
+		global $wpdb;
+		$items = array();
+		$now   = current_time( 'mysql', true );
+		if ( $updates ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared -- table name from $wpdb->prefix; ids are ints
+			$current = $wpdb->get_results( "SELECT * FROM {$this->table} WHERE id IN (" . implode( ',', array_map( 'intval', array_keys( $updates ) ) ) . ')', OBJECT_K );
+			foreach ( $updates as $id => $row ) {
+				$old     = (array) ( $current[ $id ] ?? array() );
+				$changed = array();
+				foreach ( array_diff_key( $row, array_flip( array( 'created_at', 'updated_at', 'import_run_id' ) ) ) as $col => $new ) {
+					if ( (string) ( $old[ $col ] ?? '' ) !== (string) $new ) {
+						$changed[ $col ] = array( $old[ $col ] ?? null, $new );
+					}
+				}
+				if ( $changed ) {
+					$items[] = array( $this->run_id, $lines[ $id ], 'updated', $id, wp_json_encode( $changed ), null, $now );
+				}
+			}
+		}
+		foreach ( $flags as list( $line, $id, $row ) ) {
+			$items[] = array( $this->run_id, $line, 'flagged', $id, null, wp_json_encode( $row ), $now );
+		}
+		return $items;
 	}
 
 	/** Existing rows sharing the chunk's first identity column, grouped by identity. */
@@ -381,6 +438,10 @@ function certificate_generator_import_render_report( string $entity, array $repo
 		/* translators: %d: rows skipped */
 		$parts[] = sprintf( __( '%d skipped', 'certificate-generator' ), $c['skipped'] );
 	}
+	if ( ! empty( $c['flagged'] ) ) {
+		/* translators: %d: rows flagged for review */
+		$parts[] = sprintf( __( '%d flagged for review in Import history', 'certificate-generator' ), $c['flagged'] );
+	}
 	if ( $c['failed'] ) {
 		/* translators: %d: rows failed */
 		$parts[] = sprintf( __( '%d failed', 'certificate-generator' ), $c['failed'] );
@@ -457,12 +518,13 @@ function certificate_generator_import_entities(): array {
 		'identity' => array( 'email', $name_col, 'school_name' ),
 		'name'     => $name_col,
 		'required' => array( $name_col, 'email', 'school_name', 'issue_date', 'certificate_type' ),
-		'optional' => array( 'phone', 'event_code', 'send_email', 'status', 'year' ),
+		'optional' => array( 'phone', 'external_id', 'event_code', 'send_email', 'status', 'year' ),
 		'aliases'  => $common + array(
 			$name_col     => $name_aliases,
 			'email'       => array( 'email_address', 'e_mail', 'mail', 'email_id' ),
 			'school_name' => array( 'school', 'institution', 'institute', 'college', 'organisation', 'organization' ),
 			'phone'       => array( 'phone_number', 'mobile', 'mobile_number', 'contact', 'contact_number' ),
+			'external_id' => array( 'external_ref', 'reference', 'ref_id', 'lms_id', 'crm_id' ), // an LMS / CRM / sheet id, used by the API to find the record
 		),
 		'school'   => true,
 	);
@@ -731,6 +793,9 @@ function certificate_generator_import_build_row( string $entity, array $cfg, arr
 		$school              = $args['school_lock'] ?? sanitize_text_field( $row['school_name'] ?? '' );
 		$data['email']       = sanitize_email( $row['email'] ?? '' );
 		$data['phone']       = sanitize_text_field( $row['phone'] ?? '' );
+		if ( '' !== trim( (string) ( $row['external_id'] ?? '' ) ) ) { // only when given, so an update without the column keeps it
+			$data['external_id'] = mb_substr( sanitize_text_field( $row['external_id'] ), 0, 191 );
+		}
 		$data['school_id']   = certificate_generator_import_school_id( $school, $dry_run, $ctx );
 		$data['school_name'] = $school;
 		certificate_generator_import_warn_row( $writer, $line, $name, $row['email'] ?? '', $data['email'], $raw_date, $date );
@@ -752,7 +817,7 @@ function certificate_generator_import_build_row( string $entity, array $cfg, arr
  * without writing, so the preview's counts are the import's counts.
  *
  * @param array $args map (column => choice, see certificate_generator_import_map), date_order
- *                    ('auto'|'dmy'|'mdy'), dry_run, update_existing (default true), source.
+ *                    ('auto'|'dmy'|'mdy'), dry_run, existing (update|keep|flag; the older update_existing bool still works), source.
  * @return array|string Error message, or: map, header, missing, extras, delimiter, encoding,
  *                      report (null when required columns are missing), preview (first 5 rows),
  *                      dates (every issue_date value), registered.
@@ -813,16 +878,20 @@ function certificate_generator_import_run( string $entity, string $file, array $
 		return __( 'The plugin tables are unavailable — nothing was imported.', 'certificate-generator' );
 	}
 
-	$dry_run = ! empty( $args['dry_run'] );
-	$writer  = new CertificateGenerator_Import_Writer(
+	$dry_run  = ! empty( $args['dry_run'] );
+	$existing = certificate_generator_import_existing_mode( $args );
+	$writer   = new CertificateGenerator_Import_Writer(
 		\CertificateGenerator\Database\CustomTables::instance()->get_table( $cfg['table'] ),
 		$cfg['identity'],
 		$cfg['name'],
 		$dry_run,
-		$args['update_existing'] ?? true
+		$existing
 	);
+	$run_id = 0;
 	if ( ! $dry_run ) {
-		$writer->resume( $file, (string) wp_json_encode( array( $map, $args['date_order'] ?? 'auto', $args['update_existing'] ?? true ) ) );
+		$writer->resume( $file, (string) wp_json_encode( array( $map, $args['date_order'] ?? 'auto', $existing ) ) );
+		$run_id = certificate_generator_import_run_start( $entity, (string) ( $args['source'] ?? '' ), $existing, $writer->resume_key() );
+		$writer->track( $run_id );
 	}
 	$ctx = array(
 		'schools'    => array(),
@@ -858,8 +927,33 @@ function certificate_generator_import_run( string $entity, string $file, array $
 	fclose( $handle );
 	$result['report']     = $writer->report();
 	$result['registered'] = $ctx['registered'];
+	$result['run_id']     = $run_id;
+	if ( $run_id ) {
+		certificate_generator_import_run_progress( $run_id, $result['report']['counts'], ! $result['report']['stopped_at'], $writer->resume_key() );
+	}
 	if ( ! $dry_run && function_exists( 'certificate_generator_flush_filter_caches' ) ) {
 		certificate_generator_flush_filter_caches();
+	}
+	if ( ! $dry_run && empty( $result['report']['stopped_at'] ) ) {
+		/**
+		 * Fires when a CSV import reaches the end of its file (a timed-out run fires on the
+		 * run that finishes it; counts cover that last run, 'resumed' the rows done before).
+		 *
+		 * @param array $summary entity, source, counts (new, updated, skipped, failed, resumed, …).
+		 */
+		$c       = $result['report']['counts'];
+		$summary = array(
+			'entity' => $entity,
+			'source' => (string) ( $args['source'] ?? '' ),
+			'counts' => $c,
+		);
+		// Nothing saved and rows failed: the import as a whole failed.
+		if ( $c['failed'] > 0 && 0 === $c['new'] + $c['updated'] + $c['resumed'] ) {
+			/** Fires when every row of an import failed (same $summary as import_completed). */
+			do_action( 'certificate_generator_import_failed', $summary );
+		} else {
+			do_action( 'certificate_generator_import_completed', $summary );
+		}
 	}
 	return $result;
 }
@@ -900,6 +994,7 @@ function certificate_generator_import_sample_csv_url( string $entity ): string {
 		'issue_date'       => '25-08-2026',
 		'certificate_type' => 'Participation',
 		'phone'            => '98765 43210',
+		'external_id'      => '',
 		'event_code'       => '',
 		'send_email'       => 'yes',
 		'photo_url'        => '',
@@ -985,7 +1080,7 @@ function certificate_generator_import_page( string $entity ): void {
 	$args = array(
 		'map'             => array_map( 'sanitize_key', (array) wp_unslash( $_POST['cg_map'] ?? array() ) ), // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized per value
 		'date_order'      => sanitize_key( wp_unslash( $_POST['cg_date_order'] ?? '' ) ),
-		'update_existing' => 'keep' !== sanitize_key( wp_unslash( $_POST['cg_existing'] ?? 'update' ) ),
+		'existing'        => sanitize_key( wp_unslash( $_POST['cg_existing'] ?? 'update' ) ),
 		'source'          => $source,
 	);
 	// phpcs:enable WordPress.Security.NonceVerification.Missing
@@ -1039,7 +1134,7 @@ function certificate_generator_import_hidden_args( string $job, array $args ): v
 	echo '<input type="hidden" name="cg_import_job" value="' . esc_attr( $job ) . '" />';
 	echo '<input type="hidden" name="cg_import_source" value="' . esc_attr( $args['source'] ) . '" />';
 	echo '<input type="hidden" name="cg_date_order" value="' . esc_attr( $args['date_order'] ) . '" />';
-	echo '<input type="hidden" name="cg_existing" value="' . ( $args['update_existing'] ? 'update' : 'keep' ) . '" />';
+	echo '<input type="hidden" name="cg_existing" value="' . esc_attr( certificate_generator_import_existing_mode( $args ) ) . '" />';
 	foreach ( $args['map'] as $i => $choice ) {
 		echo '<input type="hidden" name="cg_map[' . (int) $i . ']" value="' . esc_attr( $choice ) . '" />';
 	}
@@ -1119,8 +1214,10 @@ function certificate_generator_import_render_check( string $entity, array $cfg, 
 		echo '<p class="description cg-text-warning">' . esc_html__( 'Dates like 03/04/2026 could be 3 April or 4 March. Choose the order your file uses.', 'certificate-generator' ) . '</p>';
 	}
 	echo '</td></tr><tr><th>' . esc_html__( 'Rows that match an existing record', 'certificate-generator' ) . '</th><td>';
-	echo '<label><input type="radio" name="cg_existing" value="update"' . checked( $args['update_existing'], true, false ) . '> ' . esc_html__( 'Update the record with the file\'s values', 'certificate-generator' ) . '</label><br>';
-	echo '<label><input type="radio" name="cg_existing" value="keep"' . checked( $args['update_existing'], false, false ) . '> ' . esc_html__( 'Leave the record unchanged', 'certificate-generator' ) . '</label>';
+	$mode = certificate_generator_import_existing_mode( $args );
+	echo '<label><input type="radio" name="cg_existing" value="update"' . checked( $mode, 'update', false ) . '> ' . esc_html__( 'Update the record with the file\'s values', 'certificate-generator' ) . '</label><br>';
+	echo '<label><input type="radio" name="cg_existing" value="keep"' . checked( $mode, 'keep', false ) . '> ' . esc_html__( 'Leave the record unchanged', 'certificate-generator' ) . '</label><br>';
+	echo '<label><input type="radio" name="cg_existing" value="flag"' . checked( $mode, 'flag', false ) . '> ' . esc_html__( 'Leave the record unchanged and flag the row for review (Import history: apply, add as new, or dismiss)', 'certificate-generator' ) . '</label>';
 	echo '<p class="description">' . esc_html( sprintf( 'A row matches when its %s, certificate type and issue date are the same.', implode( ' + ', $cfg['identity'] ) ) ) . '</p></td></tr></table>';
 
 	if ( $report ) {
@@ -1135,7 +1232,7 @@ function certificate_generator_import_render_check( string $entity, array $cfg, 
 				$c['merged'],
 				$c['skipped']
 			)
-		) . '</strong> ' . esc_html__( 'Nothing has been saved yet.', 'certificate-generator' ) . '</p></div>';
+		) . ( $c['flagged'] ? ' ' . esc_html( sprintf( /* translators: %d: rows flagged for review */ __( '%d match existing records and will be flagged for review.', 'certificate-generator' ), $c['flagged'] ) ) : '' ) . '</strong> ' . esc_html__( 'Nothing has been saved yet.', 'certificate-generator' ) . '</p></div>';
 		certificate_generator_import_render_issues( $report['issues'], 20 );
 		if ( $result['long'] ) {
 			certificate_generator_ui_notice(
@@ -1154,7 +1251,7 @@ function certificate_generator_import_render_check( string $entity, array $cfg, 
 
 		if ( $result['preview'] ) {
 			$cols = array_keys( $first_row );
-			$cols = array_values( array_diff( $cols, array( 'event_id', 'school_id', 'year', 'status', 'import_source', 'created_at', 'updated_at' ) ) );
+			$cols = array_values( array_diff( $cols, array( 'event_id', 'school_id', 'year', 'status', 'import_source', 'import_run_id', 'created_at', 'updated_at' ) ) );
 			echo '<h3>' . esc_html__( 'First rows as they will be saved', 'certificate-generator' ) . '</h3><div class="cg-table-wrap"><table class="widefat striped cg-table"><thead><tr>';
 			foreach ( $cols as $col ) {
 				echo '<th>' . esc_html( $col ) . '</th>';

@@ -51,14 +51,15 @@ test.describe.serial('§12 Bulk Send scope and email template', () => {
 		await page.fill('#cert-filter-email-search', EMAIL);
 
 		await expect(page.locator('#cg-bs-showing')).toHaveText('Showing 1 of 1 certificate');
+		const before = (await mail.inbox(EMAIL)).length; // before Start: since 7.9.3 it sends at once in the background
 		await page.click('#cert-start-bulk-send');
 		await confirmKit(page);
 		await expect(page.locator('#bulk-send-result')).toContainText('Queued 1 email carrying 1 certificate.');
 
-		const [q] = wp.sql("SELECT scope FROM {p}cert_email_queue WHERE recipient_email = %s AND status = 'pending'", EMAIL);
+		// Newest row in any status: the background kick may already be sending it.
+		const [q] = wp.sql('SELECT scope FROM {p}cert_email_queue WHERE recipient_email = %s ORDER BY id DESC LIMIT 1', EMAIL);
 		expect(JSON.parse(q.scope)).toEqual({ students: [rowA] });
 
-		const before = (await mail.inbox(EMAIL)).length;
 		wp.runCron('certificate_generator_process_email_queue');
 		const msgs = await mail.waitForMail(EMAIL, before + 1);
 		expect(msgs.length, 'certificate email delivered').toBe(before + 1);

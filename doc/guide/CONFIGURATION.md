@@ -30,6 +30,8 @@ Beyond the single global template above, the `wp_cg_email_templates` table (see 
 | `{result_link}` | Link to online results page |
 | `{verify_link}` | Link to certificate verification page |
 | `{zip_link}` | Download link (used when the ZIP attachment would exceed 25 MB) |
+| `{verification_code}` | The certificate's verification code, as printed (`XXXX-XXXX-XXXX`) *(7.9.3)* |
+| `{certificate_link}` | The verify page opened on this certificate: full details, Add to LinkedIn, share buttons *(7.9.3)*. `{verify_link}` is the blank verify page |
 
 WordPress shortcodes (e.g. `[site_name]`) are processed *after* placeholder substitution, so both can be mixed in the template.
 

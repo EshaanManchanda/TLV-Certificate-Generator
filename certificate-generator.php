@@ -3,7 +3,7 @@
  * Plugin Name:       Certificate Generator – Bulk PDF Certificates, Email & QR Verification
  * Plugin URI:        https://techlovev.in/plugins/certificate-generator
  * Description:       A comprehensive plugin for managing, generating, and bulk-sending certificates for students and teachers.
- * Version:           7.9.2
+ * Version:           7.9.3
  * Requires at least: 6.0
  * Requires PHP:      8.2
  * Tested up to:      7.1
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define constants for plugin paths
-define( 'CERTIFICATE_GENERATOR_VERSION', '7.9.2' ); // keep in sync with the Version header and readme.txt Stable tag
+define( 'CERTIFICATE_GENERATOR_VERSION', '7.9.3' ); // keep in sync with the Version header and readme.txt Stable tag
 define( 'CERTIFICATE_GENERATOR_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CERTIFICATE_GENERATOR_URL', plugin_dir_url( __FILE__ ) );
 define( 'CERTIFICATE_GENERATOR_QUEUE_BATCH_SIZE', 50 );
@@ -180,6 +180,7 @@ $certificate_generator_optional_files = array(
 	'includes/Admin/bulk-email.php'                     => 'Bulk email admin page',
 	'includes/Admin/cert-download-admin.php'            => 'Admin certificate download page',
 	'includes/Services/certificate-events.php'          => 'Certificate audit trail',
+	'includes/Services/recipients.php'                  => 'Recipient saves',
 	'includes/Admin/revoke-certificate.php'             => 'Revoke certificate admin tool',
 	'includes/Admin/register.php'                       => 'Certificate register (CSV / PDF)',
 	'includes/Admin/filters-api.php'                    => 'Admin filters API',
@@ -228,6 +229,10 @@ foreach ( $certificate_generator_optional_files as $certificate_generator_file =
 	}
 }
 
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	require_once CERTIFICATE_GENERATOR_PATH . 'includes/Cli/commands.php'; // wp certificate-generator …
+}
+
 // Handle missing critical files
 if ( ! empty( $certificate_generator_missing_critical_files ) ) {
 	$certificate_generator_error_message = 'Certificate Generator cannot load due to missing critical files: ' . implode( ', ', $certificate_generator_missing_critical_files );
@@ -244,8 +249,12 @@ if ( ! empty( $certificate_generator_missing_critical_files ) ) {
 }
 
 // Store missing files info for admin display
-if ( ! empty( $certificate_generator_missing_optional_files ) ) {
-	update_option( 'certificate_generator_missing_files', $certificate_generator_missing_optional_files );
+if ( get_option( 'certificate_generator_missing_files', array() ) !== $certificate_generator_missing_optional_files ) {
+	if ( $certificate_generator_missing_optional_files ) {
+		update_option( 'certificate_generator_missing_files', $certificate_generator_missing_optional_files );
+	} else {
+		delete_option( 'certificate_generator_missing_files' ); // files are back: clear the notice
+	}
 }
 
 // ── New Architecture: PSR-4 Autoloader ──────────────────────────────────────
@@ -286,8 +295,10 @@ if ( class_exists( '\CertificateGenerator\Core\Plugin' ) ) {
 }
 
 // ── Legacy Enhancement Classes (keep working while src/ migration continues) ─
-if ( class_exists( 'CertificateGenerator_Migrator' ) ) {
+// Schema checks + backfill queries: once per plugin version, not on every request.
+if ( class_exists( 'CertificateGenerator_Migrator' ) && get_option( 'certificate_generator_migrator_version' ) !== CERTIFICATE_GENERATOR_VERSION ) {
 	CertificateGenerator_Migrator::run();
+	update_option( 'certificate_generator_migrator_version', CERTIFICATE_GENERATOR_VERSION );
 }
 
 if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
@@ -311,8 +322,10 @@ if ( class_exists( 'CertificateGenerator_Public_Verification' ) ) {
 	CertificateGenerator_Public_Verification::get_instance()->init();
 }
 
+// On init: scheduling a missing event runs the cron_schedules filter, whose labels are
+// translated, and translating before after_setup_theme raises a WordPress notice.
 if ( class_exists( 'CertificateGenerator_Cron_Jobs' ) ) {
-	CertificateGenerator_Cron_Jobs::init();
+	add_action( 'init', array( 'CertificateGenerator_Cron_Jobs', 'init' ) );
 }
 
 // ── Custom Tables: Create tables + sync hooks ────────────────────────────────
@@ -332,7 +345,7 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 			if ( ! wp_doing_ajax() ) {
 				return;
 			}
-			foreach ( array( 'StudentsPage', 'TeachersPage', 'SchoolsPage', 'TemplatesPage' ) as $page ) {
+			foreach ( array( 'StudentsPage', 'TeachersPage', 'SchoolsPage', 'TemplatesPage', 'JobsPage' ) as $page ) {
 				$class = '\CertificateGenerator\Admin\Pages\\' . $page;
 				if ( class_exists( $class ) ) {
 					( new $class() )->register_ajax();
@@ -392,6 +405,9 @@ if ( class_exists( '\CertificateGenerator\Database\CustomTables' ) ) {
 				CertificateGenerator_Bulk_Serial_Generator::get_instance()->add_bulk_serial_menu();
 			}
 			add_submenu_page( 'cg-dashboard', 'Download Certificates', 'Download Certs', 'certificate_generator_issue', 'cg-cert-download', 'certificate_generator_render_admin_cert_download_page' );
+			if ( class_exists( '\CertificateGenerator\Admin\Pages\JobsPage' ) ) {
+				( new \CertificateGenerator\Admin\Pages\JobsPage() )->register();
+			}
 			add_submenu_page( 'cg-dashboard', 'Certificate Register', 'Register', 'certificate_generator_view', 'cg-register', 'certificate_generator_render_register_page' );
 
 			// ── Email ──
@@ -718,11 +734,13 @@ function certificate_generator_activate() {
 
 		// QR codes and {verify_link} need a published verify page. Creating a page needs rewrite
 		// rules, which don't exist yet when activation runs before init (WP-CLI, test bootstraps).
-		if ( function_exists( 'certificate_generator_ensure_verify_page' ) ) {
-			if ( did_action( 'init' ) ) {
-				certificate_generator_ensure_verify_page();
-			} else {
-				add_action( 'init', 'certificate_generator_ensure_verify_page' );
+		foreach ( array( 'certificate_generator_ensure_verify_page', 'certificate_generator_ensure_result_page' ) as $ensure_page ) {
+			if ( function_exists( $ensure_page ) ) {
+				if ( did_action( 'init' ) ) {
+					$ensure_page();
+				} else {
+					add_action( 'init', $ensure_page );
+				}
 			}
 		}
 
@@ -770,13 +788,13 @@ function certificate_generator_activate() {
 
 		deactivate_plugins( plugin_basename( __FILE__ ) );
 
-		$error_message  = 'Certificate Generator could not be activated: ' . $e->getMessage();
-		$error_message .= '<br>• PHP Version: ' . PHP_VERSION;
-		$error_message .= '<br>• WordPress Version: ' . get_bloginfo( 'version' );
-		$error_message .= '<br>• Memory Limit: ' . ini_get( 'memory_limit' );
-		$error_message .= '<br><br><a href="' . admin_url( 'plugins.php' ) . '" class="button">Return to Plugins</a>';
+		$error_message  = 'Certificate Generator could not be activated: ' . esc_html( $e->getMessage() );
+		$error_message .= '<br>• PHP Version: ' . esc_html( PHP_VERSION );
+		$error_message .= '<br>• WordPress Version: ' . esc_html( get_bloginfo( 'version' ) );
+		$error_message .= '<br>• Memory Limit: ' . esc_html( (string) ini_get( 'memory_limit' ) );
+		$error_message .= '<br><br><a href="' . esc_url( admin_url( 'plugins.php' ) ) . '" class="button">Return to Plugins</a>';
 
-		wp_die( esc_html( $error_message ) );
+		wp_die( wp_kses_post( $error_message ) );
 	}
 }
 
@@ -803,6 +821,7 @@ add_action(
 function certificate_generator_deactivate() {
 	flush_rewrite_rules();
 	wp_clear_scheduled_hook( 'certificate_generator_cleanup_logs' );
+	wp_clear_scheduled_hook( 'certificate_generator_process_email_queue' );
 	if ( class_exists( 'CertificateGenerator_Cron_Jobs' ) ) {
 		CertificateGenerator_Cron_Jobs::deactivate();
 	}
@@ -851,6 +870,9 @@ function certificate_generator_uninstall() {
 		$cg_prefix . 'events',
 		$cg_prefix . 'certificate_events',
 		$cg_prefix . 'message_log',
+		$cg_prefix . 'api_keys',
+		$cg_prefix . 'jobs',
+		$cg_prefix . 'import_items',
 	);
 
 	foreach ( array_merge( $legacy_tables, $cg_tables ) as $table ) {
@@ -890,6 +912,10 @@ function certificate_generator_uninstall() {
 		'certificate_generator_verification_secret',
 		'certificate_generator_verify_serial_full_details',
 		'certificate_generator_log_retention_days',
+		'certificate_generator_migrator_version',
+		'certificate_generator_expired_checked_at',
+		'certificate_generator_queue_paused',
+		'certificate_generator_feature_toggles',
 		'certificate_generator_verify_page_id', // the page itself is the site owner's content and stays
 	);
 	foreach ( $options as $opt ) {
@@ -903,6 +929,10 @@ function certificate_generator_uninstall() {
 	wp_clear_scheduled_hook( 'certificate_generator_cleanup_qr_codes' );
 	wp_clear_scheduled_hook( 'certificate_generator_check_expiring_certificates' );
 	wp_clear_scheduled_hook( 'certificate_generator_cleanup_old_certificates' );
+	wp_clear_scheduled_hook( 'certificate_generator_cleanup_old_zips' );
+	wp_clear_scheduled_hook( 'certificate_generator_send_renewal_reminders' );
+	wp_clear_scheduled_hook( 'certificate_generator_cleanup_logs' );
+	delete_transient( 'certificate_generator_result_page_url' );
 }
 register_uninstall_hook( __FILE__, 'certificate_generator_uninstall' );
 
@@ -1053,6 +1083,10 @@ function certificate_generator_update_check() {
 
 	if ( $current_version !== $new_version ) {
 		update_option( 'certificate_generator_version', $new_version );
+		// Updates don't run activation: make sure {result_link} has a page on existing sites too.
+		if ( function_exists( 'certificate_generator_ensure_result_page' ) ) {
+			add_action( 'init', 'certificate_generator_ensure_result_page' );
+		}
 	}
 
 }
@@ -1221,10 +1255,11 @@ function certificate_generator_render_bulk_import_page(): void {
 		'teachers'     => 'Teachers',
 		'schools'      => 'Schools',
 		'certificates' => 'Certificates',
+		'history'      => 'Import history',
 	);
 	// School Coordinators import students and teachers only (into their own school).
 	if ( ! current_user_can( 'certificate_generator_manage_settings' ) ) {
-		unset( $tabs['schools'] );
+		unset( $tabs['schools'], $tabs['history'] );
 	}
 	if ( ! current_user_can( 'certificate_generator_manage_templates' ) ) {
 		unset( $tabs['certificates'] );
@@ -1253,6 +1288,9 @@ function certificate_generator_render_bulk_import_page(): void {
 					break;
 				case 'certificates':
 					certificate_generator_bulk_import_certificates();
+					break;
+				case 'history':
+					certificate_generator_import_history_page();
 					break;
 				default:
 					certificate_generator_bulk_import_students();

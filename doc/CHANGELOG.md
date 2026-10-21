@@ -4,6 +4,32 @@
 
 All notable changes to this plugin should be documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 7.9.3 — unreleased
+
+### Added
+- **Lifecycle actions** for add-ons (listed in `doc/dev/ARCHITECTURE.md`): `certificate_generator_certificate_issued` (end of `certificate_generator_insert_certificate_record()`, so every issuing path), `_certificate_reissued`, `_certificate_expired` (daily cron, once each, bounded by the `certificate_generator_expired_checked_at` option), `_recipient_saved`, `_recipients_deleted`, `_import_completed` and `_email_logged`.
+- **`external_id` on students, teachers and schools** (schema 1.3.6): an LMS / CRM / sheet id. Optional import column (aliases `external_ref`, `reference`, `ref_id`, `lms_id`, `crm_id`), a field on the student edit page; integrations find records by it.
+- **Bulk jobs** (`src/Services/Jobs.php`, table `wp_cg_jobs`): "Generate certificates" on the Students / Teachers / Schools lists runs in the background (25 per WP-Cron batch, no 200-row cap) with a progress page (Certificate Generator → Bulk Jobs), failed items with their errors, and Retry failed. One worker per job (option-row lock); a retry never issues a second certificate or a new serial (`certificate_generator_generate_for_row()` reuses the row's serial and cached PDF). A job no worker touched for 15 minutes shows as stalled; the hourly cron reschedules it and the open progress page runs it. New bulk action **Regenerate PDFs** re-renders up-to-date PDFs (same serials). Action `certificate_generator_job_finished`, filter `certificate_generator_job_max_items` (5,000). Pro 1.8.0's REST `/jobs` uses this engine.
+- **PDF status filter** on the Students / Teachers / Schools lists: no PDF yet, PDF file missing (checked on disk), has PDF.
+- **Import history** (Bulk Import → Import history, `includes/Services/import-history.php`, table `wp_cg_import_items`, column `import_run_id` via Migration 015): every import is a run; a resumed import stays one run. New choice for rows matching an existing record: **flag for review** (apply the file's values, add as a new record, or dismiss). **Undo import** previews, then deletes the rows the import created and restores the fields it changed — except records that got a certificate or an email, or were edited since, which are kept and listed with the reason. Undo runs in batches of 500 and continues after an interruption.
+- **Diagnostics** (Tools → Cert Gen Diagnostics, `certificate_generator_diagnostics()`): folders, fonts, PDF and image libraries, database version, overdue cron events, email queue, mail transport and stalled bulk jobs, each failing check with its fix.
+- **WP-CLI**: `wp certificate-generator generate` (`--ids`, `--certificate-type`, `--missing-pdf`, `--force`), `import <file>` (`--existing=update|keep|flag`, `--dry-run`), `jobs list|status|retry|run`, `diagnostics` (exit 1 on a failing check).
+- **Email tags** `{verification_code}` (XXXX-XXXX-XXXX) and `{certificate_link}` (the verify page opened on the certificate); `{serial_number}` is now listed in the tag reference.
+- **LinkedIn "Add to Profile"** sends the expiry month/year, and the verify page explains how to attach the PDF with LinkedIn's Add media.
+- **`certificate_generator_certificate_verified`** and **`certificate_generator_import_failed`** actions.
+- **`wp_cg_api_keys` table** (`CustomTables` schema 1.3.5): hashed, scoped API keys for add-ons (Pro 1.8.0's REST API). Uninstall drops it.
+- **`certificate_generator_save_recipient()`** (`includes/Services/recipients.php`): the Students / Teachers / Schools edit pages save through it; add-ons reuse it.
+- **`certificate_generator_result_page_url()`**: `{result_link}` opens the first page with the student search shortcode, created on activation and on update when missing.
+
+### Fixed
+- **Expiry was never stored**: `expires_at` was computed from the template but only saved to post meta. `certificate_generator_template_expires_at()` now feeds both certificate tables, on the PDF and the email path.
+- **Re-render reset status**: re-rendering a PDF set `wp_cg_certificates.status` back to `generated`, un-revoking revoked rows there. Only `pending`/`failed` move now; a sent email moves `generated` to `sent`.
+- **Bulk Send "start now"** was rejected by WP-Cron as a duplicate of the 5-minute event; it now uses distinct args (`certificate_generator_kick_email_queue()`). The legacy start-bulk-send AJAX no longer sends a batch inside the request.
+- **Rate limiter time zone**: log rows store `sent_at` in site time and the limiter compares in site time.
+- `{result_link}` button added twice when the URL had `&`; pluralizer skipped when any digit matched the count; `bulk_queue` wasn't a valid `generated_via`; the legacy table migrator ran its schema checks on every request (now once per version); the missing-files notice never cleared; activation errors showed raw HTML; My Certificates link form doubled the subdirectory; the QR verify URL ignored plain permalinks.
+- Deactivation and uninstall clear every cron event and option the plugin creates.
+- Removed dead code (`columns.php` `if ( false )` block, an unused background branch in the school search, a meta box for a callback that doesn't exist).
+
 ## 7.9.2 — 2026-10-17
 
 ### Added

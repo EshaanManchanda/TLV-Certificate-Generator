@@ -11,28 +11,13 @@ parameters:
 			path: includes/Admin/bulk-email.php
 
 		-
-			message: "#^If condition is always false\\.$#"
-			count: 1
-			path: includes/Admin/columns.php
-
-		-
 			message: "#^Parameter \\#1 \\$text of function esc_attr expects string, int\\<1, max\\> given\\.$#"
 			count: 1
 			path: includes/Admin/columns.php
 
 		-
-			message: "#^Undefined variable\\: \\$wpdb$#"
-			count: 3
-			path: includes/Admin/columns.php
-
-		-
 			message: "#^Unreachable statement \\- code above always terminates\\.$#"
-			count: 19
-			path: includes/Admin/columns.php
-
-		-
-			message: "#^Variable \\$template_url in empty\\(\\) always exists and is not falsy\\.$#"
-			count: 1
+			count: 4
 			path: includes/Admin/columns.php
 
 		-
@@ -52,11 +37,6 @@ parameters:
 
 		-
 			message: "#^Call to function is_wp_error\\(\\) with WP_Term will always evaluate to false\\.$#"
-			count: 1
-			path: includes/Core/post-types.php
-
-		-
-			message: "#^Parameter \\#3 \\$callback of function add_meta_box expects callable\\(\\)\\: mixed, 'render_certificates…' given\\.$#"
 			count: 1
 			path: includes/Core/post-types.php
 
@@ -90,10 +70,6 @@ parameters:
 			count: 1
 			path: includes/Email/functions.php
 
-		-
-			message: "#^Parameter \\#2 \\$needle of function strpos expects string, int\\<1, max\\> given\\.$#"
-			count: 2
-			path: includes/Email/functions.php
 
 		-
 			message: "#^Right side of && is always true\\.$#"
@@ -119,16 +95,6 @@ parameters:
 			message: "#^Comparison operation \"\\>\" between \\(array\\|float\\|int\\) and 0 results in an error\\.$#"
 			count: 1
 			path: includes/Email/log.php
-
-		-
-			message: "#^Function certificate_generator_log_email\\(\\) should return int\\|false but returns true\\.$#"
-			count: 1
-			path: includes/Email/log.php
-
-		-
-			message: "#^Parameter \\#2 \\$to of function human_time_diff expects int, float given\\.$#"
-			count: 1
-			path: includes/Email/rate-limiter.php
 
 		-
 			message: "#^Parameter \\#3 \\$unique_id of function certificate_generator_certificate_pdf_filename expects string, int given\\.$#"
@@ -181,27 +147,7 @@ parameters:
 			path: includes/Services/certificate-search.php
 
 		-
-			message: "#^Undefined variable\\: \\$certificates_to_generate$#"
-			count: 1
-			path: includes/Services/certificate-search.php
-
-		-
-			message: "#^Undefined variable\\: \\$hex_color$#"
-			count: 1
-			path: includes/Services/certificate-search.php
-
-		-
-			message: "#^Variable \\$certificates_to_generate in empty\\(\\) is never defined\\.$#"
-			count: 1
-			path: includes/Services/certificate-search.php
-
-		-
 			message: "#^Variable \\$error_count in isset\\(\\) always exists and is not nullable\\.$#"
-			count: 1
-			path: includes/Services/certificate-search.php
-
-		-
-			message: "#^Variable \\$hex_color in isset\\(\\) is never defined\\.$#"
 			count: 1
 			path: includes/Services/certificate-search.php
 

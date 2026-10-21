@@ -116,6 +116,23 @@ No. There are no limits to hit, and nothing is deleted when you downgrade or dea
 add-on. Pro features stop working, but their data stays: LMS / WooCommerce course mappings come
 back when the add-on is reactivated, and uploaded fonts keep rendering.
 
+## Bulk jobs and imports
+
+**I imported the wrong file. Can I undo it?**
+Yes: **Bulk Import → Import history**, open the import, check the preview and click **Undo
+import**. Records that got a certificate or an email, or were edited since, are kept and listed.
+
+**A bulk job is stuck at "stalled".**
+WP-Cron isn't running. Keep the job page open (it runs the job), or run
+`wp certificate-generator jobs run <id>`; for a lasting fix see **Tools → Cert Gen Diagnostics**.
+
+**Will "Retry failed items" or generating twice create duplicate certificates?**
+No. A record keeps the serial of its first certificate, and an unchanged PDF is reused.
+
+**How do students get their verification code?**
+From the QR code on the certificate, the My Certificates page, or the email: add
+`{verification_code}` or `{certificate_link}` to the email template.
+
 ## Debugging
 
 **Where do I turn on debug logging?**

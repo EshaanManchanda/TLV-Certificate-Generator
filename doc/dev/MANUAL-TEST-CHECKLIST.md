@@ -59,7 +59,10 @@ Repeat this block for **Students**, then **Teachers**, then **Schools**.
 - [ ] Filter **email status** (sent / not sent / no email).
 - [ ] Bulk **Edit** (e.g. change school name for 2 rows): only the selected rows change.
 - [ ] Bulk **Export CSV** for the selected rows, then for *"select all matching filter"*. The CSV opens and the row counts are right.
-- [ ] Bulk **Generate** certificates for 2 rows: PDFs are created, with no errors.
+- [ ] Bulk **Generate** certificates for 2 rows: you land on the **Bulk Jobs** page, it reaches 100%, and the PDFs exist.
+- [ ] Generate for *Select all matching* including a row with no template: the job finishes with that row under **Failed items** and its reason; fix the template, **Retry failed items**: only that row runs, and no other serial changes.
+- [ ] **PDF status** filter: *No PDF yet* lists records never generated; delete one PDF file on the server, and it moves to *PDF file missing*.
+- [ ] **Regenerate PDFs** on 2 rows: the PDFs are re-rendered (new file time), the serials are unchanged.
 - [ ] Bulk **Email** 1 row: the test inbox receives it, and the list shows a green ✓ in the email column.
 - [ ] Single-row **Send email** button: the status cell updates live without a page reload.
 - [ ] Bulk **Duplicate to date**: copies rows to a new event date, and the originals stay unchanged.
@@ -90,6 +93,8 @@ Use `assets/samples/*.csv` (import `templates.csv` first) and a CSV of your own 
 - [ ] Import a CSV with a **missing required column**: you get a clear error listing the missing field names, shown as plain text (no broken HTML).
 - [ ] Import a CSV with a header like `<b>name</b>`: it's shown as text, not rendered as bold.
 - [ ] Dates in both `dd-mm-yyyy` and `yyyy-mm-dd` import correctly.
+- [ ] Re-import a file with **flag for review**: the rows are listed under **Import history** → the import; *Apply file values*, *Add as new record* and *Dismiss* each work.
+- [ ] **Undo import** on a fresh import: the preview counts match; after undo the created rows are gone and the updated fields have their old values. Generate one of the imported rows first: undo keeps it and says *has an issued certificate*.
 
 ## 7. Generating certificates & template matching
 - [ ] Generate for **Asha Multi, 10-01-2026**. The PDF uses the **10-01-2026 Participation** template.
@@ -207,6 +212,10 @@ Enable one integration (e.g. Tutor LMS), then:
 - [ ] **Register**: filter by a school and by Revoked; the table and the CSV / PDF downloads match. The CSV opens in Excel with Hindi names intact; the PDF repeats the header row on page 2. A School Coordinator sees only their school.
 - [ ] Trash the verification page, then run the daily cron (or click **Create it now** on the Dashboard): a published verify page is back, and a new certificate's QR code opens it.
 - [ ] Dashboard checklist: **Hide checklist** hides it; Documentation → Getting Started → **Show this checklist on the Dashboard again** brings it back.
+
+## 19c. Diagnostics and WP-CLI
+- [ ] **Tools → Cert Gen Diagnostics** shows every plugin check as Pass on a healthy site; with `DISABLE_WP_CRON` and no server cron, *Scheduled tasks* fails once something is overdue, and says what to do.
+- [ ] `wp certificate-generator diagnostics` prints the same checks; `wp certificate-generator import <file> --dry-run` prints the counts and saves nothing; `wp certificate-generator generate --ids=<id>` shows a progress bar and finishes.
 
 ## 20. Cleanup & final checks
 - [ ] `debug.log` has no new PHP warnings or fatals from this plugin.

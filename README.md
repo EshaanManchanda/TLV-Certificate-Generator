@@ -2,7 +2,7 @@
 
 A WordPress plugin for issuing certificates in bulk to students, teachers and schools: template-based PDF generation in any language, CSV import with a check step, email delivery with a queue and templates, QR-code verification with unguessable codes, certificate history, reissue, serial numbers and analytics. **No limits, and nothing locked.**
 
-- **Version:** 7.8.0 (see [`doc/CHANGELOG.md`](doc/CHANGELOG.md))
+- **Version:** 7.9.3 (see [`doc/CHANGELOG.md`](doc/CHANGELOG.md))
 - **Requires:** WordPress 6.0+, PHP 8.2+
 - **Tested up to:** WordPress 7.1
 - **License:** GPL-2.0-or-later ([`LICENSE.txt`](LICENSE.txt))
@@ -17,7 +17,9 @@ This repository is the **free plugin** (WordPress.org). It has no usage limits, 
 | Free (this plugin) | Pro add-on ($3.5/mo or $35/yr) |
 |---|---|
 | Certificate templates, PDF generation, 27 built-in fonts, names in any language | Everything in Free, plus: |
-| Students / teachers / schools, CSV import (with mapping and a check before saving) & export | LMS auto-issue: Tutor LMS, LearnDash, LifterLMS, LearnPress, Sensei |
+| Students / teachers / schools, CSV import (with mapping, a check before saving, duplicate flagging, import history and undo) & export | LMS auto-issue: Tutor LMS, LearnDash, LifterLMS, LearnPress, Sensei |
+| Bulk generation in the background (progress, failed items, retry), PDF status filter, diagnostics, WP-CLI | REST API with scoped keys, signed webhooks, bulk jobs over the API |
+| | n8n templates and Zapier guide (**Automation** page) |
 | Email sending (wp_mail, SMTP, Sender.net, Mandrill) and email templates | WooCommerce auto-issue on order completion |
 | Bulk send with background queue, rate limits, email logs, resend | "Issue to past completions" for every LMS |
 | QR verification with unguessable codes, search shortcodes, LinkedIn "Add to Profile" | Custom font upload (`.ttf`) |
@@ -34,14 +36,17 @@ How the two plugins fit together: [`doc/dev/ARCHITECTURE.md`](doc/dev/ARCHITECTU
 - **Certificate history, revoke and reissue** — every certificate keeps a history (issued, name corrected, revoked, reinstated, reissued, verified). Issued certificates keep the layout they were issued with; reissue applies a corrected template while keeping the serial and code, and the verify page shows "Corrected on …".
 - **Serial numbers** — configurable format (`PREFIX-{YEAR}-{SEQ}`), bulk assignment for existing records.
 - **Roles** — a **School Coordinator** role (the admin picks the school on the user's profile) can view, edit, import, download and email certificates for their own school's students and teachers only; templates, settings, revoke and analytics stay with admins. Four capabilities (`certificate_generator_view`, `_issue`, `_manage_templates`, `_manage_settings`) for role-editor plugins; admins have them all. See [Roles and School Coordinators](doc/guide/documentation.md#roles-and-school-coordinators) *(7.9.0)*.
+- **Bulk generation jobs** *(7.9.3)* — **Generate certificates** on the Students, Teachers or Schools list runs in the background, 25 at a time, with no per-run cap: a progress page (**Certificate Generator → Bulk Jobs**) shows done / failed / pending, lists each failed record with its reason, and **Retry failed** re-runs only those. Re-running never issues a second certificate or changes a serial. A job that WP-Cron isn't advancing is shown as *stalled* (the open page keeps it going). **Regenerate PDFs** re-renders up-to-date PDFs, same serials. A **PDF status** filter finds records with no PDF yet or whose PDF file is missing.
+- **Import history and undo** *(7.9.3)* — every CSV import is listed under **Bulk Import → Import history**. Rows that match an existing record can be **flagged for review** instead of updated or skipped, then applied, added as new or dismissed. **Undo import** previews first, deletes the rows the import created and restores the fields it changed, and keeps (and lists, with the reason) any record that got a certificate or an email, or was edited, after the import.
+- **Diagnostics and WP-CLI** *(7.9.3)* — **Tools → Cert Gen Diagnostics** checks folders, fonts, PDF and image libraries, the database version, overdue scheduled tasks, the email queue and stalled jobs, with the fix for each problem. `wp certificate-generator generate | import | jobs | diagnostics` does the same work from the command line ([commands](doc/guide/documentation.md#wp-cli)).
 - **Students / Teachers / Schools** — manual entry or CSV import/export, no row limits. Imports are checked before anything is saved: column mapping (common header names are recognised), new / updated / duplicate / skipped counts, date order, comma / semicolon / tab and Excel's Windows encoding. Ready-to-edit samples for students, teachers, schools and templates ship in [`assets/samples/`](assets/samples/).
-- **Email** — your own SMTP, Sender.net or Mandrill (or WordPress's mail), per-type email templates with placeholders, CC/BCC.
+- **Email** — your own SMTP, Sender.net or Mandrill (or WordPress's mail), per-type email templates with placeholders (including `{verification_code}` and `{certificate_link}`, which opens the certificate's verify page), CC/BCC.
 - **Bulk send** — filter by school, certificate type or import source; background queue; ZIP bundling when a recipient has several certificates; hourly rate limits; email logs with resend.
 - **Analytics** — delivery charts, expiration reports, recipient renewal reminders.
 - **Search shortcodes** — `[certificate_generator_student_search]`, `[certificate_generator_teacher_search]`, `[certificate_generator_school_search]` let recipients find and download their certificates.
 - **My Certificates** — `[certificate_generator_my_certificates]`: recipients sign in with an emailed link (no account needed) to download their certificates, share them and choose whether their name shows on the verify page. A setting makes the student search require the link too. See [My Certificates](doc/guide/documentation.md#my-certificates-recipients) *(7.9.0)*.
 - **Certificate register** — every issued certificate with its serial, verification code, school and status, filtered and downloaded as CSV or a printable PDF (non-Latin names included). School Coordinators see their own school *(7.9.0)*.
-- **Sharing** — the verify page offers LinkedIn Add to Profile (optionally linked to your LinkedIn organization), X, WhatsApp and copy link, and shared links get a preview card.
+- **Sharing** — the verify page offers LinkedIn Add to Profile (optionally linked to your LinkedIn organization; issue and expiry dates filled in, with a hint for attaching the PDF as LinkedIn media), X, WhatsApp and copy link, and shared links get a preview card.
 - **Privacy tools** — WordPress's Export / Erase Personal Data cover the plugin's records; erased certificates are anonymised so printed ones still verify.
 - **Badges and image fields** — optional companion PNG badge; image fields for a signature or seal.
 
@@ -62,7 +67,7 @@ Works standalone — records live in the plugin's own `wp_cg_*` tables ([`doc/de
 | Path | What's there |
 |---|---|
 | `certificate-generator.php` | Bootstrap: constants, includes, activation, admin menu, add-on hooks |
-| `includes/` | Legacy procedural code — still does most of the work (PDF generation, settings, email) |
+| `includes/` | Legacy procedural code — still does most of the work (PDF generation, settings, email, import, WP-CLI in `includes/Cli/`) |
 | `src/` | PSR-4 `CertificateGenerator\` OOP code — the migration target |
 | `lib/` | Bundled FPDF (PDF, built-in fonts) and tFPDF (uploaded `.ttf` fonts) |
 | `vendor/` | Composer autoloader, `endroid/qr-code` and `mpdf/mpdf` (non-Latin certificates) |
