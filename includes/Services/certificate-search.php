@@ -520,6 +520,30 @@ function certificate_generator_fill_custom_text( array $post_data, array $field_
 	return $post_data;
 }
 
+/** Slot types used by a template's field positions ('text', 'image', 'photo', 'qr', 'serial'). */
+function certificate_generator_slot_types( array $field_positions ): array {
+	return array_values( array_unique( array_column( $field_positions, 'type' ) ) );
+}
+
+/** Serial-number slots: their text is the slot's prefix ("Certificate No.") and the serial ('' while there is none). */
+function certificate_generator_fill_serial_slots( array $post_data, array $field_positions, string $serial ): array {
+	foreach ( $field_positions as $field => $position ) {
+		if ( 'serial' === ( $position['type'] ?? '' ) ) {
+			$prefix              = trim( (string) ( $position['prefix'] ?? '' ) );
+			$post_data[ $field ] = '' === $serial ? '' : ( '' === $prefix ? $serial : $prefix . ' ' . $serial );
+		}
+	}
+	return $post_data;
+}
+
+/** A QR-code slot: the verification QR with its top-left corner at the slot's X / Y, as wide as the slot. */
+function certificate_generator_draw_qr_slot( $pdf, array $position, string $qr_data ): void {
+	if ( '' === $qr_data || ! is_numeric( $position['x'] ) || ! is_numeric( $position['y'] ) || ! class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
+		return;
+	}
+	CertificateGenerator_QR_Code_Generator::get_instance()->add_qr_to_pdf( $pdf, $qr_data, (float) $position['x'], (float) $position['y'], (float) $position['width'] );
+}
+
 /** A field's text as drawn: upper-cased when the slot asks for it. */
 function certificate_generator_transform_text( array $position, string $text ): string {
 	return 'upper' === ( $position['text_transform'] ?? '' ) ? mb_strtoupper( $text, 'UTF-8' ) : $text;
@@ -1160,6 +1184,8 @@ function certificate_generator_build_field_positions( array $fields, array $tmpl
 			? $photo_url
 			: ( $tmpl_meta[ "field_{$field_key}_image_url" ][0] ?? '' );
 
+		// 'serial': the certificate's serial number as text (prefix + serial, with the slot's font);
+		// 'qr': the verification QR code, top-left at X / Y, W wide.
 		$field_positions[ $field ] = array(
 			'x'         => $x,
 			'y'         => $y,
@@ -1167,8 +1193,9 @@ function certificate_generator_build_field_positions( array $fields, array $tmpl
 			'height'    => $height, // image/photo slots only — '' means "auto, keep aspect ratio"
 			'align'     => $align,
 			'visible'   => $visible,
-			'type'      => in_array( $field_type, array( 'text', 'image', 'photo' ), true ) ? $field_type : 'text',
+			'type'      => in_array( $field_type, array( 'text', 'image', 'photo', 'qr', 'serial' ), true ) ? $field_type : 'text',
 			'image_url' => $field_image,
+			'prefix'    => 'serial' === $field_type ? (string) ( $tmpl_meta[ "field_{$field_key}_text" ][0] ?? '' ) : '',
 		) + $font;
 	}
 
@@ -1424,12 +1451,64 @@ function certificate_generator_generate_pdf_with_data_impl( $post_data ) {
 		$pdf->SetTextColor( $current_color_r, $current_color_g, $current_color_b );
 	}
 
-	$post_data = certificate_generator_fill_custom_text( $post_data, $field_positions, $post_data );
+	// ── Serial number (before drawing: serial slots and {serial_number} tags print it) ──
+	$qr_generator = null;
+	if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
+		$qr_generator = CertificateGenerator_QR_Code_Generator::get_instance();
+	}
+
+	$serial_gen    = null;
+	$cert_type     = $post_data['certificate_type'] ?? '';
+	$student_name  = $post_data['student_name'] ?? $post_data['teacher_name'] ?? $post_data['school_name'] ?? '';
+
+	// The entity row's own serial_number (when the caller supplied one) is
+	// authoritative — reuse it before falling back to the fragile name+type match.
+	$serial_number = (string) ( $post_data['serial_number'] ?? '' );
+
+	// Previews show a placeholder: a real serial would burn a number and could be
+	// written onto a real entity row. A preview of a real record shows the serial it
+	// already has, so its QR scans and verifies; it never issues a new one.
+	if ( $is_preview ) {
+		$serial_number = (string) ( $post_data['_preview_serial'] ?? '' ) ?: 'PREVIEW-SERIAL';
+	}
+
+	// Reuse existing serial for the same student + certificate type
+	if ( empty( $serial_number ) && $student_name && $cert_type ) {
+		$serial_number = certificate_generator_find_existing_serial( $student_name, $cert_type, (string) ( $post_data['issue_date'] ?? '' ) );
+	}
+	if ( empty( $serial_number ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
+		$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
+		// Store the serial on the matching entity row (email/name + type + issue date).
+		$student_data_for_serial = array(
+			'table'        => isset( $post_data['student_name'] ) ? 'students' : ( isset( $post_data['teacher_name'] ) ? 'teachers' : 'schools' ),
+			'email'        => $post_data['email'] ?? '',
+			'student_name' => $student_name,
+			'issue_date'   => $issue_date_iso,
+		);
+		$serial_number           = $serial_gen->generate( $cert_type, $student_data_for_serial );
+	}
+
+	$post_data  = certificate_generator_fill_custom_text( $post_data, $field_positions, array( 'serial_number' => (string) $serial_number ) + $post_data );
+	$post_data  = certificate_generator_fill_serial_slots( $post_data, $field_positions, (string) $serial_number );
+	$slot_types = certificate_generator_slot_types( $field_positions );
+	$qr_slot_data = $qr_generator && in_array( 'qr', $slot_types, true )
+		? (string) $qr_generator->generate_qr_data( array_merge( $post_data, array( 'serial_number' => $serial_number, 'issued_at' => current_time( 'mysql' ) ) ), $serial_number )
+		: '';
 
 	// **Enhanced Text Positioning and Alignment Logic**
 	foreach ( $field_positions as $field => $position ) {
 		if ( $position['visible'] == '0' ) {
 			continue; // Skip hidden fields
+		}
+
+		if ( 'qr' === ( $position['type'] ?? '' ) ) {
+			certificate_generator_draw_qr_slot( $pdf, $position, $qr_slot_data );
+			if ( $visual_debug ) {
+				$qr_side = max( 10, min( 50, (float) $position['width'] ) ); // as drawn by add_qr_to_pdf()
+				certificate_generator_add_debug_markers( $pdf, (float) $position['x'], (float) $position['y'], (float) $position['x'], (float) $position['y'], true );
+				certificate_generator_add_debug_field_boundary( $pdf, (float) $position['x'] + $qr_side / 2, (float) $position['y'] + $qr_side / 2, $qr_side, $qr_side );
+			}
+			continue;
 		}
 
 		if ( in_array( $position['type'] ?? 'text', array( 'image', 'photo' ), true ) ) {
@@ -1508,44 +1587,7 @@ function certificate_generator_generate_pdf_with_data_impl( $post_data ) {
 		}
 	}
 
-	// ── QR Code & Serial Number for Preview ─────────────────────────────
-	$qr_generator = null;
-	if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
-		$qr_generator = CertificateGenerator_QR_Code_Generator::get_instance();
-	}
-
-	$serial_gen    = null;
-	$cert_type     = $post_data['certificate_type'] ?? '';
-	$student_name  = $post_data['student_name'] ?? $post_data['teacher_name'] ?? $post_data['school_name'] ?? '';
-
-	// The entity row's own serial_number (when the caller supplied one) is
-	// authoritative — reuse it before falling back to the fragile name+type match.
-	$serial_number = (string) ( $post_data['serial_number'] ?? '' );
-
-	// Previews show a placeholder: a real serial would burn a number and could be
-	// written onto a real entity row. A preview of a real record shows the serial it
-	// already has, so its QR scans and verifies; it never issues a new one.
-	if ( $is_preview ) {
-		$serial_number = (string) ( $post_data['_preview_serial'] ?? '' ) ?: 'PREVIEW-SERIAL';
-	}
-
-	// Reuse existing serial for the same student + certificate type
-	if ( empty( $serial_number ) && $student_name && $cert_type ) {
-		$serial_number = certificate_generator_find_existing_serial( $student_name, $cert_type, (string) ( $post_data['issue_date'] ?? '' ) );
-	}
-	if ( empty( $serial_number ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
-		$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
-		// Store the serial on the matching entity row (email/name + type + issue date).
-		$student_data_for_serial = array(
-			'table'        => isset( $post_data['student_name'] ) ? 'students' : ( isset( $post_data['teacher_name'] ) ? 'teachers' : 'schools' ),
-			'email'        => $post_data['email'] ?? '',
-			'student_name' => $student_name,
-			'issue_date'   => $issue_date_iso,
-		);
-		$serial_number           = $serial_gen->generate( $cert_type, $student_data_for_serial );
-	}
-
-	if ( $qr_generator ) {
+	if ( $qr_generator && ! in_array( 'qr', $slot_types, true ) ) { // template-level QR (before QR became a slot type)
 		$qr_enabled = $tmpl_meta['qr_enabled'][0] ?? '';
 		if ( $qr_enabled === '1' ) {
 			$qr_size  = (float) ( $tmpl_meta['qr_size'][0] ?? 15 );
@@ -1566,7 +1608,7 @@ function certificate_generator_generate_pdf_with_data_impl( $post_data ) {
 		}
 	}
 
-	if ( $qr_generator && ! empty( $serial_number ) ) {
+	if ( $qr_generator && ! empty( $serial_number ) && ! in_array( 'serial', $slot_types, true ) ) { // template-level serial text
 		$serial_display = $tmpl_meta['serial_number_display'][0] ?? '';
 		if ( $serial_display === '1' ) {
 			$sn_pos_x     = (float) ( $tmpl_meta['serial_number_position_x'][0] ?? 105 );
@@ -2246,12 +2288,52 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 		$post_data[ $field_name ] = $value;
 	}
 
+	// ── Serial number (before drawing: serial slots and {serial_number} tags print it) ──
+	$qr_generator = null;
+	if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
+		$qr_generator = CertificateGenerator_QR_Code_Generator::get_instance();
+	}
+
+	$serial_gen       = null;
+	$name_for_lookup  = $post_data['student_name'] ?? $post_data['teacher_name'] ?? $post_data['school_name']
+						?? get_post_meta( $post_id, 'student_name', true );
+	$email_for_lookup = $post_data['email'] ?? '';
+
+	// The entity row's own serial_number is authoritative — reuse it before
+	// falling back to the fragile name+type match against the legacy table.
+	$serial_number = $use_table_data ? (string) ( $student_data['serial_number'] ?? '' ) : '';
+
+	// Reuse existing serial for the same student + certificate type. Not when the caller names
+	// the exact template (LMS / WooCommerce mappings): each of their rows is its own certificate,
+	// and a name + type + date match would hand it another row's serial (a namesake's, or the
+	// same learner's certificate from a different template).
+	$names_template = $use_table_data && ! empty( $student_data['_template_id'] );
+	if ( empty( $serial_number ) && ! $names_template && $name_for_lookup && $certificate_type ) {
+		$serial_number = certificate_generator_find_existing_serial( $name_for_lookup, $certificate_type, (string) $issue_date_iso );
+	}
+	if ( empty( $serial_number ) && ! empty( $post_data ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) { // nothing to print: the render stops below, issue nothing
+		$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
+		// Store the serial on this exact entity row (by id when it came from the SQL table).
+		$serial_src              = $use_table_data ? $student_data : $post_data;
+		$student_data_for_serial = array(
+			'id'           => $use_table_data ? (int) ( $student_data['id'] ?? 0 ) : 0,
+			'table'        => isset( $serial_src['student_name'] ) ? 'students' : ( isset( $serial_src['teacher_name'] ) ? 'teachers' : 'schools' ),
+			'email'        => $email_for_lookup,
+			'student_name' => $name_for_lookup,
+			'issue_date'   => (string) $issue_date_iso,
+		);
+		$serial_number           = $serial_gen->generate( $certificate_type, $student_data_for_serial );
+	}
+
 	// Custom-text slots: tags may use any column of the row, with dates as printed.
 	$merge_source = array_merge( $use_table_data ? $student_data : array(), $post_data );
+	$merge_source['serial_number'] = (string) $serial_number;
 	if ( ! empty( $merge_source['issue_date'] ) && ( $iso = DateTime::createFromFormat( '!Y-m-d', (string) $merge_source['issue_date'] ) ) ) {
 		$merge_source['issue_date'] = $iso->format( 'd-m-Y' );
 	}
-	$post_data = certificate_generator_fill_custom_text( $post_data, $field_positions, $merge_source );
+	$post_data  = certificate_generator_fill_custom_text( $post_data, $field_positions, $merge_source );
+	$post_data  = certificate_generator_fill_serial_slots( $post_data, $field_positions, (string) $serial_number );
+	$slot_types = certificate_generator_slot_types( $field_positions );
 
 	// Check if we have any post data
 	if ( empty( $post_data ) ) {
@@ -2301,10 +2383,21 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 			return false;
 		}
 
+		// QR-code slots: the same verification data as the template-level QR code.
+		$qr_slot_data = '';
+		if ( $qr_generator && in_array( 'qr', $slot_types, true ) ) {
+			$qr_slot_data = (string) $qr_generator->generate_qr_data( array_merge( $post_data, array( 'certificate_type' => $certificate_type, 'serial_number' => $serial_number, 'issued_at' => current_time( 'mysql' ) ) ), $serial_number );
+		}
+
 		// **Enhanced Text Positioning and Alignment Logic**
 		foreach ( $field_positions as $field => $position ) {
 			// Skip if field is not visible
 			if ( $position['visible'] == '0' ) {
+				continue;
+			}
+
+			if ( 'qr' === ( $position['type'] ?? '' ) ) {
+				certificate_generator_draw_qr_slot( $pdf, $position, $qr_slot_data );
 				continue;
 			}
 
@@ -2375,45 +2468,8 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 			}
 		}
 
-		// ── QR Code & Serial Number Integration ──────────────────────────
-		$qr_generator = null;
-		if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
-			$qr_generator = CertificateGenerator_QR_Code_Generator::get_instance();
-		}
-
-		$serial_gen       = null;
-		$name_for_lookup  = $post_data['student_name'] ?? $post_data['teacher_name'] ?? $post_data['school_name']
-							?? get_post_meta( $post_id, 'student_name', true );
-		$email_for_lookup = $post_data['email'] ?? '';
-
-		// The entity row's own serial_number is authoritative — reuse it before
-		// falling back to the fragile name+type match against the legacy table.
-		$serial_number = $use_table_data ? (string) ( $student_data['serial_number'] ?? '' ) : '';
-
-		// Reuse existing serial for the same student + certificate type. Not when the caller names
-		// the exact template (LMS / WooCommerce mappings): each of their rows is its own certificate,
-		// and a name + type + date match would hand it another row's serial (a namesake's, or the
-		// same learner's certificate from a different template).
-		$names_template = $use_table_data && ! empty( $student_data['_template_id'] );
-		if ( empty( $serial_number ) && ! $names_template && $name_for_lookup && $certificate_type ) {
-			$serial_number = certificate_generator_find_existing_serial( $name_for_lookup, $certificate_type, (string) $issue_date_iso );
-		}
-		if ( empty( $serial_number ) && class_exists( 'CertificateGenerator_Serial_Number_Generator' ) ) {
-			$serial_gen = CertificateGenerator_Serial_Number_Generator::get_instance();
-			// Store the serial on this exact entity row (by id when it came from the SQL table).
-			$serial_src              = $use_table_data ? $student_data : $post_data;
-			$student_data_for_serial = array(
-				'id'           => $use_table_data ? (int) ( $student_data['id'] ?? 0 ) : 0,
-				'table'        => isset( $serial_src['student_name'] ) ? 'students' : ( isset( $serial_src['teacher_name'] ) ? 'teachers' : 'schools' ),
-				'email'        => $email_for_lookup,
-				'student_name' => $name_for_lookup,
-				'issue_date'   => (string) $issue_date_iso,
-			);
-			$serial_number           = $serial_gen->generate( $certificate_type, $student_data_for_serial );
-		}
-
-		// Generate and add QR code
-		if ( $qr_generator ) {
+		// Template-level QR code (templates saved before QR became a slot type).
+		if ( $qr_generator && ! in_array( 'qr', $slot_types, true ) ) {
 			$qr_enabled = $tmpl_meta['qr_enabled'][0] ?? '';
 			if ( $qr_enabled === '1' ) {
 				$qr_size        = (float) ( $tmpl_meta['qr_size'][0] ?? 15 );
@@ -2436,8 +2492,8 @@ function certificate_generator_generate_pdf_impl( $post_id, $fields, $student_da
 			}
 		}
 
-		// Add serial number text to certificate
-		if ( $qr_generator && ! empty( $serial_number ) ) {
+		// Template-level serial text (templates saved before Serial number became a slot type).
+		if ( $qr_generator && ! empty( $serial_number ) && ! in_array( 'serial', $slot_types, true ) ) {
 			$serial_display = $tmpl_meta['serial_number_display'][0] ?? '';
 			if ( $serial_display === '1' ) {
 				$sn_pos_x     = (float) ( $tmpl_meta['serial_number_position_x'][0] ?? 105 );

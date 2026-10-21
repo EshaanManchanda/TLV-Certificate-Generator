@@ -272,13 +272,17 @@ under **Serial Settings**:
   (`certificate_generator_serial_prefix`, `certificate_generator_serial_length`, `certificate_generator_serial_suffix`, `certificate_generator_serial_reset_period`,
   `certificate_generator_serial_include_date`).
 - Use **Bulk Serials** to assign serial numbers to existing records that don't have one yet.
+- To print it, give the template a **Serial number** Field Slot (*Type → Serial number*): it uses
+  that slot's font, size, colour, alignment and UPPERCASE, after optional text such as
+  *Certificate No.* A custom-text slot can also use `{serial_number}`. Templates from before 7.9.4
+  show their old QR / serial settings as slots when opened; saving keeps them there.
 
 This feature is **not plan-gated** — it works identically on Free, Pro, and Business.
 
 ### QR codes
 
-QR codes are embedded in every certificate automatically during PDF creation, once enabled on
-the template. Each QR carries the certificate's verification code (`?code=XXXXXXXXXXXX`) and opens
+QR codes are drawn wherever the template has a **QR code** Field Slot (*Type → QR code*): always
+square, **Size** (10–50 mm) is its width and height, X / Y its top-left corner. Each QR carries the certificate's verification code (`?code=XXXXXXXXXXXX`) and opens
 the public verification page — no manual setup required, the QR library ships with the plugin.
 QR codes printed before 7.7.0 carry the serial number and still verify, with a masked name.
 
@@ -745,7 +749,7 @@ Ready-to-edit samples ship with the plugin in `assets/samples/` (also linked fro
 | [`students.csv`](../../assets/samples/students.csv) | Students | `student_name`, `email`, `phone`, `school_name`, `issue_date`, `certificate_type`, `event_code`, `send_email`, `photo_url`, and `grade` as an example extra field |
 | [`teachers.csv`](../../assets/samples/teachers.csv) | Teachers | `teacher_name`, `email`, `phone`, `school_name`, `issue_date`, `certificate_type`, `event_code`, `send_email`, and `subject` as an extra field |
 | [`schools.csv`](../../assets/samples/schools.csv) | Schools | `school_name`, `place`, `issue_date`, `certificate_type`, `event_code`, `send_email` |
-| [`templates.csv`](../../assets/samples/templates.csv) | Certificates | `template_name`, `certificate_type`, `entity_type`, `event_date` (blank = any date), `template_url`, `orientation`, `page_size`, `font_size`, `font_color`, `font_style`, `qr_enabled`, `serial_number_display`, `template_field_count`, then per field `field_N_name` (what it shows), `field_N_position_x`/`_y` (mm from the top-left; x is the field's centre), `field_N_visible`, `field_N_width`, `field_N_alignment` (L, C, R) |
+| [`templates.csv`](../../assets/samples/templates.csv) | Certificates | `template_name`, `certificate_type`, `entity_type`, `event_date` (blank = any date), `template_url`, `orientation`, `page_size`, `font_size`, `font_color`, `font_style`, `qr_enabled`, `serial_number_display` (the pre-7.9.4 template-level QR / serial), `template_field_count`, then per field `field_N_name` (what it shows), `field_N_position_x`/`_y` (mm from the top-left; x is the field's centre), `field_N_visible`, `field_N_width`, `field_N_alignment` (L, C, R) |
 
 The four files fit together: `templates.csv` has a template for every certificate type used in the other three. Import it first, after replacing each `template_url` with your own background image's URL (Media Library → Copy URL). Dates are day-month-year (`25-08-2026`); the files are UTF-8 with a BOM so Excel shows the Hindi name correctly. Each import tab also offers **Download a sample CSV**, generated from the importer's field list plus the extra fields your templates already use.
 

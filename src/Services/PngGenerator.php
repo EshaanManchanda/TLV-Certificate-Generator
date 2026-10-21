@@ -172,7 +172,11 @@ class PngGenerator {
 			}
 			$post_data[ $field_name ] = $value;
 		}
-		$post_data = \certificate_generator_fill_custom_text( $post_data, $field_positions, array_merge( $use_table_data ? $student_data : array(), $post_data ) );
+		// PNGs show the serial a certificate already has; they never issue one.
+		$serial     = self::resolve_display_serial( $post_id, $student_data, $use_table_data );
+		$post_data  = \certificate_generator_fill_custom_text( $post_data, $field_positions, array( 'serial_number' => (string) $serial ) + array_merge( $use_table_data ? $student_data : array(), $post_data ) );
+		$post_data  = \certificate_generator_fill_serial_slots( $post_data, $field_positions, (string) $serial );
+		$slot_types = \certificate_generator_slot_types( $field_positions );
 
 		// GD draws letter by letter: Indic and Arabic text would lose its conjuncts and joins. Give the PDF instead.
 		if ( MpdfCanvas::needs_shaping( array_intersect_key( $post_data, $field_positions ) ) && function_exists( 'certificate_generator_generate_certificate_pdf' ) ) {
@@ -197,6 +201,11 @@ class PngGenerator {
 			}
 			$px_x = $x * $px_per_mm;
 			$px_y = $y * $px_per_mm;
+
+			if ( 'qr' === ( $position['type'] ?? '' ) ) {
+				self::draw_qr( $canvas, $student_data, $certificate_type, (string) $serial, $px_x, $px_y, (float) $position['width'] * $px_per_mm, 'L' );
+				continue;
+			}
 
 			if ( in_array( $position['type'] ?? 'text', array( 'image', 'photo' ), true ) ) {
 				if ( ! empty( $position['image_url'] ) ) {
@@ -238,24 +247,13 @@ class PngGenerator {
 			}
 		}
 
-		// QR code — reuse the same PNG the PDF path draws, no separate QR system.
+		// Template-level QR code and serial text (templates saved before they became slot types).
 		if ( class_exists( 'CertificateGenerator_QR_Code_Generator' ) && ( $tmpl_meta['qr_enabled'][0] ?? '' ) === '1' ) {
-			$qr_generator = \CertificateGenerator_QR_Code_Generator::get_instance();
-			$serial       = self::resolve_display_serial( $post_id, $student_data, $use_table_data );
-			$qr_data      = $qr_generator->generate_qr_data( array_merge( is_array( $student_data ) ? $student_data : array(), array( 'certificate_type' => $certificate_type ) ), $serial );
-			$qr_size_px   = (int) round( max( 10, min( 50, (float) ( $tmpl_meta['qr_size'][0] ?? 15 ) ) ) * $px_per_mm );
-			$qr_path      = $qr_generator->generate_qr_image( $qr_data, $qr_size_px, $tmpl_meta['qr_error_correction'][0] ?? 'L' );
-			if ( $qr_path ) {
-				$qr_img = self::load_image( $qr_path );
-				if ( $qr_img ) {
-					$qr_x = (float) ( $tmpl_meta['qr_position_x'][0] ?? 250 ) * $px_per_mm;
-					$qr_y = (float) ( $tmpl_meta['qr_position_y'][0] ?? 180 ) * $px_per_mm;
-					imagecopyresampled( $canvas, $qr_img, (int) $qr_x, (int) $qr_y, 0, 0, $qr_size_px, $qr_size_px, imagesx( $qr_img ), imagesy( $qr_img ) );
-					imagedestroy( $qr_img );
-				}
+			if ( ! in_array( 'qr', $slot_types, true ) ) {
+				self::draw_qr( $canvas, $student_data, $certificate_type, (string) $serial, (float) ( $tmpl_meta['qr_position_x'][0] ?? 250 ) * $px_per_mm, (float) ( $tmpl_meta['qr_position_y'][0] ?? 180 ) * $px_per_mm, (float) ( $tmpl_meta['qr_size'][0] ?? 15 ) * $px_per_mm, $tmpl_meta['qr_error_correction'][0] ?? 'L' );
 			}
 
-			if ( $serial && ( $tmpl_meta['serial_number_display'][0] ?? '' ) === '1' && $ttf_path ) {
+			if ( $serial && ( $tmpl_meta['serial_number_display'][0] ?? '' ) === '1' && $ttf_path && ! in_array( 'serial', $slot_types, true ) ) {
 				$sn_text    = 'Serial: ' . $serial;
 				$sn_size_px = self::gd_size( (float) ( $tmpl_meta['serial_number_font_size'][0] ?? 10 ) );
 				$sn_box     = imagettfbbox( $sn_size_px, 0, $ttf_path, $sn_text );
@@ -327,5 +325,22 @@ class PngGenerator {
 			$rgb = array( 0, 0, 0 );
 		}
 		return imagecolorallocate( $image, $rgb[0], $rgb[1], $rgb[2] );
+	}
+
+	/** The verification QR code (the same PNG the PDF uses), top-left at ($x, $y) px, $size px square (10–50 mm). */
+	private static function draw_qr( $canvas, $student_data, string $certificate_type, string $serial, float $x, float $y, float $size, string $ec ): void {
+		if ( ! class_exists( 'CertificateGenerator_QR_Code_Generator' ) ) {
+			return;
+		}
+		$qr_generator = \CertificateGenerator_QR_Code_Generator::get_instance();
+		$qr_data      = $qr_generator->generate_qr_data( array_merge( is_array( $student_data ) ? $student_data : array(), array( 'certificate_type' => $certificate_type ) ), $serial );
+		$px_per_mm    = self::DPI / 25.4;
+		$size_px      = (int) round( max( 10 * $px_per_mm, min( 50 * $px_per_mm, $size ) ) );
+		$qr_path      = $qr_generator->generate_qr_image( $qr_data, $size_px, $ec );
+		$qr_img       = $qr_path ? self::load_image( $qr_path ) : null;
+		if ( $qr_img ) {
+			imagecopyresampled( $canvas, $qr_img, (int) $x, (int) $y, 0, 0, $size_px, $size_px, imagesx( $qr_img ), imagesy( $qr_img ) );
+			imagedestroy( $qr_img );
+		}
 	}
 }

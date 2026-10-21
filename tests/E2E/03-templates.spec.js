@@ -53,6 +53,15 @@ const withSerialCount = () => Number(wp.sql(`SELECT
 	(SELECT COUNT(*) FROM {p}cg_teachers WHERE serial_number <> '') +
 	(SELECT COUNT(*) FROM {p}cg_schools WHERE serial_number <> '') AS n`)[0].n);
 
+/** Add a Field Slot of this type (serial / qr) with the "+" button; returns its number. */
+async function addSlot(page, type, pos) {
+	await page.click('#cg_field_count_inc');
+	const n = Number(await page.inputValue('#template_field_count'));
+	await page.selectOption(`#field_${n}_type`, type);
+	for (const [k, v] of Object.entries(pos || {})) await page.fill(`#field_${n}_${k}`, String(v));
+	return n;
+}
+
 test.describe('§03 Templates (Design)', () => {
 	test.describe.configure({ mode: 'serial' });
 	const ids = {};
@@ -79,9 +88,9 @@ test.describe('§03 Templates (Design)', () => {
 
 	test('preview: PDF opens with PREVIEW-SERIAL and does not consume real serials', async ({ page, context }, testInfo) => {
 		test.skip(!ids.jan, 'needs templates from the previous step');
-		// New templates don't print the serial; turn it on so the placeholder shows.
+		// New templates don't print the serial; add a Serial number slot so the placeholder shows.
 		await page.goto(adminUrl('cg-template-edit', { id: String(ids.jan) }));
-		await page.check('#serial_number_display');
+		await addSlot(page, 'serial', { position_x: 148, position_y: 195 });
 		await page.locator('#cg-template-form button.button-primary').first().click();
 		await expect(page.locator('body')).toContainText('Template updated.');
 		const before = withSerialCount();
@@ -91,11 +100,11 @@ test.describe('§03 Templates (Design)', () => {
 		await judge(testInfo, await pdfToPng(context, buf), 'Is this a certificate with a gold/classic decorative background and readable text placed on it (not a blank page)?');
 	});
 
-	test('QR toggle: QR appears on the preview', async ({ page, context }, testInfo) => {
+	test('QR code and Serial number slots appear on the preview', async ({ page, context }, testInfo) => {
 		test.skip(!ids.win, 'needs templates');
 		await page.goto(adminUrl('cg-template-edit', { id: String(ids.win) }));
-		await page.check('#qr_enabled');
-		await page.check('#serial_number_display');
+		await addSlot(page, 'qr', { position_x: 250, position_y: 160, width: 30 });
+		await addSlot(page, 'serial', { position_x: 148, position_y: 195 });
 		await page.locator('#cg-template-form button.button-primary').first().click();
 		await expect(page.locator('body')).toContainText('Template updated.');
 		const buf = await preview(page, context, ids.win);

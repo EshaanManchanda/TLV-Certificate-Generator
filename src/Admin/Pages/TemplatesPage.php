@@ -386,8 +386,17 @@ class TemplatesPage extends EntityListPage {
 					// (e.g. an e-signature) placed at this slot instead of student data —
 					// or 'photo', identical to 'image' except the URL comes from the
 					// student's own photo_url instead of a fixed template-time image.
+					// Also 'serial' (the serial number as text, with the slot's font) and 'qr' (the
+					// verification QR code: X / Y = top-left corner, W = size).
 					$field_type                              = sanitize_key( $_POST[ "field_{$i}_type" ] ?? 'text' );
-					$extra_fields[ "field_{$i}_type" ]       = in_array( $field_type, array( 'text', 'image', 'photo' ), true ) ? $field_type : 'text';
+					$extra_fields[ "field_{$i}_type" ]       = in_array( $field_type, array( 'text', 'image', 'photo', 'qr', 'serial' ), true ) ? $field_type : 'text';
+					if ( in_array( $field_type, array( 'qr', 'serial' ), true ) ) {
+						$extra_fields[ "field_{$i}_name" ] = 'qr' === $field_type ? 'qr_code' : 'serial_number';
+					}
+					if ( 'qr' === $field_type ) { // square, 10–50 mm: what the PDF draws
+						$extra_fields[ "field_{$i}_width" ]  = max( 10, min( 50, (float) $extra_fields[ "field_{$i}_width" ] ) );
+						$extra_fields[ "field_{$i}_height" ] = '';
+					}
 					$extra_fields[ "field_{$i}_image_url" ]  = esc_url_raw( wp_unslash( $_POST[ "field_{$i}_image_url" ] ?? '' ) );
 
 					// Per-field font: '' means "use the template's font / size / colour".
@@ -400,7 +409,8 @@ class TemplatesPage extends EntityListPage {
 						: '';
 					$extra_fields[ "field_{$i}_text_transform" ] = ! empty( $_POST[ "field_{$i}_text_transform" ] ) ? 'upper' : '';
 					// Custom-text slot: literal text with {field} tags, filled per recipient.
-					$extra_fields[ "field_{$i}_text" ] = 'custom_text' === $extra_fields[ "field_{$i}_name" ]
+					// Serial slots keep their prefix ("Certificate No.") in the same input.
+					$extra_fields[ "field_{$i}_text" ] = in_array( $extra_fields[ "field_{$i}_name" ], array( 'custom_text', 'serial_number' ), true )
 						? sanitize_text_field( wp_unslash( $_POST[ "field_{$i}_text" ] ?? '' ) )
 						: '';
 				}
@@ -588,61 +598,6 @@ class TemplatesPage extends EntityListPage {
 					</tr>
 				</table>
 
-				<h3><?php esc_html_e( 'QR Code Settings', 'certificate-generator' ); ?></h3>
-				<table class="form-table">
-					<tr>
-						<th><label><input type="checkbox" id="qr_enabled" name="qr_enabled" value="1" <?php checked( ! empty( $row['qr_enabled'] ) ); ?>> <?php esc_html_e( 'Enable QR Code', 'certificate-generator' ); ?></label></th>
-						<td></td>
-					</tr>
-					<tr>
-						<th><label for="qr_size"><?php esc_html_e( 'QR Size', 'certificate-generator' ); ?></label></th>
-						<td><input type="number" id="qr_size" name="qr_size" value="<?php echo esc_attr( $row['qr_size'] ?? 15 ); ?>" min="5" max="50"></td>
-					</tr>
-					<tr>
-						<th><label for="qr_position_x"><?php esc_html_e( 'QR Position X (mm)', 'certificate-generator' ); ?></label></th>
-						<td><input type="number" step="0.01" id="qr_position_x" name="qr_position_x" value="<?php echo esc_attr( $row['qr_position_x'] ?? 250 ); ?>"></td>
-					</tr>
-					<tr>
-						<th><label for="qr_position_y"><?php esc_html_e( 'QR Position Y (mm)', 'certificate-generator' ); ?></label></th>
-						<td><input type="number" step="0.01" id="qr_position_y" name="qr_position_y" value="<?php echo esc_attr( $row['qr_position_y'] ?? 180 ); ?>"></td>
-					</tr>
-					<tr>
-						<th><label for="qr_error_correction"><?php esc_html_e( 'QR Error Correction', 'certificate-generator' ); ?></label></th>
-						<td><select id="qr_error_correction" name="qr_error_correction">
-							<?php
-							foreach ( array(
-								'L' => __( 'Low', 'certificate-generator' ),
-								'M' => __( 'Medium', 'certificate-generator' ),
-								'Q' => __( 'Quartile', 'certificate-generator' ),
-								'H' => __( 'High', 'certificate-generator' ),
-							) as $k => $v ) :
-								?>
-								<option value="<?php echo esc_attr( $k ); ?>" <?php selected( $row['qr_error_correction'] ?? 'L', $k ); ?>><?php echo esc_html( $v ); ?></option>
-							<?php endforeach; ?>
-						</select></td>
-					</tr>
-				</table>
-
-				<h3><?php esc_html_e( 'Serial Number Display', 'certificate-generator' ); ?></h3>
-				<table class="form-table">
-					<tr>
-						<th><label><input type="checkbox" id="serial_number_display" name="serial_number_display" value="1" <?php checked( ! empty( $row['serial_number_display'] ) ); ?>> <?php esc_html_e( 'Show Serial Number on Certificate', 'certificate-generator' ); ?></label></th>
-						<td></td>
-					</tr>
-					<tr>
-						<th><label for="serial_number_position_x"><?php esc_html_e( 'Serial X Position (mm)', 'certificate-generator' ); ?></label></th>
-						<td><input type="number" step="0.01" id="serial_number_position_x" name="serial_number_position_x" value="<?php echo esc_attr( $row['serial_number_position_x'] ?? 105 ); ?>"></td>
-					</tr>
-					<tr>
-						<th><label for="serial_number_position_y"><?php esc_html_e( 'Serial Y Position (mm)', 'certificate-generator' ); ?></label></th>
-						<td><input type="number" step="0.01" id="serial_number_position_y" name="serial_number_position_y" value="<?php echo esc_attr( $row['serial_number_position_y'] ?? 200 ); ?>"></td>
-					</tr>
-					<tr>
-						<th><label for="serial_number_font_size"><?php esc_html_e( 'Serial Font Size', 'certificate-generator' ); ?></label></th>
-						<td><input type="number" id="serial_number_font_size" name="serial_number_font_size" value="<?php echo esc_attr( $row['serial_number_font_size'] ?? 10 ); ?>" min="6" max="48"></td>
-					</tr>
-				</table>
-
 				<h3><?php esc_html_e( 'Expiration', 'certificate-generator' ); ?></h3>
 				<table class="form-table">
 					<tr>
@@ -674,6 +629,50 @@ class TemplatesPage extends EntityListPage {
 					}
 				}
 				$field_count_val = max( 2, min( $max_fields_ui, (int) ( $extra_fields_data['template_field_count'] ?? 3 ) ) );
+
+				// Templates from before QR code and Serial number were slot types: show their
+				// template-level settings as slots, so saving moves them (the renderer still
+				// draws the old settings until then).
+				$moved_to_slots = array();
+				$slot_types_now = array();
+				for ( $j = 1; $j <= $field_count_val; $j++ ) {
+					$slot_types_now[] = $extra_fields_data[ "field_{$j}_type" ] ?? 'text';
+				}
+				$legacy_slots = array();
+				if ( ! empty( $row['qr_enabled'] ) && ! in_array( 'qr', $slot_types_now, true ) ) {
+					$legacy_slots['qr'] = array(
+						'type'       => 'qr',
+						'name'       => 'qr_code',
+						'position_x' => (float) ( $row['qr_position_x'] ?? 250 ),
+						'position_y' => (float) ( $row['qr_position_y'] ?? 180 ),
+						'width'      => (float) ( $row['qr_size'] ?? 15 ),
+					);
+				}
+				if ( ! empty( $row['serial_number_display'] ) && ! in_array( 'serial', $slot_types_now, true ) ) {
+					$sn_size                = (float) ( $row['serial_number_font_size'] ?? 10 );
+					$legacy_slots['serial'] = array(
+						'type'       => 'serial',
+						'name'       => 'serial_number',
+						'position_x' => (float) ( $row['serial_number_position_x'] ?? 105 ),
+						// The old serial's Y was its baseline; a slot's Y is the text's middle.
+						'position_y' => round( (float) ( $row['serial_number_position_y'] ?? 200 ) - 0.35 * $sn_size * 25.4 / 72, 2 ),
+						'width'      => 120,
+						'alignment'  => 'C',
+						'font_size'  => $sn_size,
+						'text'       => 'Serial:',
+					);
+				}
+				foreach ( $legacy_slots as $kind => $slot ) {
+					if ( $field_count_val >= $max_fields_ui ) {
+						break;
+					}
+					++$field_count_val;
+					foreach ( $slot as $prop => $value ) {
+						$extra_fields_data[ "field_{$field_count_val}_{$prop}" ] = $value;
+					}
+					$extra_fields_data[ "field_{$field_count_val}_visible" ] = '1';
+					$moved_to_slots[]                                       = 'qr' === $kind ? __( 'QR code', 'certificate-generator' ) : __( 'Serial number', 'certificate-generator' );
+				}
 
 				$cert_type_val  = $row['certificate_type'] ?? '';
 				$all_renderable = ( class_exists( '\CertificateGenerator_Field_Schema' ) && $cert_type_val )
@@ -828,6 +827,14 @@ class TemplatesPage extends EntityListPage {
 				#cg-click-mode-banner button{background:rgba(255,255,255,.2);border:none;color:#fff;cursor:pointer;padding:2px 8px;border-radius:3px;font-size:11px}
 				</style>
 
+				<?php if ( $moved_to_slots ) : ?>
+					<div class="notice notice-info inline"><p>
+						<?php
+						/* translators: %s: "QR code" and/or "Serial number" */
+						echo esc_html( sprintf( __( '%s now live in the Field Slots below, with their own font, size, colour and alignment. Save the template to keep them there.', 'certificate-generator' ), implode( ' + ', $moved_to_slots ) ) );
+						?>
+					</p></div>
+				<?php endif; ?>
 				<!-- Field count + click mode banner outside the 2-col grid -->
 				<div class="cg-tpl-countbar">
 					<div class="cg-tpl-count">
@@ -918,7 +925,7 @@ class TemplatesPage extends EntityListPage {
 										?>
 										<span class="cg-field-hidden-badge"><?php esc_html_e( 'hidden', 'certificate-generator' ); ?></span><?php endif; ?>
 								</div>
-								<div class="cg-field-row-footer">
+								<div class="cg-field-row-footer" id="cg-field-name-row-<?php echo (int) $i; ?>"<?php echo in_array( $ftype, array( 'qr', 'serial' ), true ) ? ' style="display:none;"' : ''; ?>>
 									<label class="cg-tpl-grow-label">
 										<select id="field_<?php echo (int) $i; ?>_name" name="field_<?php echo (int) $i; ?>_name" class="cg-field-name-select">
 											<option value=""><?php esc_html_e( '— Select field —', 'certificate-generator' ); ?></option>
@@ -943,7 +950,7 @@ class TemplatesPage extends EntityListPage {
 									</div>
 								</div>
 								<div class="cg-field-row-footer">
-									<label>W <input type="number" id="field_<?php echo (int) $i; ?>_width" step="0.01" name="field_<?php echo (int) $i; ?>_width" value="<?php echo esc_attr( $pw ); ?>" min="1" max="297"> mm</label>
+									<label><span class="cg-field-w-label" id="cg-field-w-label-<?php echo (int) $i; ?>"><?php echo 'qr' === $ftype ? esc_html__( 'Size', 'certificate-generator' ) : 'W'; ?></span> <input type="number" id="field_<?php echo (int) $i; ?>_width" step="0.01" name="field_<?php echo (int) $i; ?>_width" value="<?php echo esc_attr( $pw ); ?>" min="1" max="297"> mm</label>
 									<label id="cg-field-height-wrap-<?php echo (int) $i; ?>" style="<?php echo in_array( $ftype, array( 'image', 'photo' ), true ) ? '' : 'display:none;'; ?>">H <input type="number" id="field_<?php echo (int) $i; ?>_height" step="0.01" name="field_<?php echo (int) $i; ?>_height" value="<?php echo esc_attr( $ph ); ?>" min="0" max="297" placeholder="auto"> mm</label>
 									<label><?php esc_html_e( 'Align', 'certificate-generator' ); ?>
 										<select id="field_<?php echo (int) $i; ?>_alignment" name="field_<?php echo (int) $i; ?>_alignment">
@@ -961,10 +968,13 @@ class TemplatesPage extends EntityListPage {
 											<option value="text" <?php selected( $ftype, 'text' ); ?>><?php esc_html_e( 'Text', 'certificate-generator' ); ?></option>
 											<option value="image" <?php selected( $ftype, 'image' ); ?>><?php esc_html_e( 'Image (e.g. signature)', 'certificate-generator' ); ?></option>
 											<option value="photo" <?php selected( $ftype, 'photo' ); ?>><?php esc_html_e( 'Photo (student photo)', 'certificate-generator' ); ?></option>
+											<option value="serial" <?php selected( $ftype, 'serial' ); ?>><?php esc_html_e( 'Serial number', 'certificate-generator' ); ?></option>
+											<option value="qr" <?php selected( $ftype, 'qr' ); ?>><?php esc_html_e( 'QR code (verification link)', 'certificate-generator' ); ?></option>
 										</select>
 									</label>
+									<span class="cg-hint cg-field-qr-hint" id="cg-field-qr-hint-<?php echo (int) $i; ?>"<?php echo 'qr' === $ftype ? '' : ' style="display:none;"'; ?>><?php esc_html_e( 'Always square: Size is its width and height (10–50 mm). X / Y = top-left corner.', 'certificate-generator' ); ?></span>
 								</div>
-								<div class="cg-field-row-footer cg-field-font-row" id="cg-field-font-row-<?php echo (int) $i; ?>"<?php echo $ftype === 'text' ? '' : ' style="display:none;"'; ?>>
+								<div class="cg-field-row-footer cg-field-font-row" id="cg-field-font-row-<?php echo (int) $i; ?>"<?php echo in_array( $ftype, array( 'text', 'serial' ), true ) ? '' : ' style="display:none;"'; ?>>
 									<label><?php esc_html_e( 'Font', 'certificate-generator' ); ?>
 										<select id="field_<?php echo (int) $i; ?>_font_style" name="field_<?php echo (int) $i; ?>_font_style">
 											<option value=""><?php esc_html_e( 'Template default', 'certificate-generator' ); ?></option>
@@ -981,11 +991,11 @@ class TemplatesPage extends EntityListPage {
 									</label>
 									<label><input type="checkbox" id="field_<?php echo (int) $i; ?>_text_transform" name="field_<?php echo (int) $i; ?>_text_transform" value="upper" <?php checked( $fupper ); ?>> <?php esc_html_e( 'UPPERCASE', 'certificate-generator' ); ?></label>
 								</div>
-								<div class="cg-field-row-footer cg-field-text-row" id="cg-field-text-row-<?php echo (int) $i; ?>"<?php echo 'custom_text' === $current_field_key ? '' : ' style="display:none;"'; ?>>
-									<label class="cg-tpl-grow-label"><?php esc_html_e( 'Text', 'certificate-generator' ); ?>
-										<input type="text" id="field_<?php echo (int) $i; ?>_text" name="field_<?php echo (int) $i; ?>_text" class="widefat" value="<?php echo esc_attr( $ftext ); ?>" placeholder="<?php esc_attr_e( 'e.g. Awarded to {student_name} for {certificate_type}', 'certificate-generator' ); ?>">
+								<div class="cg-field-row-footer cg-field-text-row" id="cg-field-text-row-<?php echo (int) $i; ?>"<?php echo 'custom_text' === $current_field_key || 'serial' === $ftype ? '' : ' style="display:none;"'; ?>>
+									<label class="cg-tpl-grow-label"><span class="cg-field-text-label-custom"<?php echo 'serial' === $ftype ? ' style="display:none;"' : ''; ?>><?php esc_html_e( 'Text', 'certificate-generator' ); ?></span><span class="cg-field-text-label-serial"<?php echo 'serial' === $ftype ? '' : ' style="display:none;"'; ?>><?php esc_html_e( 'Text before the serial', 'certificate-generator' ); ?></span>
+										<input type="text" id="field_<?php echo (int) $i; ?>_text" name="field_<?php echo (int) $i; ?>_text" class="widefat" value="<?php echo esc_attr( $ftext ); ?>" placeholder="<?php echo 'serial' === $ftype ? esc_attr__( 'e.g. Certificate No.', 'certificate-generator' ) : esc_attr__( 'e.g. Awarded to {student_name} for {certificate_type}', 'certificate-generator' ); ?>">
 									</label>
-									<p class="cg-hint"><?php esc_html_e( 'Use any field in braces: {student_name}, {school_name}, {certificate_type}, {issue_date}, or a CSV column such as {grade}.', 'certificate-generator' ); ?></p>
+									<p class="cg-hint cg-field-text-hint-custom"<?php echo 'serial' === $ftype ? ' style="display:none;"' : ''; ?>><?php esc_html_e( 'Use any field in braces: {student_name}, {school_name}, {certificate_type}, {issue_date}, {serial_number}, or a CSV column such as {grade}.', 'certificate-generator' ); ?></p>
 								</div>
 								<div class="cg-field-image-row" id="cg-field-image-row-<?php echo (int) $i; ?>"<?php echo $ftype === 'image' ? '' : ' style="display:none;"'; ?>>
 									<input type="hidden" id="field_<?php echo (int) $i; ?>_image_url" name="field_<?php echo (int) $i; ?>_image_url" value="<?php echo esc_attr( $fimg ); ?>">
@@ -1199,10 +1209,20 @@ class TemplatesPage extends EntityListPage {
 				var cx   = mmToPx(x_mm, 'x');
 				var cy   = mmToPx(y_mm, 'y');
 				var wPx  = Math.max(4, mmToPx(w_mm, 'x'));
-				var hw   = $h.outerWidth()  / 2 || 0;
-				var hh   = $h.outerHeight() / 2 || 0;
-				$h.css({ left: (cx - hw) + 'px', top: (cy - hh) + 'px' });
-				$h.find('.cg-width-bar').css('width', wPx + 'px');
+				if ($('#field_' + n + '_type').val() === 'qr') {
+					// A QR slot is a square of its real size, placed by its top-left corner.
+					var qPx = Math.max(24, mmToPx(Math.max(10, Math.min(50, w_mm)), 'x'));
+					$h.addClass('cg-handle-qr-slot').css({ left: cx + 'px', top: cy + 'px', width: qPx + 'px', height: qPx + 'px', overflow: 'hidden' });
+					$h.find('.cg-width-bar').css('width', '0');
+				} else {
+					var hw   = $h.outerWidth()  / 2 || 0;
+					var hh   = $h.outerHeight() / 2 || 0;
+					$h.removeClass('cg-handle-qr-slot').css({ width: '', height: '', overflow: '' });
+					hw = $h.outerWidth() / 2 || 0;
+					hh = $h.outerHeight() / 2 || 0;
+					$h.css({ left: (cx - hw) + 'px', top: (cy - hh) + 'px' });
+					$h.find('.cg-width-bar').css('width', wPx + 'px');
+				}
 				var visible = $('#field_' + n + '_visible').prop('checked');
 				// Canvas is a layout editor — always show & keep interactive.
 				// "hidden" only means the field won't render on the PDF.
@@ -1269,7 +1289,8 @@ class TemplatesPage extends EntityListPage {
 
 				var d = pageDims();
 				for (var n = 1; n <= count; n++) {
-					var label = FIELD_LABELS[n - 1] || ('Field ' + n);
+					var slotType = $('#field_' + n + '_type').val();
+					var label = slotType === 'qr' ? 'QR code' : (slotType === 'serial' ? 'Serial number' : (FIELD_LABELS[n - 1] || ('Field ' + n)));
 					var color = COLORS[(n - 1) % COLORS.length];
 					var $h = $('<div>')
 						.attr({ id: 'cg-handle-' + n, 'data-field': n })
@@ -1299,7 +1320,9 @@ class TemplatesPage extends EntityListPage {
 								cursor: 'grabbing',
 								start: function () { setActiveRow(fieldN); },
 								drag: function (e, ui) {
-									var hw  = $handle.outerWidth() / 2, hh = $handle.outerHeight() / 2;
+									// QR slots are placed by their top-left corner, other slots by their centre.
+									var isQr = $('#field_' + fieldN + '_type').val() === 'qr';
+									var hw  = isQr ? 0 : $handle.outerWidth() / 2, hh = isQr ? 0 : $handle.outerHeight() / 2;
 									var cd  = canvasDims(), d = pageDims();
 									var cx_px = Math.max(0, Math.min(cd.w, ui.position.left + hw));
 									var cy_px = Math.max(0, Math.min(cd.h, ui.position.top  + hh));
@@ -1527,17 +1550,32 @@ class TemplatesPage extends EntityListPage {
 				// per slot. The "Choose Image" button itself is wired by
 				// CgMediaUploader.autoInit() via its .cg-media-btn/data-input/data-preview
 				// attributes — no init needed here.
+				// Serial number / QR code slots need no field choice; a serial slot has a prefix box
+				// and the font row, a QR slot neither.
 				$('.cg-field-type-select').on('change', function () {
 					var n        = $(this).data('field');
-					var isImageish = ['image', 'photo'].indexOf($(this).val()) !== -1;
-					$('#cg-field-image-row-' + n).toggle($(this).val() === 'image');
+					var type     = $(this).val();
+					var isImageish = ['image', 'photo'].indexOf(type) !== -1;
+					var isSerial = type === 'serial';
+					$('#cg-field-image-row-' + n).toggle(type === 'image');
 					$('#cg-field-height-wrap-' + n).toggle(isImageish);
-					$('#cg-field-font-row-' + n).toggle(!isImageish);
+					$('#cg-field-font-row-' + n).toggle(type === 'text' || isSerial);
+					$('#cg-field-name-row-' + n).toggle(type !== 'qr' && !isSerial);
+					$('#cg-field-qr-hint-' + n).toggle(type === 'qr');
+					$('#cg-field-w-label-' + n).text(type === 'qr' ? 'Size' : 'W');
+					var $textRow = $('#cg-field-text-row-' + n);
+					$textRow.toggle(isSerial || (type === 'text' && $('#field_' + n + '_name').val() === 'custom_text'));
+					$textRow.find('.cg-field-text-label-serial').toggle(isSerial);
+					$textRow.find('.cg-field-text-label-custom, .cg-field-text-hint-custom').toggle(!isSerial);
+					if (isSerial && $('#field_' + n + '_text').val() === '') {
+						$('#field_' + n + '_text').val('Serial:');
+					}
+					buildHandles(); // the canvas label follows the type
 				});
 				// Custom-text slots show their text box (the select is rebuilt on entity change, so delegate).
 				$(document).on('change', '.cg-field-name-select', function () {
 					var n = this.id.replace(/^field_(\d+)_name$/, '$1');
-					$('#cg-field-text-row-' + n).toggle($(this).val() === 'custom_text');
+					$('#cg-field-text-row-' + n).toggle($(this).val() === 'custom_text' || $('#field_' + n + '_type').val() === 'serial');
 				});
 
 				// ── Boot ──────────────────────────────────────────────────────

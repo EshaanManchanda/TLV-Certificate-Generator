@@ -4,7 +4,12 @@
 
 All notable changes to this plugin should be documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
-## 7.9.3 — unreleased
+## 7.9.4 — unreleased
+
+### Changed
+- **QR code and Serial number are Field Slot types** (template editor → Field Slots → *Type*). A Serial number slot prints the serial with the slot's own font, size, colour, alignment and UPPERCASE, after optional text ("Certificate No."); the serial is now resolved before the slots are drawn, so it prints on a certificate's first render, and `{serial_number}` works in custom-text slots. A QR code slot is always square (Size = width = height, 10–50 mm), placed by its top-left corner; the canvas shows it as a square of its real size, and the debug preview outlines it. The separate *QR Code Settings* and *Serial Number Display* sections are gone: an older template shows them as slots when opened and moves them there on save; until then the PDF, preview and PNG still draw the template-level settings.
+
+## 7.9.3 — 2026-10-21
 
 ### Added
 - **Lifecycle actions** for add-ons (listed in `doc/dev/ARCHITECTURE.md`): `certificate_generator_certificate_issued` (end of `certificate_generator_insert_certificate_record()`, so every issuing path), `_certificate_reissued`, `_certificate_expired` (daily cron, once each, bounded by the `certificate_generator_expired_checked_at` option), `_recipient_saved`, `_recipients_deleted`, `_import_completed` and `_email_logged`.

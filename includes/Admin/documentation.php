@@ -247,12 +247,14 @@ function certificate_generator_render_documentation_page() {
 					<li><strong>Text</strong> — the default. Renders the selected field's value as text, with alignment (Left/Centre/Right) and width for wrapping.</li>
 					<li><strong>Image</strong> — a static image that's the same on every certificate (e.g. a signature or logo). Upload it once on the template; it doesn't come from student data.</li>
 					<li><strong>Photo</strong> — draws that specific recipient's own photo (see <strong>Photo</strong> in Managing Students below). Falls back to a blank slot if the recipient has no photo uploaded.</li>
+					<li><strong>Serial number</strong> — the certificate's serial, with the slot's own font, size, colour, alignment and UPPERCASE, after optional text such as <em>Certificate No.</em>.</li>
+					<li><strong>QR code</strong> — the verification QR code, always square: <strong>Size</strong> (10–50 mm) is its width and height, X / Y its top-left corner.</li>
 					<li><strong>Custom text with {fields}…</strong> — your own sentence with tags filled from the record, e.g. <code>Awarded to {student_name} for {certificate_type}</code>. Any column can be a tag, including extra CSV fields; dates print as dd-mm-yyyy.</li>
 				</ul>
 				<div class="cg-note">Image and Photo fields have an optional <strong>Height</strong> (mm) — leave it blank to keep the source image's own aspect ratio, or set it to force a fixed size.</div>
 
 				<h4>QR code &amp; serial number placement</h4>
-				<p>Toggle <strong>QR Code</strong> and <strong>Serial Number Display</strong> on the template, then drag their markers to position them — these are separate from the numbered field slots. See the <strong>QR Codes</strong> and <strong>Serial Numbers</strong> sections below.</p>
+				<p>Both are Field Slots: set a slot's <strong>Type</strong> to <strong>Serial number</strong> or <strong>QR code</strong>. A Serial number slot prints the certificate's serial with that slot's font, size, colour, alignment and UPPERCASE setting, after the text you give it (e.g. <em>Certificate No.</em>). A QR code slot is always square: <strong>Size</strong> is its width and height (10–50 mm), and X / Y is its top-left corner. Templates from before 7.9.4 show their old QR and serial settings as slots the first time you open them; save to keep them.</p>
 
 				<h4>Previewing</h4>
 				<p><strong>Preview Certificate</strong> renders the saved template with sample data. To check it with real data, choose a record of that certificate type in the <strong>Preview with</strong> dropdown next to the button: the preview uses its values and its existing serial, so the QR code really verifies. A preview never issues a serial or saves anything.</p>
@@ -376,7 +378,7 @@ function certificate_generator_render_documentation_page() {
 			<div class="cg-section-body">
 				<p>QR codes are embedded in certificates and open the public verification page with the certificate's verification code.</p>
 				<ul>
-					<li>QR codes are generated automatically during PDF/PNG creation, once enabled on the template.</li>
+					<li>QR codes are generated automatically during PDF/PNG creation, wherever the template has a <strong>QR code</strong> slot.</li>
 					<li>Every certificate has an unguessable 12-character verification code (shown as <code>XXXX-XXXX-XXXX</code>). Scanning the QR, or typing the code, shows the full result: name, certificate type, dates and an "Add to LinkedIn" button.</li>
 					<li>Typing a <strong>serial number</strong> alone also verifies the certificate, but shows the name masked (e.g. <code>B** W*****</code>), because serial numbers run in sequence and could be stepped through to collect names. QR codes printed before version 7.7.0 carry the serial and work the same way.</li>
 					<li>Verification is rate-limited per visitor.</li>

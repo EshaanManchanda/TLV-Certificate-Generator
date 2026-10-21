@@ -4,7 +4,7 @@ Tags: certificate, certificates, pdf certificate, bulk certificate, verification
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 7.9.3
+Stable tag: 7.9.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,9 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 
 == Changelog ==
 
+= 7.9.4 =
+* New: QR code and Serial number are Field Slot types in the template editor. The serial gets its own font, size, colour, alignment and text before it ("Certificate No."); the QR code is always square, sized in mm. Older templates move their settings into slots when opened and saved.
+
 = 7.9.3 =
 * Fix: certificate expiry dates are saved, so verification, renewal reminders and the expiring-soon email see them.
 * Fix: "Send" on Bulk Send starts sending at once in the background instead of waiting for the next 5-minute run.
@@ -160,6 +163,9 @@ QR codes are generated on your server. Fonts and the analytics chart library (Ch
 Full history: https://github.com/EshaanManchanda/TLV-Certificate-Generator/blob/main/doc/CHANGELOG.md
 
 == Upgrade Notice ==
+
+= 7.9.4 =
+QR code and Serial number become Field Slots with their own font, size, colour and alignment; open and save older templates to move their settings. Includes everything in 7.9.3 (bulk jobs, import history and undo, diagnostics, WP-CLI).
 
 = 7.9.3 =
 Saves certificate expiry dates, starts Bulk Send at once, and adds lifecycle hooks. Required by Certificate Generator Pro 1.8.0 (scoped API keys, webhooks v2).
