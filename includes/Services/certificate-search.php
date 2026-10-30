@@ -3797,6 +3797,16 @@ function certificate_generator_student_search_shortcode( $atts = array() ) {
 			$certificates         = $result['certificates'];
 			$no_template_students = $result['no_template'];
 
+			if ( $certificates ) {
+				/**
+				 * Fires when a recipient's certificates are shown to them (result page or My Certificates).
+				 *
+				 * @param string   $email   Recipient email.
+				 * @param string[] $serials Serial numbers of the certificates shown.
+				 */
+				do_action( 'certificate_generator_certificates_viewed', $email, array_values( array_filter( array_column( $certificates, 'serial_number' ) ) ) );
+			}
+
 			// If no PDFs generated but student exists, check for pending/scheduled template.
 			if ( empty( $certificates ) ) {
 				$pending = certificate_generator_get_pending_certificate_info( $email );

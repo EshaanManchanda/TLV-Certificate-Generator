@@ -95,8 +95,17 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 	/** [BB] searching an email with no matching student shows the "No Certificate Found" screen. */
 	public function test_unknown_email_shows_no_certificate_found_screen(): void {
 		$_GET['student_email'] = 'nobody-registered@example.com';
+		$viewed                = 0;
+		add_action(
+			'certificate_generator_certificates_viewed',
+			static function () use ( &$viewed ) {
+				++$viewed;
+			}
+		);
 
 		$output = certificate_generator_student_search_shortcode( array() );
+
+		$this->assertSame( 0, $viewed );
 
 		$this->assertStringContainsString( 'No Certificate Found', $output );
 		$this->assertStringContainsString( "couldn't find any certificates", $output );
@@ -136,8 +145,23 @@ class StudentSearchShortcodeTest extends WP_UnitTestCase {
 		);
 
 		$_GET['student_email'] = 'found@example.com';
+		$viewed                = array();
+		add_action(
+			'certificate_generator_certificates_viewed',
+			static function ( $email, $serials ) use ( &$viewed ) {
+				$viewed[] = array( $email, $serials );
+			},
+			10,
+			2
+		);
 
 		$output = certificate_generator_student_search_shortcode( array() );
+
+		// Showing the certificates tells add-ons who saw which serials.
+		$this->assertCount( 1, $viewed );
+		$this->assertSame( 'found@example.com', $viewed[0][0] );
+		$this->assertCount( 1, $viewed[0][1] );
+		$this->assertNotSame( '', $viewed[0][1][0] );
 
 		// The card renders sanitize_file_name($student_name)/(school_name) — spaces become
 		// hyphens (the value doubles as the download-filename stem), so assert that form.

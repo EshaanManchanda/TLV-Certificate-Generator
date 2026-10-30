@@ -258,6 +258,10 @@ function certificate_generator_my_certificates_shortcode( $atts = array() ): str
 	foreach ( array( 'students', 'teachers' ) as $entity ) {
 		$certificates = array_merge( $certificates, certificate_generator_student_certificates_for_email( $email, $entity )['certificates'] );
 	}
+	if ( $certificates ) {
+		/** This action is documented in includes/Services/certificate-search.php */
+		do_action( 'certificate_generator_certificates_viewed', $email, array_values( array_filter( array_column( $certificates, 'serial_number' ) ) ) );
+	}
 	$flags = certificate_generator_wallet_name_flags( array_column( $certificates, 'serial_number' ) );
 	$qr    = class_exists( 'CertificateGenerator_QR_Code_Generator' ) ? CertificateGenerator_QR_Code_Generator::get_instance() : null;
 

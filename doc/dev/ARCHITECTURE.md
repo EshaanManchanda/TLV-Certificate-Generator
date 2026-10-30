@@ -34,6 +34,7 @@ Lifecycle actions, used by Pro webhooks (each one fires at the single function e
 | `certificate_generator_recipients_deleted` | `$entity, int[] $ids` | single and bulk delete on the Students / Teachers / Schools lists |
 | `certificate_generator_import_completed` / `_import_failed` | `array $summary` (entity, source, counts) | `certificate_generator_import_run()` once the file is fully read; `_failed` when rows failed and none were saved |
 | `certificate_generator_certificate_verified` | `$serial, $by` (`code` / `serial`) | `SerialNumberService::verify()`, visitors only |
+| `certificate_generator_certificates_viewed` | `$email, string[] $serials` | the student result shortcode and My Certificates, when they list the recipient's certificates |
 | `certificate_generator_email_logged` | `array $data` (`status` sent / failed) | `certificate_generator_log_email()`, every delivery attempt |
 | `certificate_generator_job_finished` | `array $summary` (id, status, total, done, failed, …) | `Jobs::process()` when a bulk job ends (again after a retry) |
 

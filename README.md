@@ -2,7 +2,7 @@
 
 A WordPress plugin for issuing certificates in bulk to students, teachers and schools: template-based PDF generation in any language, CSV import with a check step, email delivery with a queue and templates, QR-code verification with unguessable codes, certificate history, reissue, serial numbers and analytics. **No limits, and nothing locked.**
 
-- **Version:** 7.9.3 (see [`doc/CHANGELOG.md`](doc/CHANGELOG.md))
+- **Version:** 7.9.4 (see [`doc/CHANGELOG.md`](doc/CHANGELOG.md))
 - **Requires:** WordPress 6.0+, PHP 8.2+
 - **Tested up to:** WordPress 7.1
 - **License:** GPL-2.0-or-later ([`LICENSE.txt`](LICENSE.txt))
@@ -30,11 +30,11 @@ How the two plugins fit together: [`doc/dev/ARCHITECTURE.md`](doc/dev/ARCHITECTU
 
 ## Features (free)
 
-- **Certificate templates** — upload a background image (e.g. from Canva), drag-position fields, give each field its own font, size, colour and UPPERCASE setting, and add custom-text fields that mix your words with `{field}` tags ("Awarded to {student_name}"). Long names shrink to fit.
+- **Certificate templates** — upload a background image (e.g. from Canva), drag-position fields, give each field its own font, size, colour and UPPERCASE setting, and add custom-text fields that mix your words with `{field}` tags ("Awarded to {student_name}"). Long names shrink to fit. The **QR code** and **serial number** are field slots too *(7.9.4)*: the serial gets its own font, size, colour, alignment and leading text ("Certificate No."), and the QR code is a square you size in mm and drag into place.
 - **PDF generation** with the bundled [FPDF](lib/fpdf) engine and open-licensed fonts. Certificates with text outside Western European (Hindi, Marathi, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Odia, Urdu, Arabic, Ł, Cyrillic, …) switch automatically to [mPDF](https://github.com/mpdf/mpdf) with bundled fonts, so conjuncts join and Arabic connects.
 - **QR-code verification** — every certificate gets an unguessable 12-character verification code; its QR code opens the public verification page (`[certificate_generator_verify_certificate]`). Checking by serial number alone still works but masks the name.
 - **Certificate history, revoke and reissue** — every certificate keeps a history (issued, name corrected, revoked, reinstated, reissued, verified). Issued certificates keep the layout they were issued with; reissue applies a corrected template while keeping the serial and code, and the verify page shows "Corrected on …".
-- **Serial numbers** — configurable format (`PREFIX-{YEAR}-{SEQ}`), bulk assignment for existing records.
+- **Serial numbers** — configurable format (`PREFIX-{YEAR}-{SEQ}`), bulk assignment for existing records. Printed through a Serial number field slot, or `{serial_number}` in any custom-text slot.
 - **Roles** — a **School Coordinator** role (the admin picks the school on the user's profile) can view, edit, import, download and email certificates for their own school's students and teachers only; templates, settings, revoke and analytics stay with admins. Four capabilities (`certificate_generator_view`, `_issue`, `_manage_templates`, `_manage_settings`) for role-editor plugins; admins have them all. See [Roles and School Coordinators](doc/guide/documentation.md#roles-and-school-coordinators) *(7.9.0)*.
 - **Bulk generation jobs** *(7.9.3)* — **Generate certificates** on the Students, Teachers or Schools list runs in the background, 25 at a time, with no per-run cap: a progress page (**Certificate Generator → Bulk Jobs**) shows done / failed / pending, lists each failed record with its reason, and **Retry failed** re-runs only those. Re-running never issues a second certificate or changes a serial. A job that WP-Cron isn't advancing is shown as *stalled* (the open page keeps it going). **Regenerate PDFs** re-renders up-to-date PDFs, same serials. A **PDF status** filter finds records with no PDF yet or whose PDF file is missing.
 - **Import history and undo** *(7.9.3)* — every CSV import is listed under **Bulk Import → Import history**. Rows that match an existing record can be **flagged for review** instead of updated or skipped, then applied, added as new or dismissed. **Undo import** previews first, deletes the rows the import created and restores the fields it changed, and keeps (and lists, with the reason) any record that got a certificate or an email, or was edited, after the import.
